@@ -13,18 +13,25 @@ DEFAULT_SCAN_INTERVAL = 60  # seconds
 
 # ── Verified API endpoints (myheatpump.com, March 2026) ─────────────────────
 #
-# Login  : POST /a/login
-#          username + password are Base64-encoded in the form payload
-#          Extra fields validCode, loginValidCode, __url must be present but empty
-#          Server sets JSESSIONID + heatpump.session.id cookies on success
+# Step 1 – Login
+#   POST /a/login
+#   Payload : username=<Base64>, password=<Base64>,
+#             validCode=, loginValidCode=, __url=
+#   Response: {"msg": "Login successful!"} + sets JSESSIONID cookie
 #
-# Data   : POST /a/amt/desktop/load
-#          Payload : ctrlPermi=1  (form data)
-#          Response: application/json  containing nested parXX sensor values
+# Step 2 – Device list  (fetched once after login to get mn + devid)
+#   POST /a/amt/deviceList/listData
+#   Payload : (empty)
+#   Response: list/dict containing device entries with "mn" and "devid" fields
+#
+# Step 3 – Sensor data  (fetched every poll interval)
+#   POST /a/amt/realdata/get
+#   Payload : mn=<device mn>, devid=<device devid>
+#   Response: flat JSON  {"par1": 2.0, "par2": 0.0, ..., "mn": ..., "devid": ...}
 #
 LOGIN_PATH        = "/a/login"
-DATA_PATH         = "/a/amt/desktop/load"
-DATA_PAYLOAD      = {"ctrlPermi": "1"}
+DEVICE_LIST_PATH  = "/a/amt/deviceList/listData"
+REALDATA_PATH     = "/a/amt/realdata/get"
 SESSION_COOKIE_NAME = "JSESSIONID"
 
 # Known parameter → sensor mapping for Energy Save / myheatpump.com
