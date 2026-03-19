@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ES Heatpump – Zugangsdaten",
+        "description": "Bitte gib deine Anmeldedaten für das myheatpump.com Portal ein.",
+        "data": {
+          "username": "Benutzername (E-Mail)",
+          "password": "Passwort",
+          "base_url": "Portal-URL (Standard: https://www.myheatpump.com)",
+          "scan_interval": "Aktualisierungsintervall (Sekunden)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ungültige Anmeldedaten. Bitte Benutzername und Passwort prüfen.",
+      "cannot_connect": "Verbindung zum Portal fehlgeschlagen. Bitte URL und Netzwerk prüfen.",
+      "unknown": "Unbekannter Fehler. Bitte Logs prüfen."
+    },
+    "abort": {
+      "already_configured": "Diese Wärmepumpe ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ES Heatpump – Einstellungen",
+        "data": {
+          "base_url": "Portal-URL",
+          "scan_interval": "Aktualisierungsintervall (Sekunden)"
+        }
+      }
+    }
+  }
+}

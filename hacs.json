@@ -1,0 +1,6 @@
+{
+  "name": "ES Heatpump (myheatpump.com)",
+  "description": "Home Assistant integration for Energy Save heat pumps via myheatpump.com portal",
+  "render_readme": true,
+  "homeassistant": "2024.1.0"
+}

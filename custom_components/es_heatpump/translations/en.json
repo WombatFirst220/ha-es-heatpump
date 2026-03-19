@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ES Heat Pump – Credentials",
+        "description": "Enter your myheatpump.com portal credentials. The integration will log in automatically and fetch all sensor data.",
+        "data": {
+          "username": "Username (e-mail address)",
+          "password": "Password",
+          "base_url": "Portal URL (default: https://www.myheatpump.com)",
+          "scan_interval": "Update interval in seconds"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Login failed – wrong username or password.",
+      "cannot_connect": "Connection failed – portal unreachable.",
+      "unknown": "Unknown error – please check the HA logs."
+    },
+    "abort": {
+      "already_configured": "This account is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ES Heat Pump – Change Settings",
+        "data": {
+          "base_url": "Portal URL",
+          "scan_interval": "Update interval in seconds"
+        }
+      }
+    }
+  }
+}

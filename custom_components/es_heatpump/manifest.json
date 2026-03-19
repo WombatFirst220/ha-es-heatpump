@@ -1,0 +1,12 @@
+{
+  "domain": "es_heatpump",
+  "name": "ES Heatpump (myheatpump.com)",
+  "version": "1.0.0",
+  "documentation": "https://github.com/WombatFirst220/ha-es-heatpump",
+  "issue_tracker": "https://github.com/WombatFirst220/ha-es-heatpump/issues",
+  "dependencies": [],
+  "codeowners": ["@WombatFirst220"],
+  "requirements": [],
+  "iot_class": "cloud_polling",
+  "config_flow": true
+}
