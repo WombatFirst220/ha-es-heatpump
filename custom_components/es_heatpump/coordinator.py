@@ -133,13 +133,13 @@ class ESHeatpumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed(f"Login request failed: {err}") from err
 
         # ── Parse JSON success indicator ───────────────────────────────
-        # Known response shapes:
-        #   {"success": true, ...}
-        #   {"code": 0, "msg": "ok", ...}
-        #   {"code": 200, ...}
+        # Confirmed live response: {"msg": "Login successful!"}
+        # Also handle: {"success": true}, {"code": 0}, {"code": 200}
+        msg_text = str(result.get("msg") or result.get("message") or "").lower()
         success = (
             result.get("success") is True
             or result.get("code") in (0, 200, "0", "200")
+            or "success" in msg_text
         )
         if not success:
             msg = result.get("msg") or result.get("message") or str(result)
