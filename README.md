@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.4.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-1.5.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 ---
 
@@ -273,6 +273,25 @@ ha-es-heatpump/
 
 <a name="changelog"></a>
 ## 📋 Changelog
+
+---
+
+### v1.5.0 – Dashboard-Inhalt repariert / Dashboard content fixed
+*2026-03-21*
+
+**🇩🇪**
+- **Fix: Dashboard zeigte nur „Neuer Abschnitt" statt Inhalt** – Ursache war ein unerlaubtes `title:`-Feld auf oberster Ebene der YAML-Datei
+- Bei file-basierten Lovelace-Dashboards darf die YAML-Datei **nur** `views:` enthalten – der Titel wird ausschließlich in der Dashboard-Registrierung gesetzt
+- Entity-IDs an die tatsächlich von der Integration erzeugten Sensor-Namen angepasst (z.B. `sensor.es_wp_aussentemperatur`, `sensor.es_wp_heizkreis_temperatur`)
+- Dashboard jetzt mit 3 Views: **Übersicht**, **Energiebilanz**, **Diagnose** (alle Rohdaten)
+- Beide Kopien der YAML-Datei aktualisiert (`dashboard/es_heatpump.yaml` und `dashboards/es_heatpump.yaml`)
+
+**🇬🇧**
+- **Fix: Dashboard was showing only "New section" instead of content** – caused by a forbidden top-level `title:` field in the YAML file
+- File-based Lovelace dashboards must contain **only** `views:` – the title is set exclusively in the dashboard registration
+- Entity IDs updated to match the actual sensor names created by the integration (e.g. `sensor.es_wp_aussentemperatur`, `sensor.es_wp_heizkreis_temperatur`)
+- Dashboard now has 3 views: **Overview**, **Energy balance**, **Diagnostics** (all raw values)
+- Both copies of the YAML file updated (`dashboard/es_heatpump.yaml` and `dashboards/es_heatpump.yaml`)
 
 ---
 
