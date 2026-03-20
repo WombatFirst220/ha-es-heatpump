@@ -1,205 +1,160 @@
-# ============================================================
-# ES Heatpump Dashboard  –  "ES Heatpump"
-# Importiere diese Datei in Home Assistant über:
-#   Einstellungen → Dashboards → Dashboard hinzufügen → YAML
-# oder lege sie als Lovelace-Datei ab und referenziere sie
-# in configuration.yaml:
-#   lovelace:
-#     dashboards:
-#       es-heatpump:
-#         mode: yaml
-#         filename: dashboards/es_heatpump.yaml
-#         title: ES Heatpump
-#         icon: mdi:heat-pump
-#         show_in_sidebar: true
-# ============================================================
+# ES Heatpump Dashboard – automatisch installiert durch die HACS-Integration
+# Dieses File darf NUR "views:" enthalten – kein "title:" auf oberster Ebene!
+# Der Titel wird in der Dashboard-Registrierung gesetzt, nicht hier.
 
-title: ES Heatpump
 views:
+  # ── View 1: Übersicht ───────────────────────────────────────────────────
   - title: Übersicht
     path: overview
     icon: mdi:heat-pump
     cards:
 
-      # ── Header ────────────────────────────────────────────
       - type: markdown
         content: >
-          ## 🌡️ Energy Save Wärmepumpe
-          Letzte Aktualisierung: {{ states.sensor.es_wp_aussentemperatur.last_changed | relative_time }}
+          ## 🌡️ ES Wärmepumpe
 
-      # ── Temperaturen ──────────────────────────────────────
+      # ── Temperaturen ──────────────────────────────────────────────────
       - type: entities
         title: Temperaturen
         icon: mdi:thermometer
         entities:
           - entity: sensor.es_wp_aussentemperatur
             name: Außentemperatur
-            icon: mdi:thermometer
+          - entity: sensor.es_wp_heizkreis_temperatur
+            name: Heizkreis (Vorlauf)
           - entity: sensor.es_wp_vorlauftemperatur
-            name: Vorlauf Ist
-            icon: mdi:thermometer-chevron-up
-          - entity: sensor.es_wp_vorlauf_soll
-            name: Vorlauf Soll
-            icon: mdi:thermometer-lines
+            name: Vorlauftemperatur
           - entity: sensor.es_wp_rucklauftemperatur
-            name: Rücklauf
-            icon: mdi:thermometer-chevron-down
+            name: Rücklauftemperatur
           - entity: sensor.es_wp_warmwasser_ist
             name: Warmwasser Ist
-            icon: mdi:water-thermometer
-          - entity: sensor.es_wp_warmwasser_soll
-            name: Warmwasser Soll
-            icon: mdi:water-thermometer-outline
           - entity: sensor.es_wp_heizen_solltemperatur
             name: Heizen Soll
-            icon: mdi:thermometer-check
+          - entity: sensor.es_wp_raumtemperatur
+            name: Raumtemperatur
+          - entity: sensor.es_wp_mischventil_1_temperatur
+            name: Mischventil 1
+          - entity: sensor.es_wp_mischventil_2_temperatur
+            name: Mischventil 2
 
-      # ── Temperaturgraph ───────────────────────────────────
+      # ── Temperaturverlauf ──────────────────────────────────────────────
       - type: history-graph
         title: Temperaturverlauf (24h)
         hours_to_show: 24
         entities:
           - entity: sensor.es_wp_aussentemperatur
             name: Außen
-          - entity: sensor.es_wp_vorlauftemperatur
-            name: Vorlauf
-          - entity: sensor.es_wp_rucklauftemperatur
-            name: Rücklauf
+          - entity: sensor.es_wp_heizkreis_temperatur
+            name: Heizkreis
           - entity: sensor.es_wp_warmwasser_ist
             name: Warmwasser
+          - entity: sensor.es_wp_raumtemperatur
+            name: Raum
 
-      # ── Betrieb & Leistung ────────────────────────────────
+      # ── Betrieb & Leistung ─────────────────────────────────────────────
       - type: entities
         title: Betrieb & Leistung
         icon: mdi:lightning-bolt
         entities:
           - entity: sensor.es_wp_betriebsmodus
             name: Betriebsmodus
-            icon: mdi:heat-pump
+          - entity: sensor.es_wp_kompressor_frequenz
+            name: Kompressor Frequenz
+          - entity: sensor.es_wp_kompressor_drehzahl_berechnet
+            name: Kompressor Drehzahl
+          - entity: sensor.es_wp_lufter_drehzahl
+            name: Lüfter Drehzahl
           - entity: sensor.es_wp_leistungsaufnahme
             name: Leistungsaufnahme
-            icon: mdi:lightning-bolt
-          - entity: sensor.es_wp_heizleistung
-            name: Heizleistung
-            icon: mdi:heat-wave
-          - entity: sensor.es_wp_cop
-            name: COP (Arbeitszahl)
-            icon: mdi:chart-line
-          - entity: sensor.es_wp_kompressor_frequenz
-            name: Kompressor
-            icon: mdi:sine-wave
-          - entity: sensor.es_wp_lufter_drehzahl
-            name: Lüfter
-            icon: mdi:fan
-          - entity: sensor.es_wp_pumpe_heizkreis
-            name: Pumpe Heizkreis
-            icon: mdi:pump
-          - entity: sensor.es_wp_pumpe_warmwasser
-            name: Pumpe Warmwasser
-            icon: mdi:pump
+          - entity: sensor.es_wp_spannung
+            name: Spannung
 
-      # ── Leistungsgraph ────────────────────────────────────
-      - type: history-graph
-        title: Leistung (24h)
-        hours_to_show: 24
-        entities:
-          - entity: sensor.es_wp_leistungsaufnahme
-            name: Aufnahme
-          - entity: sensor.es_wp_heizleistung
-            name: Heizleistung
-
-      # ── Kältekreis ────────────────────────────────────────
+      # ── Pumpen ────────────────────────────────────────────────────────
       - type: entities
-        title: Kältekreis
-        icon: mdi:snowflake
+        title: Pumpen
+        icon: mdi:pump
         entities:
-          - entity: sensor.es_wp_sauggastemperatur
-            name: Sauggas
-          - entity: sensor.es_wp_heigastemperatur
-            name: Heißgas
-          - entity: sensor.es_wp_kondensationstemperatur
-            name: Kondensation
-          - entity: sensor.es_wp_verdampfungstemperatur
-            name: Verdampfung
-          - entity: sensor.es_wp_kademittel_hochdruck
-            name: Hochdruck
-          - entity: sensor.es_wp_kademittel_niederdruck
-            name: Niederdruck
+          - entity: sensor.es_wp_pumpe_p0_status
+            name: Pumpe P0
+          - entity: sensor.es_wp_pumpe_p1_status
+            name: Pumpe P1
+          - entity: sensor.es_wp_pumpe_p2_status
+            name: Pumpe P2
 
-      # ── Energie-Statistik ─────────────────────────────────
+      # ── Energie ───────────────────────────────────────────────────────
       - type: entities
-        title: Energie gesamt
+        title: Energie
         icon: mdi:counter
         entities:
-          - entity: sensor.es_wp_energie_heizen_gesamt
-            name: Wärme Heizen
-          - entity: sensor.es_wp_energie_warmwasser_gesamt
-            name: Wärme Warmwasser
-          - entity: sensor.es_wp_strom_heizen_gesamt
-            name: Strom Heizen
-          - entity: sensor.es_wp_strom_warmwasser_gesamt
-            name: Strom Warmwasser
+          - entity: sensor.es_wp_energie_gesamt
+            name: Energie gesamt
+          - entity: sensor.es_wp_ah_betriebszeit
+            name: AH Betriebszeit
+          - entity: sensor.es_wp_hbh_betriebszeit
+            name: HBH Betriebszeit
+          - entity: sensor.es_wp_hwtbh_betriebszeit
+            name: HWTBH Betriebszeit
 
-      # ── Heizkurve ─────────────────────────────────────────
+      # ── Gerät ─────────────────────────────────────────────────────────
       - type: entities
-        title: Heizkurve & Einstellungen
-        icon: mdi:chart-bell-curve
+        title: Geräteinfo
+        icon: mdi:information-outline
         entities:
-          - entity: sensor.es_wp_heizkurve_steilheit
-            name: Steilheit
-          - entity: sensor.es_wp_heizkurve_parallelverschiebung
-            name: Parallelverschiebung
-          - entity: sensor.es_wp_heizen_einschalttemperatur
-            name: Einschalttemperatur
-          - entity: sensor.es_wp_warmwasser_ladetemperatur
-            name: WW Ladetemperatur
-          - entity: sensor.es_wp_warmwasser_hystere
-            name: WW Hysterese
+          - entity: sensor.es_wp_software_version
+            name: Software Version
 
-      # ── Betriebsstunden ───────────────────────────────────
-      - type: entities
-        title: Betriebsstunden & Starts
-        icon: mdi:timer-outline
-        entities:
-          - entity: sensor.es_wp_betriebsstunden_kompressor
-            name: Kompressor Gesamt
-          - entity: sensor.es_wp_betriebsstunden_heizen
-            name: Heizen
-          - entity: sensor.es_wp_betriebsstunden_warmwasser
-            name: Warmwasser
-          - entity: sensor.es_wp_starts_kompressor
-            name: Kompressor Starts
-
-  # ── zweite View: Energiebilanz ─────────────────────────────
+  # ── View 2: Energiebilanz ───────────────────────────────────────────────
   - title: Energiebilanz
     path: energy
     icon: mdi:lightning-bolt
     cards:
       - type: statistics-graph
-        title: Wärme Heizen – Wochenverlauf
+        title: Energie gesamt – Verlauf
         entities:
-          - entity: sensor.es_wp_energie_heizen_gesamt
-            name: Wärme Heizen
+          - entity: sensor.es_wp_energie_gesamt
+            name: Energie gesamt
         chart_type: bar
         period: day
         days_to_show: 14
 
-      - type: statistics-graph
-        title: Wärme Warmwasser – Wochenverlauf
+      - type: history-graph
+        title: Kompressor Frequenz (24h)
+        hours_to_show: 24
         entities:
-          - entity: sensor.es_wp_energie_warmwasser_gesamt
-            name: Wärme WW
-        chart_type: bar
-        period: day
-        days_to_show: 14
+          - entity: sensor.es_wp_kompressor_frequenz
+            name: Kompressor Hz
+          - entity: sensor.es_wp_lufter_drehzahl
+            name: Lüfter rpm
 
-      - type: statistics-graph
-        title: Stromverbrauch – Wochenverlauf
+  # ── View 3: Alle Parameter (Diagnose) ──────────────────────────────────
+  - title: Diagnose
+    path: diagnose
+    icon: mdi:bug-outline
+    cards:
+      - type: entities
+        title: Alle Rohdaten (parXX)
+        show_header_toggle: false
         entities:
-          - entity: sensor.es_wp_strom_heizen_gesamt
-            name: Strom Heizen
-          - entity: sensor.es_wp_strom_warmwasser_gesamt
-            name: Strom WW
-        chart_type: bar
-        period: day
-        days_to_show: 14
+          - entity: sensor.es_wp_aussentemperatur
+          - entity: sensor.es_wp_vorlauftemperatur
+          - entity: sensor.es_wp_rucklauftemperatur
+          - entity: sensor.es_wp_warmwasser_ist
+          - entity: sensor.es_wp_heizen_solltemperatur
+          - entity: sensor.es_wp_heizkreis_temperatur
+          - entity: sensor.es_wp_mischventil_1_temperatur
+          - entity: sensor.es_wp_mischventil_2_temperatur
+          - entity: sensor.es_wp_raumtemperatur
+          - entity: sensor.es_wp_betriebsmodus
+          - entity: sensor.es_wp_kompressor_frequenz
+          - entity: sensor.es_wp_kompressor_drehzahl_berechnet
+          - entity: sensor.es_wp_lufter_drehzahl
+          - entity: sensor.es_wp_leistungsaufnahme
+          - entity: sensor.es_wp_spannung
+          - entity: sensor.es_wp_energie_gesamt
+          - entity: sensor.es_wp_ah_betriebszeit
+          - entity: sensor.es_wp_hbh_betriebszeit
+          - entity: sensor.es_wp_hwtbh_betriebszeit
+          - entity: sensor.es_wp_software_version
+          - entity: sensor.es_wp_temperatur_par22
+          - entity: sensor.es_wp_temperatur_par25
+          - entity: sensor.es_wp_temperatur_par30
