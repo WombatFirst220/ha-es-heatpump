@@ -29,57 +29,181 @@ DEFAULT_SCAN_INTERVAL = 60  # seconds
 #   Payload : mn=<device mn>, devid=<device devid>
 #   Response: flat JSON  {"par1": 2.0, "par2": 0.0, ..., "mn": ..., "devid": ...}
 #
-LOGIN_PATH        = "/a/login"
-DEVICE_LIST_PATH  = "/a/amt/deviceList/listData"
-REALDATA_PATH     = "/a/amt/realdata/get"
+LOGIN_PATH          = "/a/login"
+DEVICE_LIST_PATH    = "/a/amt/deviceList/listData"
+REALDATA_PATH       = "/a/amt/realdata/get"
 SESSION_COOKIE_NAME = "JSESSIONID"
 
-# Known parameter → sensor mapping for Energy Save / myheatpump.com
-# Keys are the parameter IDs returned by the API (e.g. "par1", "par36")
-# Extend this list as new parameters are discovered.
+# ── Parameter → Sensor mapping ───────────────────────────────────────────────
+# Verified by cross-referencing live myheatpump.com portal UI values with the
+# raw par values returned by /a/amt/realdata/get  (March 2026, Valtop AW12-R32)
+#
+# Confidence legend:
+#   ✓  = confirmed via exact or near-exact live value match
+#   ~  = plausible but not yet confirmed (value was 0.0 or ambiguous)
+#   ?  = unknown / needs further investigation
+#
 PARAMETER_SENSORS = {
-    # Temperatures
-    "par1":  {"name": "Außentemperatur",               "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:thermometer"},
-    "par2":  {"name": "Vorlauftemperatur",              "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:thermometer-chevron-up"},
-    "par3":  {"name": "Rücklauftemperatur",             "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:thermometer-chevron-down"},
-    "par4":  {"name": "Warmwasser Ist",                 "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:water-thermometer"},
-    "par5":  {"name": "Warmwasser Soll",                "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:water-thermometer-outline"},
-    "par6":  {"name": "Vorlauf Soll",                   "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:thermometer-lines"},
-    "par7":  {"name": "Sauggastemperatur",              "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:thermometer"},
-    "par8":  {"name": "Heißgastemperatur",              "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:thermometer-high"},
-    "par9":  {"name": "Kondensationstemperatur",        "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:thermometer"},
-    "par10": {"name": "Verdampfungstemperatur",         "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:thermometer-low"},
-    "par11": {"name": "Kältemittel Hochdruck",         "unit": "bar", "device_class": "pressure",       "state_class": "measurement", "icon": "mdi:gauge-high"},
-    "par12": {"name": "Kältemittel Niederdruck",       "unit": "bar", "device_class": "pressure",       "state_class": "measurement", "icon": "mdi:gauge-low"},
-    # Power & Energy
-    "par13": {"name": "Leistungsaufnahme",              "unit": "kW",  "device_class": "power",          "state_class": "measurement", "icon": "mdi:lightning-bolt"},
-    "par14": {"name": "Heizleistung",                   "unit": "kW",  "device_class": "power",          "state_class": "measurement", "icon": "mdi:heat-wave"},
-    "par15": {"name": "COP",                            "unit": None,  "device_class": None,             "state_class": "measurement", "icon": "mdi:chart-line"},
-    "par16": {"name": "Energie Heizen gesamt",          "unit": "kWh", "device_class": "energy",         "state_class": "total_increasing", "icon": "mdi:counter"},
-    "par17": {"name": "Energie Warmwasser gesamt",      "unit": "kWh", "device_class": "energy",         "state_class": "total_increasing", "icon": "mdi:counter"},
-    "par18": {"name": "Strom Heizen gesamt",            "unit": "kWh", "device_class": "energy",         "state_class": "total_increasing", "icon": "mdi:counter"},
-    "par19": {"name": "Strom Warmwasser gesamt",        "unit": "kWh", "device_class": "energy",         "state_class": "total_increasing", "icon": "mdi:counter"},
-    # Operating state
-    "par20": {"name": "Betriebsmodus",                  "unit": None,  "device_class": None,             "state_class": None,           "icon": "mdi:heat-pump"},
-    "par21": {"name": "Kompressor Frequenz",            "unit": "Hz",  "device_class": "frequency",      "state_class": "measurement", "icon": "mdi:sine-wave"},
-    "par22": {"name": "Lüfter Drehzahl",               "unit": "rpm", "device_class": None,             "state_class": "measurement", "icon": "mdi:fan"},
-    "par23": {"name": "Pumpe Heizkreis",                "unit": "%",   "device_class": None,             "state_class": "measurement", "icon": "mdi:pump"},
-    "par24": {"name": "Pumpe Warmwasser",               "unit": "%",   "device_class": None,             "state_class": "measurement", "icon": "mdi:pump"},
-    # Setpoints / control
-    "par30": {"name": "Heizkurve Steilheit",            "unit": None,  "device_class": None,             "state_class": "measurement", "icon": "mdi:chart-bell-curve"},
-    "par31": {"name": "Heizkurve Parallelverschiebung", "unit": "K",   "device_class": None,             "state_class": "measurement", "icon": "mdi:arrow-up-down"},
-    "par35": {"name": "Heizen Einschalttemperatur",     "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:thermometer-plus"},
-    "par36": {"name": "Heizen Solltemperatur",          "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:thermometer-check"},
-    "par37": {"name": "Warmwasser Ladetemperatur",      "unit": "°C",  "device_class": "temperature",    "state_class": "measurement", "icon": "mdi:water-boiler"},
-    "par38": {"name": "Warmwasser Hystere",             "unit": "K",   "device_class": None,             "state_class": "measurement", "icon": "mdi:delta"},
-    # Runtime counters
-    "par50": {"name": "Betriebsstunden Kompressor",     "unit": "h",   "device_class": None,             "state_class": "total_increasing", "icon": "mdi:timer-outline"},
-    "par51": {"name": "Betriebsstunden Heizen",         "unit": "h",   "device_class": None,             "state_class": "total_increasing", "icon": "mdi:timer"},
-    "par52": {"name": "Betriebsstunden Warmwasser",     "unit": "h",   "device_class": None,             "state_class": "total_increasing", "icon": "mdi:timer"},
-    "par53": {"name": "Starts Kompressor",              "unit": None,  "device_class": None,             "state_class": "total_increasing", "icon": "mdi:counter"},
+    # ── Temperatures (verified) ───────────────────────────────────────────
+    "par6":  {  # Set Temperature = 32  →  par6 = 32.1  ✓
+        "name": "Heizen Solltemperatur",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:thermometer-check",
+    },
+    "par7":  {  # Sanitary Hot Water Temp TW = 50.3  →  par7 = 50.5  ✓
+        "name": "Warmwasser Ist",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:water-thermometer",
+    },
+    "par8":  {  # Cooling/Heating Water Temp TC = 34.6  →  par8 = 34.3  ✓
+        "name": "Heizkreis Temperatur",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:thermometer-chevron-up",
+    },
+    "par9":  {  # Water Temp After Mixing Valve 1 = 23.4  →  par9 = 23.6  ✓
+        "name": "Mischventil 1 Temperatur",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:valve",
+    },
+    "par10": {  # Water Temp After Mixing Valve 2 = -99  →  par10 = -99.0  ✓
+        "name": "Mischventil 2 Temperatur",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:valve",
+    },
+    "par11": {  # Room Temp TR = 21.5  →  par11 = 21.9  ✓
+        "name": "Raumtemperatur",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:home-thermometer",
+    },
+    "par24": {  # Actual Ambient Temp Ta = 4.8  →  par24 = 4.8  ✓
+        "name": "Außentemperatur",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:thermometer",
+    },
+    # ── Temperatures (unconfirmed – value was not visible in current screenshot) ~
+    "par4":  {  # ~ Vorlauftemperatur (par4 = 35.1, plausible for flow temp)
+        "name": "Vorlauftemperatur",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:thermometer-chevron-up",
+    },
+    "par5":  {  # ~ Rücklauftemperatur (par5 = 33.6, plausible for return temp)
+        "name": "Rücklauftemperatur",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:thermometer-chevron-down",
+    },
+    "par22": {  # ~ Temperatur (par22 = 21.8, near room temp – purpose unclear)
+        "name": "Temperatur par22",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:thermometer",
+    },
+    "par25": {  # ~ Temperatur (par25 = 37.7 – purpose unclear)
+        "name": "Temperatur par25",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:thermometer",
+    },
+    "par30": {  # ~ Temperatur (par30 = 4.8, same as Außentemp – possibly duplicate or sensor 2)
+        "name": "Temperatur par30",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:thermometer",
+    },
+    # ── Compressor & fan ─────────────────────────────────────────────────
+    "par20": {  # Comp. Speed Hz = 43  →  par20 = 43.0  ✓
+        "name": "Kompressor Frequenz",
+        "unit": "Hz", "device_class": "frequency", "state_class": "measurement",
+        "icon": "mdi:sine-wave",
+    },
+    "par38": {  # Calculated Comp. Speed = 2  →  par38 = 2.0  ✓
+        "name": "Kompressor Drehzahl berechnet",
+        "unit": None, "device_class": None, "state_class": "measurement",
+        "icon": "mdi:rotate-right",
+    },
+    "par21": {  # ~ par21 = 400.0 – likely fan speed RPM
+        "name": "Lüfter Drehzahl",
+        "unit": "rpm", "device_class": None, "state_class": "measurement",
+        "icon": "mdi:fan",
+    },
+    # ── Electrical ───────────────────────────────────────────────────────
+    "par31": {  # Voltage = 231 V  →  par31 = 231.0  ✓
+        "name": "Spannung",
+        "unit": "V", "device_class": "voltage", "state_class": "measurement",
+        "icon": "mdi:lightning-bolt",
+    },
+    "par26": {  # ~ par26 = 1.8 – possibly current (A) or power (kW)
+        "name": "Leistungsaufnahme",
+        "unit": "kW", "device_class": "power", "state_class": "measurement",
+        "icon": "mdi:lightning-bolt",
+    },
+    "par28": {  # ~ par28 = 560.0 – possibly total energy counter (Wh or kWh?)
+        "name": "Energie gesamt",
+        "unit": "kWh", "device_class": "energy", "state_class": "total_increasing",
+        "icon": "mdi:counter",
+    },
+    # ── Operating mode ───────────────────────────────────────────────────
+    "par15": {  # Unit Current Working Mode: Heating  →  par15 = 1.0  ✓ (1=Heating)
+        "name": "Betriebsmodus",
+        "unit": None, "device_class": None, "state_class": None,
+        "icon": "mdi:heat-pump",
+    },
+    # ── Pump status ──────────────────────────────────────────────────────
+    "par27": {  # ~ Pump status P0 = 1  →  par27 = 1.0  (most likely)
+        "name": "Pumpe P0 Status",
+        "unit": None, "device_class": None, "state_class": "measurement",
+        "icon": "mdi:pump",
+    },
+    "par33": {  # ~ Pump status P1 = 1  →  par33 = 1.0  (most likely)
+        "name": "Pumpe P1 Status",
+        "unit": None, "device_class": None, "state_class": "measurement",
+        "icon": "mdi:pump",
+    },
+    "par34": {  # ~ Pump status P2 = 0  →  par34 = 1.0  (uncertain – P2 showed 0 in portal)
+        "name": "Pumpe P2 Status",
+        "unit": None, "device_class": None, "state_class": "measurement",
+        "icon": "mdi:pump",
+    },
+    # ── Software / device info ───────────────────────────────────────────
+    "par37": {  # Software Version = 218  →  par37 = 218.0  ✓
+        "name": "Software Version",
+        "unit": None, "device_class": None, "state_class": None,
+        "icon": "mdi:chip",
+    },
+    # ── Runtime counters ─────────────────────────────────────────────────
+    "par41": {  # AH Working Time = 49115 min  →  par41 = 49115.0  ✓
+        "name": "AH Betriebszeit",
+        "unit": "min", "device_class": None, "state_class": "total_increasing",
+        "icon": "mdi:timer-outline",
+    },
+    "par42": {  # HBH Working Time = 9564 min  →  par42 = 9564.0  ✓
+        "name": "HBH Betriebszeit",
+        "unit": "min", "device_class": None, "state_class": "total_increasing",
+        "icon": "mdi:timer",
+    },
+    "par43": {  # ~ HWTBH Working Time = 0 min  →  par43 = 0.0  (most likely)
+        "name": "HWTBH Betriebszeit",
+        "unit": "min", "device_class": None, "state_class": "total_increasing",
+        "icon": "mdi:timer",
+    },
+    # ── Unknown / needs investigation ────────────────────────────────────
+    # par1  = 2.0   ?
+    # par2  = 0.0   ?
+    # par3  = 0.0   ?
+    # par12 = 0.0   ?
+    # par13 = 0.0   ?
+    # par14 = 0.0   ?
+    # par16 = 0.0   ?
+    # par17 = 0.0   ?
+    # par18 = 0.0   ?
+    # par19 = 0.0   ?
+    # par23 = 6.8   ?  (possibly pump speed %)
+    # par29 = 0.0   ?
+    # par32 = 0.0   ?
+    # par35 = 0.0   ?
+    # par36 = 33.0  ?  (close to set temp 32 – maybe Warmwasser Soll?)
+    # par39 = 2.7   ?
+    # par40 = 0.3   ?
+    # par44..par48  = 0.0  ?
 }
 
 # Device info
-DEVICE_NAME = "ES Wärmepumpe"
+DEVICE_NAME         = "ES Wärmepumpe"
 DEVICE_MANUFACTURER = "Energy Save"
-DEVICE_MODEL = "myheatpump.com"
+DEVICE_MODEL        = "myheatpump.com"
