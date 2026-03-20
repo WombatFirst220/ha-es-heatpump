@@ -36,11 +36,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # ── Auto-install Lovelace dashboard ──────────────────────────────────────
-    # Scheduled as a background task so it never blocks the setup.
-    hass.async_create_task(
-        async_install_dashboard(hass),
-        name="es_heatpump_install_dashboard",
-    )
+    # Run directly so the dashboard is registered before setup returns.
+    # The function is idempotent – safe to call on every HA start.
+    try:
+        await async_install_dashboard(hass)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("ES Heatpump: dashboard install failed: %s", err)
 
     # Reload when options change (e.g. scan interval updated by user)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

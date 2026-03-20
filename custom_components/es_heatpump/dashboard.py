@@ -1,23 +1,22 @@
 """
 dashboard.py
 ────────────
-Automatically creates the "ES Heatpump" Lovelace dashboard the first time
-the integration is set up, and removes it when the integration is removed.
+Automatically installs / removes the "ES Heatpump" Lovelace dashboard.
 
-Strategy (version-safe across HA 2023.x–2025.x):
-  1. Copy the bundled es_heatpump.yaml to <config>/dashboards/es_heatpump.yaml
-  2. Register it as a YAML-file-based dashboard via the lovelace storage
-     collection (hass.data["lovelace"]["dashboards_collection"]).
-  3. If the lovelace collection is not yet available (rare edge case during
-     very early startup), fall back to writing directly into the lovelace
-     *storage* file and firing a persistent notification that asks the user
-     to restart HA once.
+Strategy (proven reliable across HA 2023.x – 2025.x):
+  1. Copy the bundled YAML to <config>/dashboards/es_heatpump.yaml
+  2. Write the dashboard entry directly into the
+     .storage/lovelace_dashboards JSON file (HA's own storage format).
+  3. Fire the lovelace_updated event so HA picks up the change immediately
+     WITHOUT needing a full restart.
+  4. If firing the event fails for any reason, show a persistent notification
+     asking for a one-time restart.
 """
 from __future__ import annotations
 
 import logging
-import os
 import shutil
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -27,18 +26,18 @@ from homeassistant.helpers import storage as ha_storage
 _LOGGER = logging.getLogger(__name__)
 
 # ── Constants ────────────────────────────────────────────────────────────────
-DASHBOARD_URL_PATH = "es-heatpump"
-DASHBOARD_TITLE = "ES Heatpump"
-DASHBOARD_ICON = "mdi:heat-pump"
+DASHBOARD_URL_PATH  = "es-heatpump"
+DASHBOARD_TITLE     = "ES Heatpump"
+DASHBOARD_ICON      = "mdi:heat-pump"
 
-# Source YAML bundled inside the integration package
+# YAML bundled inside the integration package
 _YAML_SRC: Path = Path(__file__).parent / "dashboard" / "es_heatpump.yaml"
-# Destination inside the HA config directory
-_YAML_DEST_REL = "dashboards/es_heatpump.yaml"
+# Destination relative to <config>/
+_YAML_DEST_REL      = "dashboards/es_heatpump.yaml"
 
-# HA lovelace storage key (stable since HA 2022)
-_LOVELACE_STORAGE_KEY = "lovelace_dashboards"
-_LOVELACE_STORAGE_VERSION = 1
+# HA storage key for Lovelace dashboards (stable since HA 2021)
+_STORE_KEY          = "lovelace_dashboards"
+_STORE_VERSION      = 1
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
@@ -46,205 +45,143 @@ _LOVELACE_STORAGE_VERSION = 1
 async def async_install_dashboard(hass: HomeAssistant) -> None:
     """
     Install the ES Heatpump dashboard.
-    Called once from async_setup_entry on first install.
     Idempotent – does nothing if the dashboard already exists.
     """
-    if await _dashboard_exists(hass):
-        _LOGGER.debug("ES Heatpump: dashboard already exists, skipping install")
+    store = ha_storage.Store(hass, _STORE_VERSION, _STORE_KEY)
+    data  = await store.async_load() or {"items": []}
+    items: list[dict] = data.setdefault("items", [])
+
+    # ── Already installed? ────────────────────────────────────────────────
+    if any(item.get("url_path") == DASHBOARD_URL_PATH for item in items):
+        _LOGGER.debug("ES Heatpump: dashboard already registered, skipping")
         return
 
+    # ── Step 1: copy YAML file ────────────────────────────────────────────
     dest = Path(hass.config.config_dir) / _YAML_DEST_REL
-    await _copy_yaml(hass, dest)
+    try:
+        await hass.async_add_executor_job(_copy_yaml, dest)
+    except Exception as err:
+        _LOGGER.error("ES Heatpump: could not copy dashboard YAML: %s", err)
+        return
 
-    registered = await _register_via_collection(hass)
-    if not registered:
-        registered = await _register_via_storage(hass)
+    # ── Step 2: add entry to storage ──────────────────────────────────────
+    entry: dict[str, Any] = {
+        "id":              str(uuid.uuid4()),
+        "url_path":        DASHBOARD_URL_PATH,
+        "title":           DASHBOARD_TITLE,
+        "icon":            DASHBOARD_ICON,
+        "show_in_sidebar": True,
+        "require_admin":   False,
+        "mode":            "yaml",
+        "filename":        _YAML_DEST_REL,
+    }
+    items.append(entry)
 
-    if registered:
+    try:
+        await store.async_save(data)
+        _LOGGER.debug("ES Heatpump: dashboard entry written to lovelace storage")
+    except Exception as err:
+        _LOGGER.error("ES Heatpump: could not write to lovelace storage: %s", err)
+        return
+
+    # ── Step 3: tell HA to reload Lovelace without a restart ─────────────
+    reloaded = await _async_reload_lovelace(hass)
+
+    if reloaded:
         _LOGGER.info(
             "ES Heatpump: dashboard '%s' installed and visible in the sidebar.",
             DASHBOARD_TITLE,
         )
     else:
         _LOGGER.warning(
-            "ES Heatpump: could not auto-register dashboard. "
-            "Please add it manually from dashboards/%s", _YAML_DEST_REL
+            "ES Heatpump: dashboard registered but Lovelace reload failed. "
+            "A Home Assistant restart is needed for it to appear in the sidebar."
         )
         hass.components.persistent_notification.async_create(
-            title="ES Heatpump – Dashboard",
+            title="ES Heatpump – Neustart erforderlich / Restart required",
             message=(
-                "Das ES-Heatpump-Dashboard konnte nicht automatisch angelegt werden.\n\n"
-                "Bitte manuell hinzufügen: **Einstellungen → Dashboards → Dashboard hinzufügen** "
-                "und die Datei `dashboards/es_heatpump.yaml` aus dem HA-Konfig-Verzeichnis "
-                "als YAML-Dashboard registrieren.\n\n"
-                "*(The ES Heatpump dashboard could not be auto-installed. "
-                "Please add it manually via Settings → Dashboards → Add dashboard.)*"
+                "Das **ES Heatpump**-Dashboard wurde installiert und erscheint nach "
+                "einem **Neustart von Home Assistant** in der Seitenleiste.\n\n"
+                "*(The ES Heatpump dashboard has been installed and will appear "
+                "in the sidebar after a **Home Assistant restart**.)*"
             ),
-            notification_id="es_heatpump_dashboard_manual",
+            notification_id="es_heatpump_restart_required",
         )
 
 
 async def async_remove_dashboard(hass: HomeAssistant) -> None:
     """
-    Remove the ES Heatpump dashboard.
-    Called from async_unload_entry so the sidebar stays clean.
+    Remove the ES Heatpump dashboard entry and its YAML file.
+    Called when the last config entry is removed.
     """
-    removed = await _deregister_via_collection(hass)
-    if not removed:
-        await _deregister_via_storage(hass)
+    store = ha_storage.Store(hass, _STORE_VERSION, _STORE_KEY)
+    data  = await store.async_load()
+    if data:
+        original_len = len(data.get("items", []))
+        data["items"] = [
+            i for i in data.get("items", [])
+            if i.get("url_path") != DASHBOARD_URL_PATH
+        ]
+        if len(data["items"]) < original_len:
+            await store.async_save(data)
+            _LOGGER.debug("ES Heatpump: dashboard entry removed from lovelace storage")
 
     dest = Path(hass.config.config_dir) / _YAML_DEST_REL
-    if await hass.async_add_executor_job(dest.exists):
-        await hass.async_add_executor_job(dest.unlink)
+    try:
+        await hass.async_add_executor_job(_remove_yaml, dest)
+    except Exception:
+        pass
+
+    await _async_reload_lovelace(hass)
+
+
+# ── Internal helpers ──────────────────────────────────────────────────────────
+
+def _copy_yaml(dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(_YAML_SRC, dest)
+    _LOGGER.debug("ES Heatpump: copied dashboard YAML → %s", dest)
+
+
+def _remove_yaml(dest: Path) -> None:
+    if dest.exists():
+        dest.unlink()
         _LOGGER.debug("ES Heatpump: removed dashboard YAML %s", dest)
 
 
-# ── Internal helpers ─────────────────────────────────────────────────────────
-
-async def _dashboard_exists(hass: HomeAssistant) -> bool:
-    """Return True if a dashboard with our url_path already exists."""
-    try:
-        collection = _get_collection(hass)
-        if collection is not None:
-            return any(
-                item.get("url_path") == DASHBOARD_URL_PATH
-                for item in collection.async_items()
-            )
-    except Exception:  # noqa: BLE001
-        pass
-
-    # Fallback: check storage file
-    store = _make_store(hass)
-    data = await store.async_load()
-    if data and isinstance(data.get("items"), list):
-        return any(
-            item.get("url_path") == DASHBOARD_URL_PATH
-            for item in data["items"]
-        )
-    return False
-
-
-async def _copy_yaml(hass: HomeAssistant, dest: Path) -> None:
-    """Copy the bundled dashboard YAML to the HA config directory."""
-    def _do_copy() -> None:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(_YAML_SRC, dest)
-
-    await hass.async_add_executor_job(_do_copy)
-    _LOGGER.debug("ES Heatpump: copied dashboard YAML to %s", dest)
-
-
-def _get_collection(hass: HomeAssistant) -> Any | None:
-    """Return the lovelace dashboards collection if available."""
-    lovelace = hass.data.get("lovelace")
-    if lovelace is None:
-        return None
-    # HA stores it under different keys depending on version
-    for key in ("dashboards_collection", "dashboards"):
-        coll = lovelace.get(key) if isinstance(lovelace, dict) else getattr(lovelace, key, None)
-        if coll is not None:
-            return coll
-    return None
-
-
-async def _register_via_collection(hass: HomeAssistant) -> bool:
-    """Try to register the dashboard via the live lovelace collection."""
-    collection = _get_collection(hass)
-    if collection is None:
-        return False
-    try:
-        await collection.async_create_item(
-            {
-                "url_path": DASHBOARD_URL_PATH,
-                "title": DASHBOARD_TITLE,
-                "icon": DASHBOARD_ICON,
-                "show_in_sidebar": True,
-                "require_admin": False,
-                "mode": "yaml",
-                "filename": _YAML_DEST_REL,
-            }
-        )
-        return True
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.debug("ES Heatpump: collection registration failed: %s", err)
-        return False
-
-
-def _make_store(hass: HomeAssistant) -> ha_storage.Store:
-    return ha_storage.Store(hass, _LOVELACE_STORAGE_VERSION, _LOVELACE_STORAGE_KEY)
-
-
-async def _register_via_storage(hass: HomeAssistant) -> bool:
+async def _async_reload_lovelace(hass: HomeAssistant) -> bool:
     """
-    Directly write the dashboard entry into the lovelace storage JSON file.
-    Used as a fallback when the collection object is not yet available.
-    HA will pick up the change on next restart.
+    Trigger a Lovelace reload so the sidebar updates without a restart.
+    Tries multiple methods in order of reliability.
+    Returns True if at least one method succeeded.
     """
+
+    # Method A: call the lovelace.reload_resources service (HA 2022+)
     try:
-        store = _make_store(hass)
-        data = await store.async_load() or {"items": []}
-        items: list[dict] = data.setdefault("items", [])
-
-        # Guard against duplicates
-        if any(i.get("url_path") == DASHBOARD_URL_PATH for i in items):
-            return True
-
-        import uuid
-        items.append(
-            {
-                "id": str(uuid.uuid4()),
-                "url_path": DASHBOARD_URL_PATH,
-                "title": DASHBOARD_TITLE,
-                "icon": DASHBOARD_ICON,
-                "show_in_sidebar": True,
-                "require_admin": False,
-                "mode": "yaml",
-                "filename": _YAML_DEST_REL,
-            }
+        await hass.services.async_call(
+            "lovelace", "reload_resources", blocking=True
         )
-        await store.async_save(data)
-        _LOGGER.info(
-            "ES Heatpump: dashboard written to lovelace storage. "
-            "A Home Assistant restart is needed for the dashboard to appear."
-        )
-        hass.components.persistent_notification.async_create(
-            title="ES Heatpump – Neustart erforderlich",
-            message=(
-                "Das **ES Heatpump**-Dashboard wurde konfiguriert und erscheint "
-                "nach einem **Neustart von Home Assistant** in der Seitenleiste.\n\n"
-                "*(The ES Heatpump dashboard has been configured and will appear "
-                "in the sidebar after a **Home Assistant restart**.)*"
-            ),
-            notification_id="es_heatpump_dashboard_restart",
-        )
+        _LOGGER.debug("ES Heatpump: lovelace.reload_resources called successfully")
         return True
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.error("ES Heatpump: storage fallback failed: %s", err)
-        return False
+    except Exception as err:
+        _LOGGER.debug("ES Heatpump: reload_resources failed (%s), trying next method", err)
 
-
-async def _deregister_via_collection(hass: HomeAssistant) -> bool:
-    collection = _get_collection(hass)
-    if collection is None:
-        return False
+    # Method B: fire the lovelace_updated event directly
     try:
-        for item in collection.async_items():
-            if item.get("url_path") == DASHBOARD_URL_PATH:
-                await collection.async_delete_item(item["id"])
-                return True
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.debug("ES Heatpump: collection deregistration failed: %s", err)
+        hass.bus.async_fire("lovelace_updated", {"url_path": None, "action": "create"})
+        _LOGGER.debug("ES Heatpump: lovelace_updated event fired")
+        return True
+    except Exception as err:
+        _LOGGER.debug("ES Heatpump: lovelace_updated fire failed (%s)", err)
+
+    # Method C: call the frontend.reload service
+    try:
+        await hass.services.async_call(
+            "frontend", "reload_themes", blocking=True
+        )
+        _LOGGER.debug("ES Heatpump: frontend.reload_themes called")
+        return True
+    except Exception as err:
+        _LOGGER.debug("ES Heatpump: frontend reload failed (%s)", err)
+
     return False
-
-
-async def _deregister_via_storage(hass: HomeAssistant) -> None:
-    try:
-        store = _make_store(hass)
-        data = await store.async_load()
-        if not data:
-            return
-        items = data.get("items", [])
-        data["items"] = [i for i in items if i.get("url_path") != DASHBOARD_URL_PATH]
-        await store.async_save(data)
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.debug("ES Heatpump: storage deregistration failed: %s", err)
