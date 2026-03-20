@@ -3,10 +3,11 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.3.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 ---
 
-> 🇩🇪 [Deutsche Version](#deutsch) · 🇬🇧 [English Version](#english)
+> 🇩🇪 [Deutsche Version](#deutsch) · 🇬🇧 [English Version](#english) · 📋 [Changelog](#changelog)
 
 ---
 
@@ -21,9 +22,9 @@ Automatische Anmeldung, Session-Verwaltung, Sensor-Erstellung und **vollautomati
 | Feature | Beschreibung |
 |---------|-------------|
 | 🔐 Automatischer Login | Zugangsdaten einmal eingeben – alles andere übernimmt die Integration |
-| 🔄 Session-Verwaltung | Automatische Erneuerung der Session ohne Neustart |
-| 📊 Alle Sensoren | 34+ bekannte Parameter mit deutschen Klarnamen, Einheit und Device Class |
-| 🔍 Unbekannte Parameter | Neue Parameter werden als `Parameter parXX` angelegt – kein Datenverlust |
+| 🔄 Session-Verwaltung | Automatische Erneuerung der Session (alle 55 Minuten) ohne Neustart |
+| 🔍 Automatische Geräteerkennung | `mn` und `devid` werden automatisch vom Portal abgerufen |
+| 📊 Alle Sensoren | 40+ Parameter, 14 davon mit verifizierten Klarnamen |
 | 📋 Dashboard | „ES Heatpump"-Dashboard wird **automatisch** installiert und in der Seitenleiste angezeigt |
 | ⚙️ Konfigurierbar | Abfrageintervall (10–3600 s) und Portal-URL anpassbar |
 | 🌍 Mehrsprachig | UI auf Deutsch und Englisch |
@@ -59,65 +60,60 @@ Automatische Anmeldung, Session-Verwaltung, Sensor-Erstellung und **vollautomati
 
 Das Dashboard wird vollautomatisch installiert und enthält:
 
-- **Temperaturen** – Außen, Vorlauf, Rücklauf, Warmwasser (Ist/Soll)
+- **Temperaturen** – Außen, Vorlauf, Rücklauf, Warmwasser, Mischventile, Raumtemperatur
 - **Temperaturverlauf (24h)** – History Graph
-- **Betrieb & Leistung** – Betriebsmodus, Kompressor, Lüfter, Pumpen, COP
-- **Kältekreis** – Sauggas, Heißgas, Druck
-- **Energie gesamt** – Wärme & Strom für Heizen und Warmwasser
-- **Heizkurve & Einstellungen** – Steilheit, Parallelverschiebung, Sollwerte
-- **Betriebsstunden** – Kompressor, Heizen, Warmwasser, Starts
+- **Betrieb & Leistung** – Betriebsmodus, Kompressor, Lüfter, Pumpen
+- **Spannung & Energie** – Netzspannung, Leistungsaufnahme, Energiezähler
+- **Betriebszeiten** – AH, HBH, HWTBH Betriebszeit in Minuten
 - **Energiebilanz-View** – Balkendiagramme (14 Tage)
 
 ### 🌡️ Bekannte Sensoren
 
-| Parameter | Name | Einheit |
-|-----------|------|---------|
-| par1 | Außentemperatur | °C |
-| par2 | Vorlauftemperatur | °C |
-| par3 | Rücklauftemperatur | °C |
-| par4 | Warmwasser Ist | °C |
-| par5 | Warmwasser Soll | °C |
-| par6 | Vorlauf Soll | °C |
-| par7 | Sauggastemperatur | °C |
-| par8 | Heißgastemperatur | °C |
-| par9 | Kondensationstemperatur | °C |
-| par10 | Verdampfungstemperatur | °C |
-| par11 | Kältemittel Hochdruck | bar |
-| par12 | Kältemittel Niederdruck | bar |
-| par13 | Leistungsaufnahme | kW |
-| par14 | Heizleistung | kW |
-| par15 | COP (Arbeitszahl) | – |
-| par16 | Energie Heizen gesamt | kWh |
-| par17 | Energie Warmwasser gesamt | kWh |
-| par18 | Strom Heizen gesamt | kWh |
-| par19 | Strom Warmwasser gesamt | kWh |
-| par20 | Betriebsmodus | – |
-| par21 | Kompressor Frequenz | Hz |
-| par22 | Lüfter Drehzahl | rpm |
-| par23 | Pumpe Heizkreis | % |
-| par24 | Pumpe Warmwasser | % |
-| par30 | Heizkurve Steilheit | – |
-| par31 | Heizkurve Parallelverschiebung | K |
-| par35 | Heizen Einschalttemperatur | °C |
-| par36 | Heizen Solltemperatur | °C |
-| par37 | Warmwasser Ladetemperatur | °C |
-| par38 | Warmwasser Hysterese | K |
-| par50 | Betriebsstunden Kompressor | h |
-| par51 | Betriebsstunden Heizen | h |
-| par52 | Betriebsstunden Warmwasser | h |
-| par53 | Starts Kompressor | – |
+#### ✅ Verifizierte Parameter (Live-Messung bestätigt)
 
-Unbekannte Parameter werden automatisch als `Parameter parXX` angelegt.  
-Bitte ein Issue eröffnen, wenn du weitere Parameter kennst!
+| Parameter | Name | Einheit | Bestätigung |
+|-----------|------|---------|-------------|
+| par6  | Heizen Solltemperatur | °C | Portal „Set Temperature" |
+| par7  | Warmwasser Ist | °C | Portal „Sanitary Hot Water Temp. TW" |
+| par8  | Heizkreis Temperatur | °C | Portal „Cooling/Heating Water Temp. TC" |
+| par9  | Mischventil 1 Temperatur | °C | Portal „Water Temp. After Mixing Valve 1" |
+| par10 | Mischventil 2 Temperatur | °C | Portal „Water Temp. After Mixing Valve 2" |
+| par11 | Raumtemperatur | °C | Portal „Room Temp. TR" |
+| par15 | Betriebsmodus | – | Portal „Unit Current Working Mode" (1=Heizen) |
+| par20 | Kompressor Frequenz | Hz | Portal „Comp. Speed Hz" |
+| par24 | Außentemperatur | °C | Portal „Actual Ambient Temp. Ta" |
+| par31 | Spannung | V | Portal „Voltage" |
+| par37 | Software Version | – | Portal „Software Version" |
+| par38 | Kompressor Drehzahl berechnet | – | Portal „Calculated Comp. Speed" |
+| par41 | AH Betriebszeit | min | Portal „AH Working Time" |
+| par42 | HBH Betriebszeit | min | Portal „HBH Working Time" |
+
+#### ~ Plausible Parameter (noch nicht abschließend bestätigt)
+
+| Parameter | Name | Einheit | Hinweis |
+|-----------|------|---------|---------|
+| par4  | Vorlauftemperatur | °C | Wert 35.1 plausibel |
+| par5  | Rücklauftemperatur | °C | Wert 33.6 plausibel |
+| par21 | Lüfter Drehzahl | rpm | Wert 400.0 plausibel |
+| par26 | Leistungsaufnahme | kW | Wert 1.8 plausibel |
+| par28 | Energie gesamt | kWh | Wert 560.0 |
+| par43 | HWTBH Betriebszeit | min | Wert 0 (kalt) |
+
+#### ❓ Unbekannte Parameter (werden als `Parameter parXX` angelegt)
+
+par1, par2, par3, par12, par13, par14, par16–par19, par23, par25, par27, par29, par30, par32–par36, par39, par40, par44–par48
+
+> Bitte ein **GitHub Issue** eröffnen, wenn du einen dieser Parameter identifiziert hast!  
+> Je mehr Nutzer Rückmeldungen geben, desto vollständiger wird das Mapping.
 
 ### 🔧 Erweiterte Konfiguration (für Entwickler)
 
 Abweichende Endpunkte lassen sich in `const.py` anpassen:
 
 ```python
-LOGIN_PATH  = "/index.php"         # relativer Pfad zum Login
-DATA_PATH   = "/index.php"         # relativer Pfad zu den Daten
-DATA_PARAMS = {"s": "realdata"}    # Query-Parameter für den Datenabruf
+LOGIN_PATH        = "/a/login"
+DEVICE_LIST_PATH  = "/a/amt/deviceList/listData"
+REALDATA_PATH     = "/a/amt/realdata/get"
 ```
 
 ### 🐛 Fehlerbehebung
@@ -125,10 +121,10 @@ DATA_PARAMS = {"s": "realdata"}    # Query-Parameter für den Datenabruf
 | Problem | Lösung |
 |---------|--------|
 | „Anmeldung fehlgeschlagen" | Zugangsdaten im Portal prüfen |
-| Keine Sensordaten | HA-Logs prüfen; `DATA_PATH` / `DATA_PARAMS` ggf. anpassen |
+| Keine Sensordaten | HA-Logs prüfen (`Einstellungen → System → Logs`) |
 | Dashboard fehlt | HA einmal neu starten |
 | Sensoren `unavailable` | Netzwerkverbindung und Portal-Erreichbarkeit prüfen |
-| Unbekannte Parameter | Issue mit Parameterbezeichnung und Wert öffnen |
+| Sensor hat falschen Namen | GitHub Issue mit par-ID, Portalname und aktuellem Wert öffnen |
 
 ---
 
@@ -143,9 +139,9 @@ Automatic login, session management, sensor creation, and **fully automatic dash
 | Feature | Description |
 |---------|-------------|
 | 🔐 Automatic Login | Enter credentials once – the integration handles everything else |
-| 🔄 Session Management | Automatic session renewal without restarts |
-| 📊 All Sensors | 34+ known parameters with friendly names, units, and device classes |
-| 🔍 Unknown Parameters | New parameters are created as `Parameter parXX` – no data is lost |
+| 🔄 Session Management | Automatic session renewal (every 55 minutes) without restarts |
+| 🔍 Automatic Device Discovery | `mn` and `devid` are fetched automatically from the portal |
+| 📊 All Sensors | 40+ parameters, 14 confirmed with friendly names |
 | 📋 Dashboard | The "ES Heatpump" dashboard is **automatically** installed and shown in the sidebar |
 | ⚙️ Configurable | Poll interval (10–3600 s) and portal URL adjustable |
 | 🌍 Multilingual | UI available in German and English |
@@ -181,78 +177,71 @@ Automatic login, session management, sensor creation, and **fully automatic dash
 
 The dashboard is installed automatically and includes:
 
-- **Temperatures** – Outdoor, flow, return, hot water (actual/setpoint)
+- **Temperatures** – Outdoor, flow, return, hot water, mixing valves, room temperature
 - **Temperature history (24h)** – History graph
-- **Operation & Power** – Operating mode, compressor, fan, pumps, COP
-- **Refrigerant circuit** – Suction gas, hot gas, high/low pressure
-- **Total energy** – Heat and electricity for heating and hot water
-- **Heating curve & settings** – Slope, parallel shift, setpoints
-- **Operating hours** – Compressor, heating, hot water, starts
+- **Operation & Power** – Operating mode, compressor, fan, pumps
+- **Voltage & Energy** – Mains voltage, power consumption, energy counters
+- **Operating hours** – AH, HBH, HWTBH runtimes in minutes
 - **Energy balance view** – Bar charts (14 days)
 
 ### 🌡️ Known Sensors
 
-| Parameter | Name | Unit |
-|-----------|------|------|
-| par1 | Outdoor temperature | °C |
-| par2 | Flow temperature | °C |
-| par3 | Return temperature | °C |
-| par4 | Hot water actual | °C |
-| par5 | Hot water setpoint | °C |
-| par6 | Flow setpoint | °C |
-| par7 | Suction gas temperature | °C |
-| par8 | Hot gas temperature | °C |
-| par9 | Condensation temperature | °C |
-| par10 | Evaporation temperature | °C |
-| par11 | Refrigerant high pressure | bar |
-| par12 | Refrigerant low pressure | bar |
-| par13 | Power consumption | kW |
-| par14 | Heating power | kW |
-| par15 | COP (coefficient of performance) | – |
-| par16 | Total energy heating | kWh |
-| par17 | Total energy hot water | kWh |
-| par18 | Total electricity heating | kWh |
-| par19 | Total electricity hot water | kWh |
-| par20 | Operating mode | – |
-| par21 | Compressor frequency | Hz |
-| par22 | Fan speed | rpm |
-| par23 | Heating circuit pump | % |
-| par24 | Hot water pump | % |
-| par30 | Heating curve slope | – |
-| par31 | Heating curve parallel shift | K |
-| par35 | Heating switch-on temperature | °C |
-| par36 | Heating setpoint temperature | °C |
-| par37 | Hot water loading temperature | °C |
-| par38 | Hot water hysteresis | K |
-| par50 | Compressor operating hours | h |
-| par51 | Heating operating hours | h |
-| par52 | Hot water operating hours | h |
-| par53 | Compressor starts | – |
+#### ✅ Verified Parameters (confirmed by live measurement)
 
-Unknown parameters are automatically added as `Parameter parXX`.  
-Please open an issue if you identify additional parameters!
+| Parameter | Name | Unit | Confirmed by |
+|-----------|------|------|-------------|
+| par6  | Heating setpoint temperature | °C | Portal "Set Temperature" |
+| par7  | Hot water actual | °C | Portal "Sanitary Hot Water Temp. TW" |
+| par8  | Heating circuit temperature | °C | Portal "Cooling/Heating Water Temp. TC" |
+| par9  | Mixing valve 1 temperature | °C | Portal "Water Temp. After Mixing Valve 1" |
+| par10 | Mixing valve 2 temperature | °C | Portal "Water Temp. After Mixing Valve 2" |
+| par11 | Room temperature | °C | Portal "Room Temp. TR" |
+| par15 | Operating mode | – | Portal "Unit Current Working Mode" (1=Heating) |
+| par20 | Compressor frequency | Hz | Portal "Comp. Speed Hz" |
+| par24 | Outdoor temperature | °C | Portal "Actual Ambient Temp. Ta" |
+| par31 | Voltage | V | Portal "Voltage" |
+| par37 | Software version | – | Portal "Software Version" |
+| par38 | Calculated compressor speed | – | Portal "Calculated Comp. Speed" |
+| par41 | AH operating time | min | Portal "AH Working Time" |
+| par42 | HBH operating time | min | Portal "HBH Working Time" |
+
+#### ~ Plausible Parameters (not yet fully confirmed)
+
+| Parameter | Name | Unit | Note |
+|-----------|------|------|------|
+| par4  | Flow temperature | °C | Value 35.1 plausible |
+| par5  | Return temperature | °C | Value 33.6 plausible |
+| par21 | Fan speed | rpm | Value 400.0 plausible |
+| par26 | Power consumption | kW | Value 1.8 plausible |
+| par28 | Total energy | kWh | Value 560.0 |
+| par43 | HWTBH operating time | min | Value 0 (cold) |
+
+#### ❓ Unknown Parameters (shown as `Parameter parXX`)
+
+par1, par2, par3, par12, par13, par14, par16–par19, par23, par25, par27, par29, par30, par32–par36, par39, par40, par44–par48
+
+> Please open a **GitHub issue** if you have identified any of these parameters!  
+> The more users contribute, the more complete the mapping becomes.
 
 ### 🔧 Advanced Configuration (for developers)
 
-If your installation uses a different endpoint, adjust `const.py`:
+If your installation uses different endpoints, adjust `const.py`:
 
 ```python
-LOGIN_PATH  = "/index.php"         # relative path to the login endpoint
-DATA_PATH   = "/index.php"         # relative path to the data endpoint
-DATA_PARAMS = {"s": "realdata"}    # query parameters for the data request
+LOGIN_PATH        = "/a/login"
+DEVICE_LIST_PATH  = "/a/amt/deviceList/listData"
+REALDATA_PATH     = "/a/amt/realdata/get"
 ```
-
-The `_normalize()` method in `coordinator.py` automatically handles multiple known JSON response shapes.
 
 ### 🐛 Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
 | "Login failed" | Check credentials on the myheatpump.com portal |
-| No sensor data | Check HA logs; adjust `DATA_PATH` / `DATA_PARAMS` if needed |
+| No sensor data | Check HA logs (`Settings → System → Logs`) |
 | Dashboard missing | Restart HA once |
 | Sensors `unavailable` | Check network connectivity and portal availability |
-| Unknown parameters | Open an issue with the parameter name and value |
+| Sensor has wrong name | Open a GitHub issue with par-ID, portal label, and current value |
 
 ---
 
@@ -265,8 +254,8 @@ ha-es-heatpump/
 ├── custom_components/es_heatpump/
 │   ├── __init__.py              # Integration setup & teardown + dashboard trigger
 │   ├── manifest.json            # HA integration manifest
-│   ├── const.py                 # Parameter mapping (34 known sensors)
-│   ├── coordinator.py           # Login + session management + polling
+│   ├── const.py                 # Verified parameter mapping
+│   ├── coordinator.py           # Login → device discovery → sensor polling
 │   ├── config_flow.py           # UI setup wizard
 │   ├── sensor.py                # Sensor entities
 │   ├── dashboard.py             # Auto-dashboard installer/remover
@@ -282,7 +271,90 @@ ha-es-heatpump/
 
 ---
 
+<a name="changelog"></a>
+## 📋 Changelog
+
+---
+
+### v1.3.0 – Parameter-Mapping verifiziert / Parameter mapping verified
+*2026-03-20*
+
+**🇩🇪**
+- **14 Parameter live bestätigt** durch direkten Vergleich der Portal-Anzeige mit den par-Rohwerten über Chrome DevTools
+- Korrektes Mapping für: Außentemperatur (par24), Warmwasser (par7), Heizkreis (par8), Mischventile (par9/par10), Raumtemperatur (par11), Solltemperatur (par6), Betriebsmodus (par15), Kompressor-Frequenz (par20), Spannung (par31), Software-Version (par37), Kompressor-Drehzahl (par38), AH/HBH-Betriebszeiten (par41/par42)
+- Alle unbekannten Parameter werden weiterhin als `Parameter parXX` angelegt – kein Datenverlust
+- Kommentare im Code markieren verifizierte (✓), plausible (~) und unbekannte (?) Parameter
+
+**🇬🇧**
+- **14 parameters verified live** by cross-referencing portal UI values against raw par values via Chrome DevTools
+- Correct mapping for: outdoor temperature (par24), hot water (par7), heating circuit (par8), mixing valves (par9/par10), room temperature (par11), setpoint (par6), operating mode (par15), compressor frequency (par20), voltage (par31), software version (par37), compressor speed (par38), AH/HBH runtimes (par41/par42)
+- All unknown parameters are still created as `Parameter parXX` – no data loss
+- Code comments mark verified (✓), plausible (~), and unknown (?) parameters
+
+---
+
+### v1.2.0 – Korrekter Daten-Endpunkt / Correct data endpoint
+*2026-03-20*
+
+**🇩🇪**
+- **Kritischer Fix:** Daten-Endpunkt korrigiert von `/a/amt/desktop/load` → `/a/amt/realdata/get`
+- Neuer dreistufiger API-Flow: Login → Geräteerkennung → Sensordaten
+- **Automatische Geräteerkennung:** `mn` und `devid` werden nach dem Login automatisch über `POST /a/amt/deviceList/listData` abgerufen – keine manuelle Eingabe nötig
+- `_normalize()` vereinfacht: Response ist flaches JSON mit par-Werten direkt auf oberster Ebene
+
+**🇬🇧**
+- **Critical fix:** Data endpoint corrected from `/a/amt/desktop/load` → `/a/amt/realdata/get`
+- New three-step API flow: login → device discovery → sensor data
+- **Automatic device discovery:** `mn` and `devid` are fetched automatically after login via `POST /a/amt/deviceList/listData` – no manual input required
+- `_normalize()` simplified: response is flat JSON with par values directly at top level
+
+---
+
+### v1.1.0 – Login-Erkennung korrigiert / Login detection fixed
+*2026-03-20*
+
+**🇩🇪**
+- **Kritischer Fix:** Portal antwortet auf erfolgreichen Login mit `{"msg": "Login successful!"}` statt `{"success": true}` – die Erkennung wurde entsprechend angepasst
+- Alle drei Erfolgs-Formate werden nun erkannt: `success: true`, `code: 0/200` und `"success" im msg-Text`
+- Fehlermeldung im Log war irreführend: „login failed – portal response: Login successful!" – behoben
+
+**🇬🇧**
+- **Critical fix:** Portal responds to successful login with `{"msg": "Login successful!"}` instead of `{"success": true}` – detection updated accordingly
+- All three success formats now handled: `success: true`, `code: 0/200`, and `"success"` in msg text
+- Misleading log message fixed: "login failed – portal response: Login successful!"
+
+---
+
+### v1.0.0 – Erstveröffentlichung / Initial release
+*2026-03-20*
+
+**🇩🇪**
+- Erste vollständige HACS-Integration für Energy Save Wärmepumpen via myheatpump.com
+- Config Flow UI: Einrichtung über HA-Oberfläche ohne YAML
+- Base64-kodierte Anmeldedaten (vom Portal so gefordert)
+- Korrekte Login-Endpunkte durch Browser-DevTools verifiziert: `POST /a/login`
+- Pflichtfelder `validCode`, `loginValidCode`, `__url` (leer) im Login-Payload enthalten
+- Session-Verwaltung mit automatischer Erneuerung nach 55 Minuten
+- Lovelace-Dashboard „ES Heatpump" wird automatisch installiert (mit Fallback auf Storage + Restart-Hinweis)
+- Dashboard wird beim Entfernen der Integration automatisch wieder gelöscht
+- Übersetzungen: Deutsch und Englisch
+- Options Flow: Abfrageintervall und Portal-URL nachträglich änderbar
+
+**🇬🇧**
+- First full HACS integration for Energy Save heat pumps via myheatpump.com
+- Config Flow UI: setup via HA interface without any YAML
+- Base64-encoded credentials (required by the portal)
+- Correct login endpoints verified via browser DevTools: `POST /a/login`
+- Required fields `validCode`, `loginValidCode`, `__url` (empty) included in login payload
+- Session management with automatic renewal after 55 minutes
+- Lovelace dashboard "ES Heatpump" installed automatically (with fallback to storage + restart notice)
+- Dashboard is automatically removed when the integration is deleted
+- Translations: German and English
+- Options Flow: poll interval and portal URL can be changed after setup
+
+---
+
 ## 📄 License
 
 MIT – Contributions welcome! 🎉  
-If this integration saves you time, a ⭐ on GitHub is appreciated!
+If this integration helps you, a ⭐ on GitHub is appreciated!
