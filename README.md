@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.3.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-1.4.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 ---
 
@@ -273,6 +273,25 @@ ha-es-heatpump/
 
 <a name="changelog"></a>
 ## 📋 Changelog
+
+---
+
+### v1.4.0 – Dashboard-Installation zuverlässig / Dashboard install reliable
+*2026-03-20*
+
+**🇩🇪**
+- **Fix: Dashboard erscheint jetzt zuverlässig in der Seitenleiste** ohne manuellen Neustart
+-  komplett neu geschrieben: schreibt jetzt direkt in  (exakt das Format das HA selbst verwendet) statt über die interne Lovelace-Collection-API
+- Dreistu­figer Lovelace-Reload nach der Installation:  → -Event →  (Fallback-Kette)
+- : Dashboard-Installation läuft jetzt synchron () statt als Hintergrund-Task – verhindert Race-Conditions beim HA-Start
+- Persistent Notification erscheint nur noch als letzter Fallback, wenn alle Reload-Methoden fehlschlagen
+
+**🇬🇧**
+- **Fix: Dashboard now reliably appears in the sidebar** without a manual restart
+-  completely rewritten: now writes directly to  (the exact format HA itself uses) instead of going through the internal Lovelace collection API
+- Three-step Lovelace reload after installation:  →  event →  (fallback chain)
+- : dashboard installation now runs synchronously () instead of as a background task – prevents race conditions on HA startup
+- Persistent notification now only shown as a last resort if all reload methods fail
 
 ---
 
