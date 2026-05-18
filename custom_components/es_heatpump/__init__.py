@@ -64,13 +64,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    # ── One-time entity-registry migration ───────────────────────────────
-    # Renames legacy sensor.es_warmepumpe_* IDs to sensor.es_hp_<slug>
-    # and removes orphaned entities for parameters we no longer expose.
-    await _async_migrate_entities(hass, entry)
-
-    # Forward to sensor platform
+    # Forward to sensor platform first.  All entities (raw `parXX` from the
+    # config registry + the three freshly-created calculated sensors) are
+    # registered here before we rename them in one pass.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # ── Entity-registry migration ────────────────────────────────────────
+    # Renames legacy ``sensor.es_warmepumpe_*`` IDs to ``sensor.es_hp_<slug>``
+    # (raw parameters AND calculated sensors), and removes orphaned entities
+    # for parameters we no longer expose.  Safe to run on every startup —
+    # the rename is a no-op once IDs are already correct.
+    await _async_migrate_entities(hass, entry)
 
     # ── Auto-install Lovelace dashboard ──────────────────────────────────
     try:
