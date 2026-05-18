@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.0.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-2.0.1-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 
@@ -96,7 +96,7 @@ Das Dashboard-YAML wird beim Setup nach `<config>/dashboards/es_heatpump.yaml` k
 
 ### 🔬 Verifikations-Skript
 
-Im Ordner [`scripts/verify_mapping.py`](scripts/verify_mapping.py) liegt ein Tool, das die Plugin-Werte (`es_hp_*`) live gegen die Werte der alten Multiscrape-Sensoren (`es_wp_*`) vergleicht — ideal für die Übergangsphase, in der beide parallel laufen.
+Im Ordner [`scripts/verify_mapping.py`](scripts/verify_mapping.py) liegt ein Tool, das die Plugin-Werte (`es_hp_*`) live gegen die Werte deiner alten Multiscrape-Sensoren (`es_wp_*`) vergleicht — ideal für die Übergangsphase, in der beide parallel laufen.
 
 ```bash
 # Long-Lived-Access-Token erstellen: HA → Profil → Sicherheit
@@ -202,6 +202,10 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 
 <a id="changelog"></a>
 ## 📋 Changelog
+
+### 2.0.1 — 2026-05-18 (hotfix)
+
+- 🐛 **Fix:** `async_migrate_entry` ergänzt. v2.0.0 setzte die Config-Schema-Version auf 2 hoch, ohne einen Migrations-Handler bereitzustellen → HA brach mit `migration_error` ab und keine Entitäten wurden geladen. Der neue Handler validiert v1-Entries einfach ohne Daten-Transformation und stempelt sie auf v2.
 
 ### 2.0.0 — 2026-05-18
 

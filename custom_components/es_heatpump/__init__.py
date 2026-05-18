@@ -30,6 +30,23 @@ _LOGGER = logging.getLogger(__name__)
 _UNIQUE_ID_RE = re.compile(rf"^{DOMAIN}_(.+)_par(\d+)$")
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate old config entries to the current schema version.
+
+    v1 → v2 (2026-05-18):
+        No structural change in ``entry.data`` — the new optional fields
+        ``power_entity`` and ``flow_rate`` are simply absent in legacy
+        entries and read via ``.get()`` with a default.  We just bump the
+        version stamp so HA knows the entry is compatible.
+    """
+    _LOGGER.info(
+        "ES Heatpump: migrating config entry from v%s to v2", entry.version
+    )
+    if entry.version == 1:
+        hass.config_entries.async_update_entry(entry, version=2)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up ES Heatpump from a config entry."""
     coordinator = ESHeatpumpCoordinator(
