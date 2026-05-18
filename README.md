@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.0.2-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-2.0.3-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 
@@ -202,6 +202,11 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 
 <a id="changelog"></a>
 ## 📋 Changelog
+
+### 2.0.3 — 2026-05-18 (hotfix)
+
+- 🐛 **Fix:** Dashboard wird jetzt im **Storage-Mode** registriert statt YAML-Mode. In den Versionen 2.0.0 – 2.0.2 wurde das YAML beim Setup nach `<config>/dashboards/es_heatpump.yaml` kopiert; in manchen Setups landete die Datei aber nicht zuverlässig dort, sodass HA das Dashboard leer rendete („Neuer Abschnitt"). Im neuen Verfahren parst das Plugin das Bundle-YAML beim Setup und schreibt den Inhalt direkt in `.storage/lovelace.<id>` — damit ist die Anzeige unabhängig von Datei-Kopier-Operationen.
+- 🧹 Beim Update werden Legacy-Einträge `mode: yaml` automatisch auf `mode: storage` umgestellt, die alte YAML-Datei wird entfernt.
 
 ### 2.0.2 — 2026-05-18 (hotfix)
 
