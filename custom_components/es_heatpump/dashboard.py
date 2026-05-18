@@ -113,11 +113,17 @@ async def async_install_dashboard(hass: HomeAssistant) -> None:
     if index_dirty:
         await index_store.async_save(index_data)
 
-    # 3. Write the actual dashboard config
+    # 3. Write the actual dashboard config.
+    #
+    # HA's ``LovelaceStorage`` expects the stored data to be wrapped as
+    # ``{"config": <user-config>}``.  In v2.1.0 we accidentally stored the
+    # raw YAML at the top level, which led to a ``KeyError: 'config'`` in
+    # ``components/lovelace/dashboard.py`` when the frontend tried to load
+    # the view (resulting in an "Unknown error" toast).  Fixed in v2.1.1.
     config_store = ha_storage.Store(
         hass, _DASH_STORE_VER, f"lovelace.{dashboard_id}"
     )
-    await config_store.async_save(config)
+    await config_store.async_save({"config": config})
     _LOGGER.debug(
         "ES Heatpump: wrote dashboard config to lovelace.%s (%d views)",
         dashboard_id, len(config.get("views", [])),
