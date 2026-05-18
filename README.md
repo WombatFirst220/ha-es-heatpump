@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.0.1-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-2.0.2-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 
@@ -202,6 +202,10 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 
 <a id="changelog"></a>
 ## 📋 Changelog
+
+### 2.0.2 — 2026-05-18 (hotfix)
+
+- 🐛 **Fix:** Entity-Migration läuft jetzt **nach** `async_forward_entry_setups`, sodass auch die in v2.0.0 neu eingeführten berechneten Sensoren (`Spreizung`, `Thermische Leistung`, `Aktueller COP`) zuverlässig die `es_hp_*`-Entity-IDs bekommen. In v2.0.1 wurden sie noch mit dem Default-Slug `sensor.es_warmepumpe_*` angelegt, weil zum Migrations-Zeitpunkt noch keine Entry in der Registry existierte.
 
 ### 2.0.1 — 2026-05-18 (hotfix)
 

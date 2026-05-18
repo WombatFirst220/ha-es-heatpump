@@ -1,7 +1,7 @@
 {
   "domain": "es_heatpump",
   "name": "ES Heatpump (myheatpump.com)",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "documentation": "https://github.com/WombatFirst220/ha-es-heatpump",
   "issue_tracker": "https://github.com/WombatFirst220/ha-es-heatpump/issues",
   "dependencies": [],
