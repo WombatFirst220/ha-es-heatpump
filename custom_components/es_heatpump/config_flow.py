@@ -15,6 +15,9 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
 )
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
@@ -27,7 +30,19 @@ from .const import (
     DEFAULT_FLOW_RATE,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    KNOWN_BASE_URLS,
 )
+
+
+def _base_url_selector() -> SelectSelector:
+    """Dropdown of known myheatpump.com regional portals, allowing custom values."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=KNOWN_BASE_URLS,
+            mode=SelectSelectorMode.DROPDOWN,
+            custom_value=True,
+        )
+    )
 from .coordinator import ESHeatpumpCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -76,7 +91,9 @@ class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(CONF_USERNAME): str,
                 vol.Required(CONF_PASSWORD): str,
-                vol.Optional(CONF_BASE_URL, default=DEFAULT_BASE_URL): str,
+                vol.Optional(
+                    CONF_BASE_URL, default=DEFAULT_BASE_URL
+                ): _base_url_selector(),
                 vol.Optional(
                     CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL
                 ): vol.All(int, vol.Range(min=10, max=3600)),
@@ -136,7 +153,7 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(
                 CONF_BASE_URL,
                 default=opts.get(CONF_BASE_URL, data.get(CONF_BASE_URL, DEFAULT_BASE_URL)),
-            ): str,
+            ): _base_url_selector(),
             vol.Optional(
                 CONF_SCAN_INTERVAL,
                 default=opts.get(

@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ES Warmtepomp – Inloggegevens",
+        "description": "Voer je inloggegevens voor het myheatpump.com-portaal in. De integratie logt automatisch in en haalt alle sensorgegevens op. Heb je een EU-account? Kies https://eu.myheatpump.com uit het keuzemenu.",
+        "data": {
+          "username": "Gebruikersnaam (e-mailadres)",
+          "password": "Wachtwoord",
+          "base_url": "Portaal-URL",
+          "scan_interval": "Update-interval (seconden)",
+          "power_entity": "Vermogenssensor (optioneel, voor COP-berekening)",
+          "flow_rate": "Volumestroom verwarmingscircuit (m³/u)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Inloggen mislukt — controleer gebruikersnaam en wachtwoord.",
+      "cannot_connect": "Verbinding met portaal mislukt. Controleer de URL (EU-gebruikers: https://eu.myheatpump.com) en je netwerk.",
+      "unknown": "Onbekende fout — bekijk de Home Assistant logs."
+    },
+    "abort": {
+      "already_configured": "Deze warmtepomp is al geconfigureerd."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ES Warmtepomp – Instellingen aanpassen",
+        "data": {
+          "base_url": "Portaal-URL",
+          "scan_interval": "Update-interval (seconden)",
+          "power_entity": "Vermogenssensor (Shelly enz.)",
+          "flow_rate": "Volumestroom verwarmingscircuit (m³/u)"
+        }
+      }
+    }
+  }
+}

@@ -3,22 +3,24 @@
     "step": {
       "user": {
         "title": "ES Wärmepumpe – Zugangsdaten",
-        "description": "Gib deine Zugangsdaten für das myheatpump.com-Portal ein. Die Integration meldet sich automatisch an und ruft alle Sensordaten ab.",
+        "description": "Gib deine Zugangsdaten für das myheatpump.com-Portal ein. Die Integration meldet sich automatisch an und ruft alle Sensordaten ab. EU-Account? Wähle https://eu.myheatpump.com im Dropdown.",
         "data": {
           "username": "Benutzername (E-Mail-Adresse)",
           "password": "Passwort",
-          "base_url": "Portal-URL (Standard: https://www.myheatpump.com)",
-          "scan_interval": "Aktualisierungsintervall in Sekunden"
+          "base_url": "Portal-URL",
+          "scan_interval": "Aktualisierungsintervall (Sekunden)",
+          "power_entity": "Stromsensor (optional, für COP-Berechnung)",
+          "flow_rate": "Volumenstrom Heizkreislauf (m³/h)"
         }
       }
     },
     "error": {
       "invalid_auth": "Anmeldung fehlgeschlagen – Benutzername oder Passwort falsch.",
-      "cannot_connect": "Verbindung fehlgeschlagen – Portal nicht erreichbar.",
-      "unknown": "Unbekannter Fehler – bitte die HA-Logs prüfen."
+      "cannot_connect": "Verbindung zum Portal fehlgeschlagen. URL prüfen (EU-Nutzer: https://eu.myheatpump.com) und Netzwerk.",
+      "unknown": "Unbekannter Fehler – bitte die Home-Assistant-Logs prüfen."
     },
     "abort": {
-      "already_configured": "Dieses Konto ist bereits eingerichtet."
+      "already_configured": "Diese Wärmepumpe ist bereits eingerichtet."
     }
   },
   "options": {
@@ -27,7 +29,9 @@
         "title": "ES Wärmepumpe – Einstellungen ändern",
         "data": {
           "base_url": "Portal-URL",
-          "scan_interval": "Aktualisierungsintervall in Sekunden"
+          "scan_interval": "Aktualisierungsintervall (Sekunden)",
+          "power_entity": "Stromsensor (Shelly o.ä.)",
+          "flow_rate": "Volumenstrom Heizkreislauf (m³/h)"
         }
       }
     }
