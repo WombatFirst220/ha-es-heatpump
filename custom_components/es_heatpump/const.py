@@ -14,6 +14,12 @@ DEFAULT_BASE_URL      = "https://www.myheatpump.com"
 DEFAULT_SCAN_INTERVAL = 60          # seconds
 DEFAULT_FLOW_RATE     = 1.2         # m³/h — typical for AW12-R32 at full load
 
+# Known myheatpump.com regional portals.  Users can still type any custom URL.
+KNOWN_BASE_URLS = [
+    "https://www.myheatpump.com",   # global / China
+    "https://eu.myheatpump.com",    # EU server
+]
+
 # ── API endpoints (verified March 2026 against live portal) ──────────────────
 LOGIN_PATH          = "/a/login"
 DEVICE_LIST_PATH    = "/a/amt/deviceList/listData"
@@ -24,6 +30,19 @@ SESSION_COOKIE_NAME = "JSESSIONID"
 CALC_SPREIZUNG      = "calc_spreizung"
 CALC_THERM_LEISTUNG = "calc_therm_leistung"
 CALC_COP            = "calc_cop"
+CALC_ELEC_POWER     = "calc_elec_power"   # mirror of the configured power_entity
+
+# ── Betriebsart enum mapping (par15) ─────────────────────────────────────────
+# Confirmed via portal field "Unit Current Working Mode" + user observation.
+# Numeric values from the API are mapped to display strings; unknown values
+# fall back to "Unbekannt".
+BETRIEBSART_VALUES = {
+    0.0: "Aus",
+    1.0: "Brauchwasser",
+    2.0: "Heizen",
+    3.0: "Entfrosten",
+}
+BETRIEBSART_OPTIONS = ["Aus", "Brauchwasser", "Heizen", "Entfrosten", "Unbekannt"]
 
 # ── Device info ──────────────────────────────────────────────────────────────
 DEVICE_NAME         = "ES Wärmepumpe"
@@ -129,11 +148,27 @@ PARAMETER_SENSORS = {
         "enabled_default": True,
     },
 
+    "par36": {
+        # ⚡ Reported in GitHub issue #1 (ohlavin, 2026-04-08):
+        # "Set temp. for Heating (without heating curve)" — Heating/Cooling
+        # Circuit 1 setpoint from the portal settings page.
+        "slug": "heizen_soll_manuell",
+        "name": "Heizen Solltemperatur (manuell)",
+        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
+        "icon": "mdi:thermometer-plus",
+        "enabled_default": True,
+    },
+
     # ── Compressor / Operation ───────────────────────────────────────────
     "par15": {
+        # Text-mapped via BETRIEBSART_VALUES at runtime (see sensor.py)
         "slug": "betriebsart",
         "name": "Betriebsart",
-        "unit": None, "device_class": None, "state_class": None,
+        "unit": None,
+        "device_class": "enum",
+        "state_class": None,
+        "options": BETRIEBSART_OPTIONS,
+        "value_map": BETRIEBSART_VALUES,
         "icon": "mdi:heat-pump",
         "enabled_default": True,
     },

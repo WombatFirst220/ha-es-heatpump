@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ES Värmepump – Inloggningsuppgifter",
+        "description": "Ange dina inloggningsuppgifter för myheatpump.com-portalen. Integrationen loggar in automatiskt och hämtar alla sensordata. Har du ett EU-konto? Välj https://eu.myheatpump.com i listan.",
+        "data": {
+          "username": "Användarnamn (e-postadress)",
+          "password": "Lösenord",
+          "base_url": "Portal-URL",
+          "scan_interval": "Uppdateringsintervall (sekunder)",
+          "power_entity": "Effektsensor (valfri, används för COP-beräkning)",
+          "flow_rate": "Flöde värmekrets (m³/h)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Inloggning misslyckades — fel användarnamn eller lösenord.",
+      "cannot_connect": "Anslutning till portalen misslyckades. Kontrollera URL (EU-användare: https://eu.myheatpump.com) och nätverket.",
+      "unknown": "Okänt fel — kontrollera Home Assistant-loggarna."
+    },
+    "abort": {
+      "already_configured": "Denna värmepump är redan konfigurerad."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ES Värmepump – Ändra inställningar",
+        "data": {
+          "base_url": "Portal-URL",
+          "scan_interval": "Uppdateringsintervall (sekunder)",
+          "power_entity": "Effektsensor (Shelly m.fl.)",
+          "flow_rate": "Flöde värmekrets (m³/h)"
+        }
+      }
+    }
+  }
+}

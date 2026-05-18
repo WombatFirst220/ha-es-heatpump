@@ -30,7 +30,7 @@ views:
           ## 🌡️ Energy Save AW12-R32
           Status der Wärmepumpe – Daten aus myheatpump.com
 
-      # ── Gauges: COP, Wärmeabgabe, Heizwasser, Brauchwasser ────────────
+      # ── Gauges: COP, Wärmeabgabe, El. Leistung, Heizwasser, Brauchwasser ─
       - type: grid
         columns: 2
         square: false
@@ -51,6 +51,13 @@ views:
             name: Wärmeabgabe
             min: 0
             max: 12000
+            needle: true
+
+          - type: gauge
+            entity: sensor.es_hp_leistung_elektrisch
+            name: El. Leistung
+            min: 0
+            max: 5000
             needle: true
 
           - type: gauge
@@ -75,6 +82,17 @@ views:
               yellow: 30
               red: 45
 
+          - type: gauge
+            entity: sensor.es_hp_spreizung
+            name: Spreizung
+            min: -2
+            max: 10
+            needle: true
+            severity:
+              green: 3
+              yellow: 6
+              red: 8
+
       # ── Temperaturen ───────────────────────────────────────────────────
       - type: entities
         title: Temperaturen
@@ -92,7 +110,9 @@ views:
           - entity: sensor.es_hp_warmwasser_tw
             name: Warmwasser
           - entity: sensor.es_hp_heizen_soll
-            name: Heizen Soll
+            name: Heizen Soll (aktiv)
+          - entity: sensor.es_hp_heizen_soll_manuell
+            name: Heizen Soll (manuell)
           - entity: sensor.es_hp_heizen
             name: Heizwasser Ist
           - entity: sensor.es_hp_raumtemperatur
@@ -109,6 +129,20 @@ views:
             name: Rücklauf
           - entity: sensor.es_hp_frequenz_hz
             name: Kompressor Hz
+
+      # ── Strom & Leistung ──────────────────────────────────────────────
+      - type: entities
+        title: Strom & Leistung
+        icon: mdi:lightning-bolt
+        entities:
+          - entity: sensor.es_hp_leistung_elektrisch
+            name: Elektrische Aufnahme
+          - entity: sensor.es_hp_thermische_leistung
+            name: Wärmeabgabe
+          - entity: sensor.es_hp_aktueller_cop
+            name: Aktueller COP
+          - entity: sensor.es_hp_frequenz_hz
+            name: Kompressor Frequenz
 
       # ── System-Technik ─────────────────────────────────────────────────
       - type: glance
@@ -151,6 +185,13 @@ views:
             name: Wärmeabgabe (W)
           - entity: sensor.es_hp_frequenz_hz
             name: Frequenz (Hz)
+
+      - type: history-graph
+        title: Elektrische Leistung (24 h)
+        hours_to_show: 24
+        entities:
+          - entity: sensor.es_hp_leistung_elektrisch
+            name: El. Leistung (W)
 
       - type: history-graph
         title: Heißgastemperatur (24 h)

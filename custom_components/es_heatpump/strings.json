@@ -2,32 +2,36 @@
   "config": {
     "step": {
       "user": {
-        "title": "ES Heatpump – Zugangsdaten",
-        "description": "Bitte gib deine Anmeldedaten für das myheatpump.com Portal ein.",
+        "title": "ES Heatpump – Credentials",
+        "description": "Enter your myheatpump.com portal credentials. The integration logs in automatically and fetches all sensor data. For EU portal accounts, pick https://eu.myheatpump.com from the dropdown.",
         "data": {
-          "username": "Benutzername (E-Mail)",
-          "password": "Passwort",
-          "base_url": "Portal-URL (Standard: https://www.myheatpump.com)",
-          "scan_interval": "Aktualisierungsintervall (Sekunden)"
+          "username": "Username (e-mail address)",
+          "password": "Password",
+          "base_url": "Portal URL",
+          "scan_interval": "Update interval (seconds)",
+          "power_entity": "Electrical-power sensor (optional, used for COP calculation)",
+          "flow_rate": "Heating-loop flow rate (m³/h)"
         }
       }
     },
     "error": {
-      "invalid_auth": "Ungültige Anmeldedaten. Bitte Benutzername und Passwort prüfen.",
-      "cannot_connect": "Verbindung zum Portal fehlgeschlagen. Bitte URL und Netzwerk prüfen.",
-      "unknown": "Unbekannter Fehler. Bitte Logs prüfen."
+      "invalid_auth": "Login failed — wrong username or password.",
+      "cannot_connect": "Connection to portal failed. Check the URL (EU users: https://eu.myheatpump.com) and your network.",
+      "unknown": "Unknown error — please check the Home Assistant logs."
     },
     "abort": {
-      "already_configured": "Diese Wärmepumpe ist bereits eingerichtet."
+      "already_configured": "This heat pump is already configured."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "ES Heatpump – Einstellungen",
+        "title": "ES Heatpump – Change Settings",
         "data": {
-          "base_url": "Portal-URL",
-          "scan_interval": "Aktualisierungsintervall (Sekunden)"
+          "base_url": "Portal URL",
+          "scan_interval": "Update interval (seconds)",
+          "power_entity": "Electrical-power sensor (Shelly etc.)",
+          "flow_rate": "Heating-loop flow rate (m³/h)"
         }
       }
     }

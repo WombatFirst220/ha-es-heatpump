@@ -26,6 +26,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     CALC_COP,
+    CALC_ELEC_POWER,
     CALC_SPREIZUNG,
     CALC_THERM_LEISTUNG,
     CONF_FLOW_RATE,
@@ -87,13 +88,16 @@ async def async_setup_entry(
             )
         )
 
-    # ── Calculated sensors ───────────────────────────────────────────────
+    # ── Calculated / derived sensors ─────────────────────────────────────
     entities.append(SpreizungSensor(coordinator, device_info, username))
     entities.append(
         ThermLeistungSensor(coordinator, device_info, username, flow_rate)
     )
     entities.append(
         COPSensor(coordinator, device_info, username, flow_rate, power_entity, hass)
+    )
+    entities.append(
+        ElectricalPowerMirrorSensor(coordinator, device_info, username, power_entity, hass)
     )
 
     _LOGGER.info(
@@ -123,6 +127,7 @@ class ESHeatpumpSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self._par_id = par_id
+        self._value_map: dict[float, str] | None = meta.get("value_map")
         self._attr_name = meta["name"]
         self._attr_unique_id = f"{DOMAIN}_{username}_{par_id}"
         self._attr_suggested_object_id = f"es_hp_{meta['slug']}"
@@ -131,10 +136,13 @@ class ESHeatpumpSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         self._attr_state_class = meta.get("state_class")
         self._attr_icon = meta.get("icon")
         self._attr_entity_registry_enabled_default = meta.get("enabled_default", True)
+        # `options` is required for device_class="enum" sensors
+        if meta.get("options"):
+            self._attr_options = list(meta["options"])
         self._attr_device_info = device_info
 
     @property
-    def native_value(self) -> float | None:
+    def native_value(self) -> float | str | None:
         if self.coordinator.data is None:
             return None
         value = self.coordinator.data.get(self._par_id)
@@ -145,11 +153,20 @@ class ESHeatpumpSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
             and self._attr_device_class == "temperature"
         ):
             return None
+        # Apply value mapping (e.g. par15: 2.0 → "Heizen") if configured
+        if self._value_map is not None and value is not None:
+            return self._value_map.get(value, "Unbekannt")
         return value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {"parameter_id": self._par_id}
+        attrs: dict[str, Any] = {"parameter_id": self._par_id}
+        # For enum sensors, also expose the raw numeric value for automations
+        if self._value_map is not None and self.coordinator.data is not None:
+            raw = self.coordinator.data.get(self._par_id)
+            if raw is not None:
+                attrs["raw_value"] = raw
+        return attrs
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -303,3 +320,66 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
             "power_entity": self._power_entity,
             "flow_rate_m3h": self._flow_rate,
         }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Mirror: Elektrische Leistung (from the configured Power-Entity)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ElectricalPowerMirrorSensor(
+    CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
+):
+    """Mirror of the user-configured electrical-power sensor.
+
+    Exposed under the ES Heatpump device so the dashboard / automations have
+    a consistent ``sensor.es_hp_leistung_elektrisch`` to bind to, independent
+    of the specific Shelly/Smart-meter entity the user picked in the options.
+
+    The sensor returns the absolute value of the source entity — many
+    energy meters report power as negative when the meter is in
+    consumption direction.
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_name = "Elektrische Leistung"
+    _attr_native_unit_of_measurement = "W"
+    _attr_device_class = "power"
+    _attr_state_class = "measurement"
+    _attr_icon = "mdi:lightning-bolt"
+    _attr_suggested_display_precision = 0
+
+    def __init__(
+        self,
+        coordinator,
+        device_info: DeviceInfo,
+        username: str,
+        power_entity: str | None,
+        hass: HomeAssistant,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_ELEC_POWER}"
+        self._attr_suggested_object_id = "es_hp_leistung_elektrisch"
+        self._attr_device_info = device_info
+        self._power_entity = power_entity
+        self._hass = hass
+
+    @property
+    def available(self) -> bool:
+        return self._power_entity is not None
+
+    @property
+    def native_value(self) -> float | None:
+        if not self._power_entity:
+            return None
+        state = self._hass.states.get(self._power_entity)
+        if state is None or state.state in ("unknown", "unavailable"):
+            return None
+        try:
+            return round(abs(float(state.state)), 1)
+        except (ValueError, TypeError):
+            return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"power_entity": self._power_entity}
