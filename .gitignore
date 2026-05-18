@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# HA-Test artefacts
+.HA_VERSION
+.storage/
+home-assistant.log*
+home-assistant_v2.db*
+
+# Misc
+*.bak
+*.orig
