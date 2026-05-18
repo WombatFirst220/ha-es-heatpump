@@ -1,16 +1,18 @@
 """
 dashboard.py
 ────────────
-Automatically installs / removes the "ES Heatpump" Lovelace dashboard.
+Automatically installs / removes / updates the "ES Heatpump" Lovelace dashboard.
 
 Strategy (proven reliable across HA 2023.x – 2025.x):
-  1. Copy the bundled YAML to <config>/dashboards/es_heatpump.yaml
-  2. Write the dashboard entry directly into the
+  1. Always copy the bundled YAML to <config>/dashboards/es_heatpump.yaml.
+     The file is overwritten on every setup so plugin updates push the new
+     layout without the user having to delete it manually.
+  2. If the dashboard entry is not yet registered, add it directly to the
      .storage/lovelace_dashboards JSON file (HA's own storage format).
   3. Fire the lovelace_updated event so HA picks up the change immediately
-     WITHOUT needing a full restart.
-  4. If firing the event fails for any reason, show a persistent notification
-     asking for a one-time restart.
+     without requiring a full restart.
+  4. If reload fails for any reason, show a persistent notification asking
+     for a one-time restart.
 """
 from __future__ import annotations
 
@@ -30,41 +32,55 @@ DASHBOARD_URL_PATH  = "es-heatpump"
 DASHBOARD_TITLE     = "ES Heatpump"
 DASHBOARD_ICON      = "mdi:heat-pump"
 
+# Bumping this string forces a re-copy of the bundled YAML (in case the user
+# edited the file in-place — they'll see fresh content again on plugin update).
+DASHBOARD_VERSION   = "2.0.0"
+
 # YAML bundled inside the integration package
 _YAML_SRC: Path = Path(__file__).parent / "dashboard" / "es_heatpump.yaml"
 # Destination relative to <config>/
-_YAML_DEST_REL      = "dashboards/es_heatpump.yaml"
+_YAML_DEST_REL  = "dashboards/es_heatpump.yaml"
 
 # HA storage key for Lovelace dashboards (stable since HA 2021)
-_STORE_KEY          = "lovelace_dashboards"
-_STORE_VERSION      = 1
+_STORE_KEY     = "lovelace_dashboards"
+_STORE_VERSION = 1
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
 async def async_install_dashboard(hass: HomeAssistant) -> None:
-    """
-    Install the ES Heatpump dashboard.
-    Idempotent – does nothing if the dashboard already exists.
-    """
-    store = ha_storage.Store(hass, _STORE_VERSION, _STORE_KEY)
-    data  = await store.async_load() or {"items": []}
-    items: list[dict] = data.setdefault("items", [])
+    """Install or update the ES Heatpump dashboard.
 
-    # ── Already installed? ────────────────────────────────────────────────
-    if any(item.get("url_path") == DASHBOARD_URL_PATH for item in items):
-        _LOGGER.debug("ES Heatpump: dashboard already registered, skipping")
-        return
-
-    # ── Step 1: copy YAML file ────────────────────────────────────────────
+    Idempotent and safe to call on every HA startup. The bundled YAML is
+    always re-copied so plugin updates take effect; the registry entry is
+    only added once.
+    """
     dest = Path(hass.config.config_dir) / _YAML_DEST_REL
+
+    # ── Step 1: always copy the bundled YAML ─────────────────────────────
     try:
         await hass.async_add_executor_job(_copy_yaml, dest)
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001
         _LOGGER.error("ES Heatpump: could not copy dashboard YAML: %s", err)
         return
 
-    # ── Step 2: add entry to storage ──────────────────────────────────────
+    # ── Step 2: register dashboard entry if missing ──────────────────────
+    store = ha_storage.Store(hass, _STORE_VERSION, _STORE_KEY)
+    data = await store.async_load() or {"items": []}
+    items: list[dict] = data.setdefault("items", [])
+
+    already_registered = any(
+        item.get("url_path") == DASHBOARD_URL_PATH for item in items
+    )
+
+    if already_registered:
+        _LOGGER.debug(
+            "ES Heatpump: dashboard already registered (YAML refreshed in place)"
+        )
+        # Still fire reload so an in-place YAML update becomes visible.
+        await _async_reload_lovelace(hass)
+        return
+
     entry: dict[str, Any] = {
         "id":              str(uuid.uuid4()),
         "url_path":        DASHBOARD_URL_PATH,
@@ -80,11 +96,11 @@ async def async_install_dashboard(hass: HomeAssistant) -> None:
     try:
         await store.async_save(data)
         _LOGGER.debug("ES Heatpump: dashboard entry written to lovelace storage")
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001
         _LOGGER.error("ES Heatpump: could not write to lovelace storage: %s", err)
         return
 
-    # ── Step 3: tell HA to reload Lovelace without a restart ─────────────
+    # ── Step 3: tell HA to reload Lovelace without a restart ────────────
     reloaded = await _async_reload_lovelace(hass)
 
     if reloaded:
@@ -97,25 +113,23 @@ async def async_install_dashboard(hass: HomeAssistant) -> None:
             "ES Heatpump: dashboard registered but Lovelace reload failed. "
             "A Home Assistant restart is needed for it to appear in the sidebar."
         )
-        hass.components.persistent_notification.async_create(
-            title="ES Heatpump – Neustart erforderlich / Restart required",
-            message=(
-                "Das **ES Heatpump**-Dashboard wurde installiert und erscheint nach "
-                "einem **Neustart von Home Assistant** in der Seitenleiste.\n\n"
-                "*(The ES Heatpump dashboard has been installed and will appear "
-                "in the sidebar after a **Home Assistant restart**.)*"
-            ),
-            notification_id="es_heatpump_restart_required",
-        )
+        try:
+            hass.components.persistent_notification.async_create(
+                title="ES Heatpump – Neustart erforderlich",
+                message=(
+                    "Das **ES Heatpump**-Dashboard wurde installiert und erscheint "
+                    "nach einem **Neustart von Home Assistant** in der Seitenleiste."
+                ),
+                notification_id="es_heatpump_restart_required",
+            )
+        except Exception:  # noqa: BLE001
+            pass
 
 
 async def async_remove_dashboard(hass: HomeAssistant) -> None:
-    """
-    Remove the ES Heatpump dashboard entry and its YAML file.
-    Called when the last config entry is removed.
-    """
+    """Remove the ES Heatpump dashboard entry and its YAML file."""
     store = ha_storage.Store(hass, _STORE_VERSION, _STORE_KEY)
-    data  = await store.async_load()
+    data = await store.async_load()
     if data:
         original_len = len(data.get("items", []))
         data["items"] = [
@@ -129,7 +143,7 @@ async def async_remove_dashboard(hass: HomeAssistant) -> None:
     dest = Path(hass.config.config_dir) / _YAML_DEST_REL
     try:
         await hass.async_add_executor_job(_remove_yaml, dest)
-    except Exception:
+    except Exception:  # noqa: BLE001
         pass
 
     await _async_reload_lovelace(hass)
@@ -150,38 +164,41 @@ def _remove_yaml(dest: Path) -> None:
 
 
 async def _async_reload_lovelace(hass: HomeAssistant) -> bool:
-    """
-    Trigger a Lovelace reload so the sidebar updates without a restart.
-    Tries multiple methods in order of reliability.
-    Returns True if at least one method succeeded.
-    """
+    """Trigger a Lovelace reload so the sidebar updates without a restart.
 
-    # Method A: call the lovelace.reload_resources service (HA 2022+)
+    Tries multiple methods in order of reliability. Returns True if at least
+    one method succeeded.
+    """
+    # Method A: call lovelace.reload_resources (HA 2022+)
     try:
         await hass.services.async_call(
             "lovelace", "reload_resources", blocking=True
         )
         _LOGGER.debug("ES Heatpump: lovelace.reload_resources called successfully")
         return True
-    except Exception as err:
-        _LOGGER.debug("ES Heatpump: reload_resources failed (%s), trying next method", err)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug(
+            "ES Heatpump: reload_resources failed (%s), trying next method", err
+        )
 
     # Method B: fire the lovelace_updated event directly
     try:
-        hass.bus.async_fire("lovelace_updated", {"url_path": None, "action": "create"})
+        hass.bus.async_fire(
+            "lovelace_updated", {"url_path": None, "action": "create"}
+        )
         _LOGGER.debug("ES Heatpump: lovelace_updated event fired")
         return True
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001
         _LOGGER.debug("ES Heatpump: lovelace_updated fire failed (%s)", err)
 
-    # Method C: call the frontend.reload service
+    # Method C: call frontend.reload_themes as a last-ditch refresh
     try:
         await hass.services.async_call(
             "frontend", "reload_themes", blocking=True
         )
         _LOGGER.debug("ES Heatpump: frontend.reload_themes called")
         return True
-    except Exception as err:
+    except Exception as err:  # noqa: BLE001
         _LOGGER.debug("ES Heatpump: frontend reload failed (%s)", err)
 
     return False
