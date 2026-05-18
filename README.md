@@ -96,7 +96,7 @@ Das Dashboard-YAML wird beim Setup nach `<config>/dashboards/es_heatpump.yaml` k
 
 ### 🔬 Verifikations-Skript
 
-Im Ordner [`scripts/verify_mapping.py`](scripts/verify_mapping.py) liegt ein Tool, das die Plugin-Werte (`es_hp_*`) live gegen die Werte deiner alten Multiscrape-Sensoren (`es_wp_*`) vergleicht — ideal für die Übergangsphase, in der beide parallel laufen.
+Im Ordner [`scripts/verify_mapping.py`](scripts/verify_mapping.py) liegt ein Tool, das die Plugin-Werte (`es_hp_*`) live gegen die Werte der alten Multiscrape-Sensoren (`es_wp_*`) vergleicht — ideal für die Übergangsphase, in der beide parallel laufen.
 
 ```bash
 # Long-Lived-Access-Token erstellen: HA → Profil → Sicherheit
