@@ -2,16 +2,32 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
-from .const import CONF_BASE_URL, CONF_SCAN_INTERVAL, DEFAULT_BASE_URL, DEFAULT_SCAN_INTERVAL, DOMAIN, PLATFORMS
+from .const import (
+    CALC_COP,
+    CALC_SPREIZUNG,
+    CALC_THERM_LEISTUNG,
+    CONF_BASE_URL,
+    CONF_SCAN_INTERVAL,
+    DEFAULT_BASE_URL,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    PARAMETER_SENSORS,
+    PLATFORMS,
+)
 from .coordinator import ESHeatpumpCoordinator
 from .dashboard import async_install_dashboard, async_remove_dashboard
 
 _LOGGER = logging.getLogger(__name__)
+
+# Matches unique_ids of the form "es_heatpump_<username>_parNN"
+_UNIQUE_ID_RE = re.compile(rf"^{DOMAIN}_(.+)_par(\d+)$")
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -27,23 +43,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ),
     )
 
-    # First data refresh – raises ConfigEntryNotReady on failure
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
+    # ── One-time entity-registry migration ───────────────────────────────
+    # Renames legacy sensor.es_warmepumpe_* IDs to sensor.es_hp_<slug>
+    # and removes orphaned entities for parameters we no longer expose.
+    await _async_migrate_entities(hass, entry)
+
     # Forward to sensor platform
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # ── Auto-install Lovelace dashboard ──────────────────────────────────────
-    # Run directly so the dashboard is registered before setup returns.
-    # The function is idempotent – safe to call on every HA start.
+    # ── Auto-install Lovelace dashboard ──────────────────────────────────
     try:
         await async_install_dashboard(hass)
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning("ES Heatpump: dashboard install failed: %s", err)
 
-    # Reload when options change (e.g. scan interval updated by user)
+    # Reload when options change (e.g. scan interval, flow rate, power entity)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
@@ -55,7 +73,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
-        # Only remove the dashboard when the last configured entry is removed
         if not hass.data.get(DOMAIN):
             await async_remove_dashboard(hass)
 
@@ -65,3 +82,91 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload the entry when options change."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entity-ID migration
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _async_migrate_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """One-time renaming of legacy entity_ids to the new ``es_hp_*`` scheme.
+
+    Strategy:
+      1. For every parameter listed in ``PARAMETER_SENSORS``, look up the
+         existing entity by ``unique_id`` and, if its ``entity_id`` doesn't
+         match ``sensor.es_hp_<slug>``, rename it.  History and statistics
+         move with the entity automatically.
+      2. Find entities whose unique_id is ``es_heatpump_<user>_parNN`` for an
+         NN that is NOT in ``PARAMETER_SENSORS`` (the orphaned ``par1`` …
+         ``par100`` "Parameter parXX" leftovers from earlier plugin
+         versions) and remove them.  These never carried useful data.
+    """
+    ent_reg = er.async_get(hass)
+
+    # --- Step 1: rename ---------------------------------------------------
+    for par_id, meta in PARAMETER_SENSORS.items():
+        username = entry.data[CONF_USERNAME]
+        unique_id = f"{DOMAIN}_{username}_{par_id}"
+        current_id = ent_reg.async_get_entity_id("sensor", DOMAIN, unique_id)
+        if current_id is None:
+            continue   # entity not yet created (will get correct id on first setup)
+
+        target_id = f"sensor.es_hp_{meta['slug']}"
+        if current_id == target_id:
+            continue   # already migrated
+
+        # Target id taken by an unrelated entity?
+        clash = ent_reg.async_get(target_id)
+        if clash is not None and clash.unique_id != unique_id:
+            _LOGGER.warning(
+                "ES Heatpump: cannot rename %s → %s (target already used by %s)",
+                current_id, target_id, clash.unique_id,
+            )
+            continue
+
+        _LOGGER.info("ES Heatpump: migrating %s → %s", current_id, target_id)
+        ent_reg.async_update_entity(current_id, new_entity_id=target_id)
+
+    # Also handle the three calculated sensors so their entity_ids are stable
+    username = entry.data[CONF_USERNAME]
+    for calc_key, target_slug in (
+        (CALC_SPREIZUNG, "es_hp_spreizung"),
+        (CALC_THERM_LEISTUNG, "es_hp_thermische_leistung"),
+        (CALC_COP, "es_hp_aktueller_cop"),
+    ):
+        unique_id = f"{DOMAIN}_{username}_{calc_key}"
+        current_id = ent_reg.async_get_entity_id("sensor", DOMAIN, unique_id)
+        if current_id is None:
+            continue
+        target_id = f"sensor.{target_slug}"
+        if current_id == target_id:
+            continue
+        clash = ent_reg.async_get(target_id)
+        if clash is not None and clash.unique_id != unique_id:
+            continue
+        _LOGGER.info("ES Heatpump: migrating %s → %s", current_id, target_id)
+        ent_reg.async_update_entity(current_id, new_entity_id=target_id)
+
+    # --- Step 2: remove orphaned parXX entities ---------------------------
+    known_pars = set(PARAMETER_SENSORS.keys())
+    removed = 0
+    for ent in list(ent_reg.entities.values()):
+        if ent.platform != DOMAIN:
+            continue
+        if ent.config_entry_id != entry.entry_id:
+            continue
+        m = _UNIQUE_ID_RE.match(ent.unique_id or "")
+        if m is None:
+            continue
+        par_id = f"par{m.group(2)}"
+        if par_id in known_pars:
+            continue
+        _LOGGER.info(
+            "ES Heatpump: removing obsolete entity %s (par %s no longer exposed)",
+            ent.entity_id, par_id,
+        )
+        ent_reg.async_remove(ent.entity_id)
+        removed += 1
+
+    if removed:
+        _LOGGER.info("ES Heatpump: removed %d obsolete parameter entities", removed)

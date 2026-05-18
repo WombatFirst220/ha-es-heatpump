@@ -1,160 +1,181 @@
-# ES Heatpump Dashboard – automatisch installiert durch die HACS-Integration
-# Dieses File darf NUR "views:" enthalten – kein "title:" auf oberster Ebene!
-# Der Titel wird in der Dashboard-Registrierung gesetzt, nicht hier.
+# ES Heatpump Dashboard – v2 (2026-05-18)
+# Mirror of custom_components/es_heatpump/dashboard/es_heatpump.yaml
+# Hier nur als Referenz im Repo. Die effektiv installierte Datei kommt aus
+# custom_components/es_heatpump/dashboard/ und wird beim Setup nach
+# <config>/dashboards/es_heatpump.yaml kopiert.
 
 views:
-  # ── View 1: Übersicht ───────────────────────────────────────────────────
   - title: Übersicht
     path: overview
     icon: mdi:heat-pump
+    badges:
+      - type: entity
+        entity: sensor.es_hp_betriebsart
+        name: Modus
+      - type: entity
+        entity: sensor.es_hp_aktueller_cop
+        name: COP
+      - type: entity
+        entity: sensor.es_hp_aussentemp_ta
+        name: Außen
+
     cards:
-
       - type: markdown
-        content: >
-          ## 🌡️ ES Wärmepumpe
+        content: |
+          ## 🌡️ Energy Save AW12-R32
+          Status der Wärmepumpe – Daten aus myheatpump.com
 
-      # ── Temperaturen ──────────────────────────────────────────────────
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: gauge
+            entity: sensor.es_hp_aktueller_cop
+            name: COP
+            min: 0
+            max: 6
+            needle: true
+            severity:
+              green: 3.5
+              yellow: 2
+              red: 0
+
+          - type: gauge
+            entity: sensor.es_hp_thermische_leistung
+            name: Wärmeabgabe
+            min: 0
+            max: 12000
+            needle: true
+
+          - type: gauge
+            entity: sensor.es_hp_heizen
+            name: Heizwasser
+            min: 0
+            max: 50
+            needle: true
+            severity:
+              green: 15
+              yellow: 25
+              red: 35
+
+          - type: gauge
+            entity: sensor.es_hp_warmwasser_tw
+            name: Brauchwasser
+            min: 0
+            max: 60
+            needle: true
+            severity:
+              green: 20
+              yellow: 30
+              red: 45
+
       - type: entities
         title: Temperaturen
-        icon: mdi:thermometer
+        icon: mdi:thermometer-lines
         entities:
-          - entity: sensor.es_wp_aussentemperatur
+          - entity: sensor.es_hp_vorlauf_tuo
+            name: Vorlauf
+          - entity: sensor.es_hp_ruecklauf_tui
+            name: Rücklauf
+          - entity: sensor.es_hp_spreizung
+            name: Spreizung (Δ T)
+          - entity: sensor.es_hp_aussentemp_ta
             name: Außentemperatur
-          - entity: sensor.es_wp_heizkreis_temperatur
-            name: Heizkreis (Vorlauf)
-          - entity: sensor.es_wp_vorlauftemperatur
-            name: Vorlauftemperatur
-          - entity: sensor.es_wp_rucklauftemperatur
-            name: Rücklauftemperatur
-          - entity: sensor.es_wp_warmwasser_ist
-            name: Warmwasser Ist
-          - entity: sensor.es_wp_heizen_solltemperatur
+          - entity: sensor.es_hp_warmwasser_tw
+            name: Warmwasser
+          - entity: sensor.es_hp_heizen_soll
             name: Heizen Soll
-          - entity: sensor.es_wp_raumtemperatur
+          - entity: sensor.es_hp_heizen
+            name: Heizwasser Ist
+          - entity: sensor.es_hp_raumtemperatur
             name: Raumtemperatur
-          - entity: sensor.es_wp_mischventil_1_temperatur
-            name: Mischventil 1
-          - entity: sensor.es_wp_mischventil_2_temperatur
-            name: Mischventil 2
 
-      # ── Temperaturverlauf ──────────────────────────────────────────────
       - type: history-graph
-        title: Temperaturverlauf (24h)
+        title: Leistungsverlauf (24 h)
         hours_to_show: 24
         entities:
-          - entity: sensor.es_wp_aussentemperatur
-            name: Außen
-          - entity: sensor.es_wp_heizkreis_temperatur
-            name: Heizkreis
-          - entity: sensor.es_wp_warmwasser_ist
-            name: Warmwasser
-          - entity: sensor.es_wp_raumtemperatur
-            name: Raum
+          - entity: sensor.es_hp_vorlauf_tuo
+          - entity: sensor.es_hp_ruecklauf_tui
+          - entity: sensor.es_hp_frequenz_hz
 
-      # ── Betrieb & Leistung ─────────────────────────────────────────────
-      - type: entities
-        title: Betrieb & Leistung
-        icon: mdi:lightning-bolt
+      - type: glance
+        title: System-Technik
+        columns: 4
         entities:
-          - entity: sensor.es_wp_betriebsmodus
-            name: Betriebsmodus
-          - entity: sensor.es_wp_kompressor_frequenz
-            name: Kompressor Frequenz
-          - entity: sensor.es_wp_kompressor_drehzahl_berechnet
-            name: Kompressor Drehzahl
-          - entity: sensor.es_wp_lufter_drehzahl
-            name: Lüfter Drehzahl
-          - entity: sensor.es_wp_leistungsaufnahme
-            name: Leistungsaufnahme
-          - entity: sensor.es_wp_spannung
+          - entity: sensor.es_hp_heissgas_td
+            name: Heißgas
+          - entity: sensor.es_hp_frequenz_hz
+            name: Frequenz
+          - entity: sensor.es_hp_betriebsart
+            name: Modus
+          - entity: sensor.es_hp_spannung
             name: Spannung
 
-      # ── Pumpen ────────────────────────────────────────────────────────
-      - type: entities
-        title: Pumpen
-        icon: mdi:pump
-        entities:
-          - entity: sensor.es_wp_pumpe_p0_status
-            name: Pumpe P0
-          - entity: sensor.es_wp_pumpe_p1_status
-            name: Pumpe P1
-          - entity: sensor.es_wp_pumpe_p2_status
-            name: Pumpe P2
-
-      # ── Energie ───────────────────────────────────────────────────────
-      - type: entities
-        title: Energie
-        icon: mdi:counter
-        entities:
-          - entity: sensor.es_wp_energie_gesamt
-            name: Energie gesamt
-          - entity: sensor.es_wp_ah_betriebszeit
-            name: AH Betriebszeit
-          - entity: sensor.es_wp_hbh_betriebszeit
-            name: HBH Betriebszeit
-          - entity: sensor.es_wp_hwtbh_betriebszeit
-            name: HWTBH Betriebszeit
-
-      # ── Gerät ─────────────────────────────────────────────────────────
-      - type: entities
-        title: Geräteinfo
-        icon: mdi:information-outline
-        entities:
-          - entity: sensor.es_wp_software_version
-            name: Software Version
-
-  # ── View 2: Energiebilanz ───────────────────────────────────────────────
-  - title: Energiebilanz
+  - title: Energie
     path: energy
     icon: mdi:lightning-bolt
     cards:
       - type: statistics-graph
-        title: Energie gesamt – Verlauf
+        title: COP – Tagesverlauf (7 Tage)
         entities:
-          - entity: sensor.es_wp_energie_gesamt
-            name: Energie gesamt
-        chart_type: bar
-        period: day
-        days_to_show: 14
+          - entity: sensor.es_hp_aktueller_cop
+        chart_type: line
+        period: hour
+        days_to_show: 7
+        stat_types:
+          - mean
 
       - type: history-graph
-        title: Kompressor Frequenz (24h)
+        title: Wärmeabgabe & Kompressor-Frequenz (24 h)
         hours_to_show: 24
         entities:
-          - entity: sensor.es_wp_kompressor_frequenz
-            name: Kompressor Hz
-          - entity: sensor.es_wp_lufter_drehzahl
-            name: Lüfter rpm
+          - entity: sensor.es_hp_thermische_leistung
+          - entity: sensor.es_hp_frequenz_hz
 
-  # ── View 3: Alle Parameter (Diagnose) ──────────────────────────────────
+      - type: history-graph
+        title: Heißgastemperatur (24 h)
+        hours_to_show: 24
+        entities:
+          - entity: sensor.es_hp_heissgas_td
+
+      - type: entities
+        title: Betriebsstunden
+        icon: mdi:counter
+        entities:
+          - entity: sensor.es_hp_ah_betriebszeit
+          - entity: sensor.es_hp_hbh_betriebszeit
+
   - title: Diagnose
     path: diagnose
     icon: mdi:bug-outline
     cards:
+      - type: markdown
+        content: |
+          ### Diagnose-Sensoren
+          Die mit „Diagnose par…" markierten Sensoren konnten nicht eindeutig
+          einer Mess-Größe zugeordnet werden und sind standardmäßig **deaktiviert**.
+          Aktivieren unter *Einstellungen → Geräte & Dienste → ES Heatpump →
+          Entitäten*.
+
       - type: entities
-        title: Alle Rohdaten (parXX)
-        show_header_toggle: false
+        title: Mischventile
         entities:
-          - entity: sensor.es_wp_aussentemperatur
-          - entity: sensor.es_wp_vorlauftemperatur
-          - entity: sensor.es_wp_rucklauftemperatur
-          - entity: sensor.es_wp_warmwasser_ist
-          - entity: sensor.es_wp_heizen_solltemperatur
-          - entity: sensor.es_wp_heizkreis_temperatur
-          - entity: sensor.es_wp_mischventil_1_temperatur
-          - entity: sensor.es_wp_mischventil_2_temperatur
-          - entity: sensor.es_wp_raumtemperatur
-          - entity: sensor.es_wp_betriebsmodus
-          - entity: sensor.es_wp_kompressor_frequenz
-          - entity: sensor.es_wp_kompressor_drehzahl_berechnet
-          - entity: sensor.es_wp_lufter_drehzahl
-          - entity: sensor.es_wp_leistungsaufnahme
-          - entity: sensor.es_wp_spannung
-          - entity: sensor.es_wp_energie_gesamt
-          - entity: sensor.es_wp_ah_betriebszeit
-          - entity: sensor.es_wp_hbh_betriebszeit
-          - entity: sensor.es_wp_hwtbh_betriebszeit
-          - entity: sensor.es_wp_software_version
-          - entity: sensor.es_wp_temperatur_par22
-          - entity: sensor.es_wp_temperatur_par25
-          - entity: sensor.es_wp_temperatur_par30
+          - entity: sensor.es_hp_mischventil_1
+          - entity: sensor.es_hp_mischventil_2
+
+      - type: entities
+        title: Diagnose-Parameter
+        entities:
+          - entity: sensor.es_hp_diag_par21
+          - entity: sensor.es_hp_diag_par22
+          - entity: sensor.es_hp_diag_par23
+          - entity: sensor.es_hp_diag_par26
+          - entity: sensor.es_hp_diag_par27
+          - entity: sensor.es_hp_diag_par39
+          - entity: sensor.es_hp_diag_par40
+
+      - type: entities
+        title: Geräteinfo
+        entities:
+          - entity: sensor.es_hp_software_version
+          - entity: sensor.es_hp_hwtbh_betriebszeit
