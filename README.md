@@ -9,6 +9,10 @@
 
 ---
 
+<img src="ha-es-heatpump.jpg" width="350">
+
+---
+
 <a id="deutsch"></a>
 ## 🇩🇪 Deutsch
 
