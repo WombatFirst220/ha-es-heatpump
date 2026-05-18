@@ -30,8 +30,10 @@ from .const import (
     CALC_SPREIZUNG,
     CALC_THERM_LEISTUNG,
     CONF_FLOW_RATE,
+    CONF_FLOW_RATE_DHW,
     CONF_POWER_ENTITY,
     DEFAULT_FLOW_RATE,
+    DEFAULT_FLOW_RATE_DHW,
     DEVICE_MANUFACTURER,
     DEVICE_MODEL,
     DEVICE_NAME,
@@ -40,6 +42,33 @@ from .const import (
     TEMP_SENTINEL,
     WATER_VOL_HEAT_CAPACITY_WH,
 )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helper: select the active flow-rate based on the operation mode (par15)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#   par15 = 1.0  → Brauchwasser (DHW)        → flow_rate_dhw
+#   par15 = 2.0  → Heizen                    → flow_rate (heating)
+#   par15 = 3.0  → Entfrosten (defrost)      → 0  (no useful heat delivery)
+#   else / 0.0  → Aus                        → 0
+#
+def _active_flow_rate(
+    data: dict, flow_heating: float, flow_dhw: float
+) -> float:
+    """Return the volumetric flow rate appropriate for the current mode.
+
+    Returns 0 when the heat pump isn't delivering useful heat to either
+    circuit (off, defrosting, unknown mode) so that downstream calculations
+    yield 0 W instead of fictional output.
+    """
+    mode = data.get("par15") if data else None
+    if mode == 2.0:
+        return flow_heating
+    if mode == 1.0:
+        return flow_dhw
+    # 0.0 Aus / 3.0 Entfrosten / sonstige
+    return 0.0
 from .coordinator import ESHeatpumpCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -69,6 +98,12 @@ async def async_setup_entry(
             entry.data.get(CONF_FLOW_RATE, DEFAULT_FLOW_RATE),
         )
     )
+    flow_rate_dhw = float(
+        entry.options.get(
+            CONF_FLOW_RATE_DHW,
+            entry.data.get(CONF_FLOW_RATE_DHW, DEFAULT_FLOW_RATE_DHW),
+        )
+    )
     power_entity = entry.options.get(
         CONF_POWER_ENTITY,
         entry.data.get(CONF_POWER_ENTITY),
@@ -91,10 +126,15 @@ async def async_setup_entry(
     # ── Calculated / derived sensors ─────────────────────────────────────
     entities.append(SpreizungSensor(coordinator, device_info, username))
     entities.append(
-        ThermLeistungSensor(coordinator, device_info, username, flow_rate)
+        ThermLeistungSensor(
+            coordinator, device_info, username, flow_rate, flow_rate_dhw
+        )
     )
     entities.append(
-        COPSensor(coordinator, device_info, username, flow_rate, power_entity, hass)
+        COPSensor(
+            coordinator, device_info, username,
+            flow_rate, flow_rate_dhw, power_entity, hass,
+        )
     )
     entities.append(
         ElectricalPowerMirrorSensor(coordinator, device_info, username, power_entity, hass)
@@ -204,9 +244,14 @@ class SpreizungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
-    """Approximate heat output to the heating circuit.
+    """Approximate heat output, mode-aware.
 
-    P [W] = flow_rate [m³/h] × ΔT [K] × 1163 [Wh/(m³·K)]
+    P [W] = active_flow_rate [m³/h] × ΔT [K] × 1163 [Wh/(m³·K)]
+
+    The active flow rate is selected based on the operation mode (par15):
+      * Heizen   (par15=2) → ``flow_rate_heating``
+      * Brauchwasser (par15=1) → ``flow_rate_dhw``
+      * Off / Defrost / Unknown → 0
 
     Returns 0 when the compressor is idle (par20 = 0) regardless of ΔT,
     because a residual temperature differential in standby is not delivered
@@ -226,13 +271,15 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
         coordinator,
         device_info: DeviceInfo,
         username: str,
-        flow_rate: float,
+        flow_rate_heating: float,
+        flow_rate_dhw: float,
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_THERM_LEISTUNG}"
         self._attr_suggested_object_id = "es_hp_thermische_leistung"
         self._attr_device_info = device_info
-        self._flow_rate = flow_rate
+        self._flow_heating = flow_rate_heating
+        self._flow_dhw = flow_rate_dhw
 
     @property
     def native_value(self) -> float | None:
@@ -242,14 +289,20 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
             return None
         if not freq or freq <= 0:
             return 0.0
+        active_flow = _active_flow_rate(data, self._flow_heating, self._flow_dhw)
+        if active_flow <= 0:
+            return 0.0
         delta_t = vor - rue
         if delta_t <= 0:
             return 0.0
-        return round(self._flow_rate * delta_t * WATER_VOL_HEAT_CAPACITY_WH, 1)
+        return round(active_flow * delta_t * WATER_VOL_HEAT_CAPACITY_WH, 1)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {"flow_rate_m3h": self._flow_rate}
+        return {
+            "flow_rate_heating_m3h": self._flow_heating,
+            "flow_rate_dhw_m3h": self._flow_dhw,
+        }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -257,7 +310,11 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
 # ─────────────────────────────────────────────────────────────────────────────
 
 class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
-    """Coefficient of Performance.
+    """Coefficient of Performance, mode-aware.
+
+    Uses ``flow_rate_heating`` in Heizen mode (par15=2) and
+    ``flow_rate_dhw`` in Brauchwasser mode (par15=1).  Returns 0 in off /
+    defrost / unknown modes because there is no useful heat delivery.
 
     Requires a separate electrical-power sensor (e.g. Shelly) configured
     via the Options Flow. Without it the sensor stays at ``None``.
@@ -276,7 +333,8 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         coordinator,
         device_info: DeviceInfo,
         username: str,
-        flow_rate: float,
+        flow_rate_heating: float,
+        flow_rate_dhw: float,
         power_entity: str | None,
         hass: HomeAssistant,
     ) -> None:
@@ -284,7 +342,8 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_COP}"
         self._attr_suggested_object_id = "es_hp_aktueller_cop"
         self._attr_device_info = device_info
-        self._flow_rate = flow_rate
+        self._flow_heating = flow_rate_heating
+        self._flow_dhw = flow_rate_dhw
         self._power_entity = power_entity
         self._hass = hass
 
@@ -299,6 +358,10 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         if not freq or freq <= 0:
             return 0.0
 
+        active_flow = _active_flow_rate(data, self._flow_heating, self._flow_dhw)
+        if active_flow <= 0:
+            return 0.0
+
         state = self._hass.states.get(self._power_entity)
         if state is None or state.state in ("unknown", "unavailable"):
             return None
@@ -309,7 +372,7 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         if elec_w < 50:    # below this we treat the heatpump as effectively idle
             return 0.0
 
-        therm_w = self._flow_rate * (vor - rue) * WATER_VOL_HEAT_CAPACITY_WH
+        therm_w = active_flow * (vor - rue) * WATER_VOL_HEAT_CAPACITY_WH
         if therm_w <= 0:
             return 0.0
         return round(therm_w / elec_w, 2)
@@ -318,7 +381,8 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "power_entity": self._power_entity,
-            "flow_rate_m3h": self._flow_rate,
+            "flow_rate_heating_m3h": self._flow_heating,
+            "flow_rate_dhw_m3h": self._flow_dhw,
         }
 
 

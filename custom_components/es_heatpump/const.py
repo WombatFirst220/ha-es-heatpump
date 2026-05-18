@@ -7,12 +7,14 @@ PLATFORMS = ["sensor"]
 CONF_BASE_URL       = "base_url"
 CONF_SCAN_INTERVAL  = "scan_interval"
 CONF_POWER_ENTITY   = "power_entity"
-CONF_FLOW_RATE      = "flow_rate"
+CONF_FLOW_RATE      = "flow_rate"           # Heizen (heating circuit)
+CONF_FLOW_RATE_DHW  = "flow_rate_dhw"       # Brauchwasser (DHW circuit)
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
-DEFAULT_BASE_URL      = "https://www.myheatpump.com"
-DEFAULT_SCAN_INTERVAL = 60          # seconds
-DEFAULT_FLOW_RATE     = 1.2         # m³/h — typical for AW12-R32 at full load
+DEFAULT_BASE_URL        = "https://www.myheatpump.com"
+DEFAULT_SCAN_INTERVAL   = 60        # seconds
+DEFAULT_FLOW_RATE       = 1.2       # m³/h — heating circuit, typical AW12-R32 design value
+DEFAULT_FLOW_RATE_DHW   = 1.0       # m³/h — DHW coil circuit, typical default
 
 # Known myheatpump.com regional portals.  Users can still type any custom URL.
 KNOWN_BASE_URLS = [

@@ -10,7 +10,8 @@
           "base_url": "Portaal-URL",
           "scan_interval": "Update-interval (seconden)",
           "power_entity": "Vermogenssensor (optioneel, voor COP-berekening)",
-          "flow_rate": "Volumestroom verwarmingscircuit (m³/u)"
+          "flow_rate": "Volumestroom verwarmingscircuit (m³/u)",
+          "flow_rate_dhw": "Volumestroom warmwatercircuit (m³/u)"
         }
       }
     },
@@ -31,7 +32,8 @@
           "base_url": "Portaal-URL",
           "scan_interval": "Update-interval (seconden)",
           "power_entity": "Vermogenssensor (Shelly enz.)",
-          "flow_rate": "Volumestroom verwarmingscircuit (m³/u)"
+          "flow_rate": "Volumestroom verwarmingscircuit (m³/u)",
+          "flow_rate_dhw": "Volumestroom warmwatercircuit (m³/u)"
         }
       }
     }

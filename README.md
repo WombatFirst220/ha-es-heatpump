@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.1.1-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-2.2.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 
@@ -94,27 +94,6 @@ Drei Views:
 
 Das Dashboard-YAML wird beim Setup nach `<config>/dashboards/es_heatpump.yaml` kopiert und **bei jedem Plugin-Update überschrieben** — manuelle Änderungen an dieser Datei gehen daher verloren. Für eigene Anpassungen das Dashboard in HA duplizieren.
 
-### 🔬 Verifikations-Skript
-
-Im Ordner [`scripts/verify_mapping.py`](scripts/verify_mapping.py) liegt ein Tool, das die Plugin-Werte (`es_hp_*`) live gegen die Werte deiner alten Multiscrape-Sensoren (`es_wp_*`) vergleicht — ideal für die Übergangsphase, in der beide parallel laufen.
-
-```bash
-# Long-Lived-Access-Token erstellen: HA → Profil → Sicherheit
-export HA_HOST=http://homeassistant.local:8123
-export HA_TOKEN="<dein-token>"
-
-# Einmalige Prüfung
-python3 scripts/verify_mapping.py
-
-# Watch-Modus (alle 30 Sekunden)
-python3 scripts/verify_mapping.py --watch 30
-
-# Strikte Toleranz
-python3 scripts/verify_mapping.py --abs-tol 0.2
-```
-
-Ausgabe enthält für jede gemappte Größe Plugin-Wert, Referenz-Wert, Δ, Status (✓ OK / ~ Warnung / ✗ Mismatch). Exit-Code 0 = alle OK, 1 = Mismatch.
-
 ### 🔄 Migration von v1.x → v2.0.0
 
 **Beim ersten Start nach dem Update** läuft eine einmalige Migration:
@@ -134,7 +113,7 @@ Ausgabe enthält für jede gemappte Größe Plugin-Wert, Referenz-Wert, Δ, Stat
 | Dashboard fehlt | `lovelace.reload_resources` aufrufen, ggf. HA-Neustart |
 | Lüfter-Drehzahl fehlt | Der Lüfter-Wert ist nicht im API-Endpoint enthalten — falls benötigt, weiterhin Multiscrape verwenden |
 | COP zeigt „unknown" | Power-Entity in den Optionen hinterlegen (Shelly o.ä.) |
-| Falscher Wert eines Diagnose-Sensors | Im Verifikations-Skript abgleichen, ggf. GitHub-Issue mit Werten öffnen |
+| Falscher Wert eines Diagnose-Sensors | GitHub-Issue mit par-ID und beobachteten Werten öffnen |
 
 ---
 
@@ -177,17 +156,6 @@ Home Assistant integration for **Energy Save heat pumps** (Valtop AW12-R32 and s
 
 The plugin creates around 18 visible entities under `sensor.es_hp_*` plus calculated sensors for **Spread**, **Thermal Output** and **COP**. Diagnostic sensors are registered but disabled by default — enable them under **Settings → Devices & Services → ES Heatpump → Entities**. Unidentified parameters that always return `0.0` are not exposed at all. See the German section above and [`PARAMETER_MAPPING.md`](PARAMETER_MAPPING.md) for the full table with verification details.
 
-### 🔬 Verification script
-
-Use [`scripts/verify_mapping.py`](scripts/verify_mapping.py) to compare plugin values against any existing multiscrape reference sensors:
-
-```bash
-export HA_HOST=http://homeassistant.local:8123
-export HA_TOKEN="<long-lived-token>"
-python3 scripts/verify_mapping.py            # single check
-python3 scripts/verify_mapping.py --watch 30 # continuous
-```
-
 ### 🔄 Migration from v1.x → v2.0.0
 
 On first start after the update a one-time migration runs:
@@ -202,6 +170,13 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 
 <a id="changelog"></a>
 ## 📋 Changelog
+
+### 2.2.0 — 2026-05-18
+
+- ✨ **Getrennte Volumenströme für Heizen und Brauchwasser.**  Die thermische Leistung und der COP werden jetzt mode-bewusst berechnet: bei Betriebsart „Heizen" (par15=2) wird der konfigurierte `flow_rate` (Heizkreislauf) genutzt, bei „Brauchwasser" (par15=1) der neue `flow_rate_dhw` (DHW-Kreislauf). Bei „Aus" und „Entfrosten" werden Thermische Leistung und COP auf 0 gesetzt — Defrost zieht zwar Strom, liefert aber keine nutzbare Wärme.
+- 🔧 Neues Config-Feld **„Volumenstrom Brauchwasserkreis (m³/h)"** (Default 1.0), einstellbar im Setup-Flow und in den Optionen.
+- 🌐 Übersetzungen für alle 5 unterstützten Sprachen (de · en · nl · sv · da) aktualisiert.
+- 🗑️ Verifikations-Skript (`scripts/verify_mapping.py`) entfernt — nach Abschluss der Migration nicht mehr benötigt.
 
 ### 2.1.1 — 2026-05-18 (hotfix)
 
@@ -238,7 +213,6 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 **New**
 - 🧮 Calculated sensors: `es_hp_spreizung`, `es_hp_thermische_leistung`, `es_hp_aktueller_cop`
 - ⚙️ Config-Flow fields for power entity (COP source) and flow rate (m³/h)
-- 🔬 Standalone verification script `scripts/verify_mapping.py`
 - 📊 Redesigned dashboard with 3 views (Übersicht / Energie / Diagnose)
 - 📄 New `PARAMETER_MAPPING.md` documenting the correlation analysis
 
@@ -266,7 +240,6 @@ See git history.
 ## 📚 Weitere Dokumente / Further reading
 
 - [`PARAMETER_MAPPING.md`](PARAMETER_MAPPING.md) — Detaillierte Korrelations-Analyse mit Pearson-Koeffizienten und Begründungen
-- [`scripts/verify_mapping.py`](scripts/verify_mapping.py) — Verifikations-Tool für die Übergangsphase
 
 ## 📄 Lizenz / License
 
