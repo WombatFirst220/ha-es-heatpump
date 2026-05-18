@@ -24,14 +24,26 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from .const import (
     CONF_BASE_URL,
     CONF_FLOW_RATE,
+    CONF_FLOW_RATE_DHW,
     CONF_POWER_ENTITY,
     CONF_SCAN_INTERVAL,
     DEFAULT_BASE_URL,
     DEFAULT_FLOW_RATE,
+    DEFAULT_FLOW_RATE_DHW,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     KNOWN_BASE_URLS,
 )
+
+
+def _flow_rate_selector() -> NumberSelector:
+    """Numeric input for a flow-rate value in m³/h."""
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=0.01, max=10.0, step=0.01, mode=NumberSelectorMode.BOX,
+            unit_of_measurement="m³/h",
+        )
+    )
 
 
 def _base_url_selector() -> SelectSelector:
@@ -102,12 +114,10 @@ class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Optional(
                     CONF_FLOW_RATE, default=DEFAULT_FLOW_RATE
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=0.1, max=10.0, step=0.1, mode=NumberSelectorMode.BOX,
-                        unit_of_measurement="m³/h",
-                    )
-                ),
+                ): _flow_rate_selector(),
+                vol.Optional(
+                    CONF_FLOW_RATE_DHW, default=DEFAULT_FLOW_RATE_DHW
+                ): _flow_rate_selector(),
             }
         )
 
@@ -115,12 +125,6 @@ class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=schema,
             errors=errors,
-            description_placeholders={
-                "flow_rate_help": (
-                    "Volumenstrom des Heizkreislaufs in m³/h, "
-                    "benötigt für die Berechnung der thermischen Leistung und des COP."
-                ),
-            },
         )
 
     @staticmethod
@@ -167,12 +171,14 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
                     CONF_FLOW_RATE,
                     data.get(CONF_FLOW_RATE, DEFAULT_FLOW_RATE),
                 ),
-            ): NumberSelector(
-                NumberSelectorConfig(
-                    min=0.1, max=10.0, step=0.1, mode=NumberSelectorMode.BOX,
-                    unit_of_measurement="m³/h",
-                )
-            ),
+            ): _flow_rate_selector(),
+            vol.Optional(
+                CONF_FLOW_RATE_DHW,
+                default=opts.get(
+                    CONF_FLOW_RATE_DHW,
+                    data.get(CONF_FLOW_RATE_DHW, DEFAULT_FLOW_RATE_DHW),
+                ),
+            ): _flow_rate_selector(),
         }
 
         # Power-Entity is fully optional. If a value is already set, supply it

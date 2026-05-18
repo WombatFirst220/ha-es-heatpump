@@ -10,7 +10,8 @@
           "base_url": "Portal URL",
           "scan_interval": "Update interval (seconds)",
           "power_entity": "Electrical-power sensor (optional, used for COP calculation)",
-          "flow_rate": "Heating-loop flow rate (m³/h)"
+          "flow_rate": "Heating-loop flow rate (m³/h)",
+          "flow_rate_dhw": "DHW-loop flow rate (m³/h)"
         }
       }
     },
@@ -31,7 +32,8 @@
           "base_url": "Portal URL",
           "scan_interval": "Update interval (seconds)",
           "power_entity": "Electrical-power sensor (Shelly etc.)",
-          "flow_rate": "Heating-loop flow rate (m³/h)"
+          "flow_rate": "Heating-loop flow rate (m³/h)",
+          "flow_rate_dhw": "DHW-loop flow rate (m³/h)"
         }
       }
     }

@@ -10,7 +10,8 @@
           "base_url": "Portal-URL",
           "scan_interval": "Aktualisierungsintervall (Sekunden)",
           "power_entity": "Stromsensor (optional, für COP-Berechnung)",
-          "flow_rate": "Volumenstrom Heizkreislauf (m³/h)"
+          "flow_rate": "Volumenstrom Heizkreislauf (m³/h)",
+          "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)"
         }
       }
     },
@@ -31,7 +32,8 @@
           "base_url": "Portal-URL",
           "scan_interval": "Aktualisierungsintervall (Sekunden)",
           "power_entity": "Stromsensor (Shelly o.ä.)",
-          "flow_rate": "Volumenstrom Heizkreislauf (m³/h)"
+          "flow_rate": "Volumenstrom Heizkreislauf (m³/h)",
+          "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)"
         }
       }
     }
