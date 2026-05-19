@@ -490,6 +490,11 @@ class BetriebsartCalcSensor(
         if self._mode_source:
             state = self._hass.states.get(self._mode_source)
             attrs["source_raw"] = state.state if state else None
+        # Diagnostic: expose the non-parXX response keys from the portal API
+        # so we can later identify a native mode field without code changes.
+        raw_meta = (self.coordinator.data or {}).get("_raw_meta")
+        if raw_meta:
+            attrs["api_response_meta"] = raw_meta
         return attrs
 
 

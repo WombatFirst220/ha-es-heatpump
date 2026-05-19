@@ -3,9 +3,13 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.2.1-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-2.2.2-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
+
+<p align="center">
+  <img src="docs/dashboard-mobile.png" alt="ES Heatpump Dashboard auf dem Smartphone" width="320">
+</p>
 
 ---
 
@@ -86,9 +90,13 @@ Mischventil 2 (`par10`), Software Version (`par37`), HWTBH Betriebszeit (`par43`
 
 ### 📋 Dashboard
 
+<p align="center">
+  <img src="docs/dashboard-mobile.png" alt="ES Heatpump Dashboard – Übersicht" width="280">
+</p>
+
 Drei Views:
 
-1. **Übersicht** — Gauges (COP, Wärmeabgabe, Heizwasser, Brauchwasser), Temperaturen-Tabelle, 24h-Verlauf, System-Technik
+1. **Übersicht** — Gauges (COP, Wärmeabgabe, El. Leistung, Heizwasser, Brauchwasser, Spreizung), Temperaturen-Tabelle, 24h-Verlauf, System-Technik
 2. **Energie** — COP-Statistik (7 Tage), Wärmeabgabe + Kompressor-Frequenz, Heißgastemperatur-Verlauf, Betriebsstunden
 3. **Diagnose** — Mischventile, Diagnose-Parameter, Geräteinfo
 
@@ -170,6 +178,10 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 
 <a id="changelog"></a>
 ## 📋 Changelog
+
+### 2.2.2 — 2026-05-19 (hotfix)
+
+- 🩺 `sensor.es_hp_betriebsart` exponiert die nicht-`parXX`-Felder aus der Portal-Response als `api_response_meta`-Attribut. So lässt sich der gesamte Roh-Payload inspizieren, ohne im INFO-Log nach der Diagnose-Zeile zu suchen.
 
 ### 2.2.1 — 2026-05-19 (hotfix)
 
