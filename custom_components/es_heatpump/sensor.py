@@ -61,6 +61,10 @@ from .const import (
 # active flow rate defaults to the heating value (best-effort assumption,
 # since heating dominates typical usage).
 
+_NUMERIC_MODE_MAP = {0: "Aus", 1: "Brauchwasser", 2: "Heizen", 3: "Entfrosten"}
+_PAREN_NUMBER_RE = __import__("re").compile(r"\(([-+]?\d+(?:\.\d+)?)\)")
+
+
 def _resolve_betriebsart(hass: HomeAssistant, mode_source: str | None) -> str:
     """Look up the canonical operating-mode string."""
     if not mode_source:
@@ -69,14 +73,27 @@ def _resolve_betriebsart(hass: HomeAssistant, mode_source: str | None) -> str:
     if state is None or state.state in ("unknown", "unavailable", ""):
         return "Unbekannt"
     raw = str(state.state).strip().lower()
+
+    # Exact match in known aliases
     if raw in BETRIEBSART_ALIASES:
         return BETRIEBSART_ALIASES[raw]
+
+    # Multiscrape-style "Unbekannt (0.0)" / "Unknown (2.0)" — pull the
+    # numeric part out of the parentheses and map it.
+    m = _PAREN_NUMBER_RE.search(raw)
+    if m:
+        try:
+            as_int = int(float(m.group(1)))
+            if as_int in _NUMERIC_MODE_MAP:
+                return _NUMERIC_MODE_MAP[as_int]
+        except (ValueError, TypeError):
+            pass
+
     # Numeric fallback for sources that only return the par15-style int
     try:
         as_int = int(float(raw))
-        return {0: "Aus", 1: "Brauchwasser", 2: "Heizen", 3: "Entfrosten"}.get(
-            as_int, "Unbekannt"
-        )
+        if as_int in _NUMERIC_MODE_MAP:
+            return _NUMERIC_MODE_MAP[as_int]
     except (ValueError, TypeError):
         pass
     return "Unbekannt"
