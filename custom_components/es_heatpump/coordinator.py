@@ -77,6 +77,8 @@ class ESHeatpumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Device identifiers discovered after login
         self._mn: str | None = None
         self._devid: str | None = None
+        # Diagnostic flag — log non-par response keys once per session
+        self._logged_non_par_keys: bool = False
 
     # ------------------------------------------------------------------
     # Session helpers
@@ -272,8 +274,7 @@ class ESHeatpumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Response normalisation
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _normalize(raw: dict[str, Any]) -> dict[str, Any]:
+    def _normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         """
         Extract all parXX keys from the response into {par_id: float_value}.
 
@@ -281,12 +282,14 @@ class ESHeatpumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
           {"isNewRecord": true, "mn": 10309, "devid": 1,
            "par1": 2.0, "par2": 0.0, "par3": 0.0, ...}
 
-        Non-parXX keys (mn, devid, isNewRecord, …) are silently ignored.
+        Non-parXX keys other than housekeeping fields are logged ONCE so we
+        can discover unknown payload fields (e.g. an operating-mode flag
+        outside the parXX namespace).
         """
         import re
         par_pattern = re.compile(r"^par\d+$")
 
-        result: dict[str, float | None] = {
+        result: dict[str, Any] = {
             k: _safe_float(v)
             for k, v in raw.items()
             if par_pattern.match(str(k))
@@ -299,7 +302,31 @@ class ESHeatpumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "Please open a GitHub issue with your portal's response structure."
             )
 
-        _LOGGER.debug("ES Heatpump: received %d sensor values from portal", len(result))
+        # ── One-shot diagnostic logging of non-parXX keys ────────────────
+        # Helps the user identify whether the portal sends a separate
+        # "mode" / "status" field that we could use to determine the actual
+        # heat-pump mode (Heizen / Brauchwasser / Entfrosten).
+        if not getattr(self, "_logged_non_par_keys", False):
+            housekeeping = {"isNewRecord", "mn", "devid", "id"}
+            extras = {
+                k: v for k, v in raw.items()
+                if not par_pattern.match(str(k)) and k not in housekeeping
+            }
+            if extras:
+                _LOGGER.info(
+                    "ES Heatpump: non-parXX response keys (diagnostic, "
+                    "logged once per session): %s",
+                    extras,
+                )
+            self._logged_non_par_keys = True
+
+        # ── Pass non-par keys through under a reserved namespace so
+        # downstream sensors can read them without breaking the parXX schema
+        result["_raw_meta"] = {
+            k: v for k, v in raw.items() if not par_pattern.match(str(k))
+        }
+
+        _LOGGER.debug("ES Heatpump: received %d sensor values from portal", len(result) - 1)
         return result
 
     # ------------------------------------------------------------------

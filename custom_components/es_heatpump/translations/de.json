@@ -11,7 +11,8 @@
           "scan_interval": "Aktualisierungsintervall (Sekunden)",
           "power_entity": "Stromsensor (optional, für COP-Berechnung)",
           "flow_rate": "Volumenstrom Heizkreislauf (m³/h)",
-          "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)"
+          "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)",
+          "mode_source_entity": "Betriebsart-Quelle (optional, z. B. Multiscrape-Sensor mit 'Heizen'/'Brauchwasser')"
         }
       }
     },
@@ -33,7 +34,8 @@
           "scan_interval": "Aktualisierungsintervall (Sekunden)",
           "power_entity": "Stromsensor (Shelly o.ä.)",
           "flow_rate": "Volumenstrom Heizkreislauf (m³/h)",
-          "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)"
+          "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)",
+          "mode_source_entity": "Betriebsart-Quelle (optional, z. B. Multiscrape-Sensor mit 'Heizen'/'Brauchwasser')"
         }
       }
     }
