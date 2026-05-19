@@ -25,6 +25,7 @@ from .const import (
     CONF_BASE_URL,
     CONF_FLOW_RATE,
     CONF_FLOW_RATE_DHW,
+    CONF_MODE_SOURCE,
     CONF_POWER_ENTITY,
     CONF_SCAN_INTERVAL,
     DEFAULT_BASE_URL,
@@ -112,6 +113,9 @@ class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_POWER_ENTITY): EntitySelector(
                     EntitySelectorConfig(domain="sensor", device_class="power")
                 ),
+                vol.Optional(CONF_MODE_SOURCE): EntitySelector(
+                    EntitySelectorConfig(domain="sensor")
+                ),
                 vol.Optional(
                     CONF_FLOW_RATE, default=DEFAULT_FLOW_RATE
                 ): _flow_rate_selector(),
@@ -145,9 +149,10 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         if user_input is not None:
-            # Drop empty string from optional EntitySelector
-            if user_input.get(CONF_POWER_ENTITY) in (None, ""):
-                user_input.pop(CONF_POWER_ENTITY, None)
+            # Drop empty strings from optional EntitySelector fields
+            for key in (CONF_POWER_ENTITY, CONF_MODE_SOURCE):
+                if user_input.get(key) in (None, ""):
+                    user_input.pop(key, None)
             return self.async_create_entry(title="", data=user_input)
 
         opts = self._config_entry.options
@@ -191,6 +196,17 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
         else:
             schema_dict[vol.Optional(CONF_POWER_ENTITY)] = EntitySelector(
                 EntitySelectorConfig(domain="sensor", device_class="power")
+            )
+
+        # Mode-source entity (any sensor, used to read the real operating mode)
+        current_mode_source = opts.get(CONF_MODE_SOURCE, data.get(CONF_MODE_SOURCE))
+        if current_mode_source:
+            schema_dict[vol.Optional(CONF_MODE_SOURCE, default=current_mode_source)] = (
+                EntitySelector(EntitySelectorConfig(domain="sensor"))
+            )
+        else:
+            schema_dict[vol.Optional(CONF_MODE_SOURCE)] = EntitySelector(
+                EntitySelectorConfig(domain="sensor")
             )
 
         return self.async_show_form(step_id="init", data_schema=vol.Schema(schema_dict))

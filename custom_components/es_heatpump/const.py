@@ -4,11 +4,12 @@ DOMAIN = "es_heatpump"
 PLATFORMS = ["sensor"]
 
 # ── Config entry keys ────────────────────────────────────────────────────────
-CONF_BASE_URL       = "base_url"
-CONF_SCAN_INTERVAL  = "scan_interval"
-CONF_POWER_ENTITY   = "power_entity"
-CONF_FLOW_RATE      = "flow_rate"           # Heizen (heating circuit)
-CONF_FLOW_RATE_DHW  = "flow_rate_dhw"       # Brauchwasser (DHW circuit)
+CONF_BASE_URL         = "base_url"
+CONF_SCAN_INTERVAL    = "scan_interval"
+CONF_POWER_ENTITY     = "power_entity"
+CONF_FLOW_RATE        = "flow_rate"           # Heizen (heating circuit)
+CONF_FLOW_RATE_DHW    = "flow_rate_dhw"       # Brauchwasser (DHW circuit)
+CONF_MODE_SOURCE      = "mode_source_entity"  # external entity that knows the real mode
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 DEFAULT_BASE_URL        = "https://www.myheatpump.com"
@@ -32,19 +33,36 @@ SESSION_COOKIE_NAME = "JSESSIONID"
 CALC_SPREIZUNG      = "calc_spreizung"
 CALC_THERM_LEISTUNG = "calc_therm_leistung"
 CALC_COP            = "calc_cop"
-CALC_ELEC_POWER     = "calc_elec_power"   # mirror of the configured power_entity
+CALC_ELEC_POWER     = "calc_elec_power"     # mirror of the configured power_entity
+CALC_BETRIEBSART    = "calc_betriebsart"    # derived from mode_source_entity
 
-# ── Betriebsart enum mapping (par15) ─────────────────────────────────────────
-# Confirmed via portal field "Unit Current Working Mode" + user observation.
-# Numeric values from the API are mapped to display strings; unknown values
-# fall back to "Unbekannt".
-BETRIEBSART_VALUES = {
-    0.0: "Aus",
-    1.0: "Brauchwasser",
-    2.0: "Heizen",
-    3.0: "Entfrosten",
-}
+# ── Betriebsart options ──────────────────────────────────────────────────────
+# Canonical display values for the enum sensor.  The plugin no longer derives
+# the mode from par15 directly (that turned out to be a periodic heartbeat
+# signal, not the working mode); instead it reads from an external mode
+# source entity configured by the user (e.g. a multiscrape sensor that scrapes
+# the portal's HTML "Unit Current Working Mode" field).
 BETRIEBSART_OPTIONS = ["Aus", "Brauchwasser", "Heizen", "Entfrosten", "Unbekannt"]
+
+# Normalisation of typical state strings coming from external mode sources.
+# Lower-case key → canonical option from BETRIEBSART_OPTIONS.
+BETRIEBSART_ALIASES = {
+    # German
+    "aus":             "Aus",
+    "off":             "Aus",
+    "standby":         "Aus",
+    "0":               "Aus",
+    "heizen":          "Heizen",
+    "heating":         "Heizen",
+    "brauchwasser":    "Brauchwasser",
+    "warmwasser":      "Brauchwasser",
+    "dhw":             "Brauchwasser",
+    "hot water":       "Brauchwasser",
+    "entfrosten":      "Entfrosten",
+    "defrost":         "Entfrosten",
+    "defrosting":      "Entfrosten",
+    "abtauen":         "Entfrosten",
+}
 
 # ── Device info ──────────────────────────────────────────────────────────────
 DEVICE_NAME         = "ES Wärmepumpe"
@@ -163,16 +181,18 @@ PARAMETER_SENSORS = {
 
     # ── Compressor / Operation ───────────────────────────────────────────
     "par15": {
-        # Text-mapped via BETRIEBSART_VALUES at runtime (see sensor.py)
-        "slug": "betriebsart",
-        "name": "Betriebsart",
-        "unit": None,
-        "device_class": "enum",
-        "state_class": None,
-        "options": BETRIEBSART_OPTIONS,
-        "value_map": BETRIEBSART_VALUES,
-        "icon": "mdi:heat-pump",
-        "enabled_default": True,
+        # ⚠ Was assumed to be "Operating Mode" in v2.0.0 – v2.2.0, but live
+        # observation (2026-05-19) showed that par15 only toggles 0/1 every
+        # ~10 minutes for ~1 minute, independent of the actual mode shown by
+        # the portal HTML ("Heizen" / "Brauchwasser").  It looks like a
+        # heartbeat / "fresh data" signal rather than the mode.  Exposed as
+        # diagnostic, disabled by default; the real mode comes from the
+        # external ``mode_source_entity`` configured in the options.
+        "slug": "diag_par15_heartbeat",
+        "name": "Diagnose par15 (Heartbeat / unklar)",
+        "unit": None, "device_class": None, "state_class": "measurement",
+        "icon": "mdi:pulse",
+        "enabled_default": False,
     },
     "par20": {
         "slug": "frequenz_hz",

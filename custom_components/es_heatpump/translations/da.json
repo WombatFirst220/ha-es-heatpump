@@ -11,7 +11,8 @@
           "scan_interval": "Opdateringsinterval (sekunder)",
           "power_entity": "Effektsensor (valgfri, til COP-beregning)",
           "flow_rate": "Flow varmekredsløb (m³/t)",
-          "flow_rate_dhw": "Flow varmtvandskredsløb (m³/t)"
+          "flow_rate_dhw": "Flow varmtvandskredsløb (m³/t)",
+          "mode_source_entity": "Driftstilstand-kilde (valgfri, fx multiscrape-sensor med 'Heizen'/'Brauchwasser')"
         }
       }
     },
@@ -33,7 +34,8 @@
           "scan_interval": "Opdateringsinterval (sekunder)",
           "power_entity": "Effektsensor (Shelly m.fl.)",
           "flow_rate": "Flow varmekredsløb (m³/t)",
-          "flow_rate_dhw": "Flow varmtvandskredsløb (m³/t)"
+          "flow_rate_dhw": "Flow varmtvandskredsløb (m³/t)",
+          "mode_source_entity": "Driftstilstand-kilde (valgfri, fx multiscrape-sensor med 'Heizen'/'Brauchwasser')"
         }
       }
     }

@@ -11,7 +11,8 @@
           "scan_interval": "Uppdateringsintervall (sekunder)",
           "power_entity": "Effektsensor (valfri, används för COP-beräkning)",
           "flow_rate": "Flöde värmekrets (m³/h)",
-          "flow_rate_dhw": "Flöde varmvattenkrets (m³/h)"
+          "flow_rate_dhw": "Flöde varmvattenkrets (m³/h)",
+          "mode_source_entity": "Driftläge-källa (valfri, t.ex. multiscrape-sensor som visar 'Heizen'/'Brauchwasser')"
         }
       }
     },
@@ -33,7 +34,8 @@
           "scan_interval": "Uppdateringsintervall (sekunder)",
           "power_entity": "Effektsensor (Shelly m.fl.)",
           "flow_rate": "Flöde värmekrets (m³/h)",
-          "flow_rate_dhw": "Flöde varmvattenkrets (m³/h)"
+          "flow_rate_dhw": "Flöde varmvattenkrets (m³/h)",
+          "mode_source_entity": "Driftläge-källa (valfri, t.ex. multiscrape-sensor som visar 'Heizen'/'Brauchwasser')"
         }
       }
     }

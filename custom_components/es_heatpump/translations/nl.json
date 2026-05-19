@@ -11,7 +11,8 @@
           "scan_interval": "Update-interval (seconden)",
           "power_entity": "Vermogenssensor (optioneel, voor COP-berekening)",
           "flow_rate": "Volumestroom verwarmingscircuit (m³/u)",
-          "flow_rate_dhw": "Volumestroom warmwatercircuit (m³/u)"
+          "flow_rate_dhw": "Volumestroom warmwatercircuit (m³/u)",
+          "mode_source_entity": "Bedrijfsmodus-bron (optioneel, bv. multiscrape-sensor met 'Heizen'/'Brauchwasser')"
         }
       }
     },
@@ -33,7 +34,8 @@
           "scan_interval": "Update-interval (seconden)",
           "power_entity": "Vermogenssensor (Shelly enz.)",
           "flow_rate": "Volumestroom verwarmingscircuit (m³/u)",
-          "flow_rate_dhw": "Volumestroom warmwatercircuit (m³/u)"
+          "flow_rate_dhw": "Volumestroom warmwatercircuit (m³/u)",
+          "mode_source_entity": "Bedrijfsmodus-bron (optioneel, bv. multiscrape-sensor met 'Heizen'/'Brauchwasser')"
         }
       }
     }

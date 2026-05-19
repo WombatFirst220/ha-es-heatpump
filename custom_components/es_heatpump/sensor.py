@@ -25,12 +25,16 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    BETRIEBSART_ALIASES,
+    BETRIEBSART_OPTIONS,
+    CALC_BETRIEBSART,
     CALC_COP,
     CALC_ELEC_POWER,
     CALC_SPREIZUNG,
     CALC_THERM_LEISTUNG,
     CONF_FLOW_RATE,
     CONF_FLOW_RATE_DHW,
+    CONF_MODE_SOURCE,
     CONF_POWER_ENTITY,
     DEFAULT_FLOW_RATE,
     DEFAULT_FLOW_RATE_DHW,
@@ -45,29 +49,51 @@ from .const import (
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Helper: select the active flow-rate based on the operation mode (par15)
+# Helpers — Betriebsart resolution + active flow-rate
 # ─────────────────────────────────────────────────────────────────────────────
 #
-#   par15 = 1.0  → Brauchwasser (DHW)        → flow_rate_dhw
-#   par15 = 2.0  → Heizen                    → flow_rate (heating)
-#   par15 = 3.0  → Entfrosten (defrost)      → 0  (no useful heat delivery)
-#   else / 0.0  → Aus                        → 0
-#
-def _active_flow_rate(
-    data: dict, flow_heating: float, flow_dhw: float
-) -> float:
-    """Return the volumetric flow rate appropriate for the current mode.
+# v2.2.1 update: par15 was previously assumed to encode the operating mode
+# but turned out to be a periodic heartbeat signal (toggles 0↔1 every ~10
+# minutes, independent of actual operation).  The real mode is now read
+# from a user-configured external entity (e.g. a multiscrape sensor that
+# scrapes the portal's HTML "Unit Current Working Mode" field).  If no
+# external source is configured, mode falls back to "Unbekannt" and the
+# active flow rate defaults to the heating value (best-effort assumption,
+# since heating dominates typical usage).
 
-    Returns 0 when the heat pump isn't delivering useful heat to either
-    circuit (off, defrosting, unknown mode) so that downstream calculations
-    yield 0 W instead of fictional output.
-    """
-    mode = data.get("par15") if data else None
-    if mode == 2.0:
+def _resolve_betriebsart(hass: HomeAssistant, mode_source: str | None) -> str:
+    """Look up the canonical operating-mode string."""
+    if not mode_source:
+        return "Unbekannt"
+    state = hass.states.get(mode_source)
+    if state is None or state.state in ("unknown", "unavailable", ""):
+        return "Unbekannt"
+    raw = str(state.state).strip().lower()
+    if raw in BETRIEBSART_ALIASES:
+        return BETRIEBSART_ALIASES[raw]
+    # Numeric fallback for sources that only return the par15-style int
+    try:
+        as_int = int(float(raw))
+        return {0: "Aus", 1: "Brauchwasser", 2: "Heizen", 3: "Entfrosten"}.get(
+            as_int, "Unbekannt"
+        )
+    except (ValueError, TypeError):
+        pass
+    return "Unbekannt"
+
+
+def _active_flow_rate(
+    mode: str, flow_heating: float, flow_dhw: float
+) -> float:
+    """Return the volumetric flow rate appropriate for the resolved mode."""
+    if mode == "Heizen":
         return flow_heating
-    if mode == 1.0:
+    if mode == "Brauchwasser":
         return flow_dhw
-    # 0.0 Aus / 3.0 Entfrosten / sonstige
+    if mode == "Unbekannt":
+        # No external source configured — assume Heating (dominant mode)
+        return flow_heating
+    # "Aus" / "Entfrosten"
     return 0.0
 from .coordinator import ESHeatpumpCoordinator
 
@@ -108,6 +134,10 @@ async def async_setup_entry(
         CONF_POWER_ENTITY,
         entry.data.get(CONF_POWER_ENTITY),
     ) or None
+    mode_source = entry.options.get(
+        CONF_MODE_SOURCE,
+        entry.data.get(CONF_MODE_SOURCE),
+    ) or None
 
     entities: list[SensorEntity] = []
 
@@ -127,17 +157,21 @@ async def async_setup_entry(
     entities.append(SpreizungSensor(coordinator, device_info, username))
     entities.append(
         ThermLeistungSensor(
-            coordinator, device_info, username, flow_rate, flow_rate_dhw
+            coordinator, device_info, username,
+            flow_rate, flow_rate_dhw, mode_source, hass,
         )
     )
     entities.append(
         COPSensor(
             coordinator, device_info, username,
-            flow_rate, flow_rate_dhw, power_entity, hass,
+            flow_rate, flow_rate_dhw, power_entity, mode_source, hass,
         )
     )
     entities.append(
         ElectricalPowerMirrorSensor(coordinator, device_info, username, power_entity, hass)
+    )
+    entities.append(
+        BetriebsartCalcSensor(coordinator, device_info, username, mode_source, hass)
     )
 
     _LOGGER.info(
@@ -273,6 +307,8 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
         username: str,
         flow_rate_heating: float,
         flow_rate_dhw: float,
+        mode_source: str | None,
+        hass: HomeAssistant,
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_THERM_LEISTUNG}"
@@ -280,6 +316,8 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
         self._attr_device_info = device_info
         self._flow_heating = flow_rate_heating
         self._flow_dhw = flow_rate_dhw
+        self._mode_source = mode_source
+        self._hass = hass
 
     @property
     def native_value(self) -> float | None:
@@ -289,7 +327,8 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
             return None
         if not freq or freq <= 0:
             return 0.0
-        active_flow = _active_flow_rate(data, self._flow_heating, self._flow_dhw)
+        mode = _resolve_betriebsart(self._hass, self._mode_source)
+        active_flow = _active_flow_rate(mode, self._flow_heating, self._flow_dhw)
         if active_flow <= 0:
             return 0.0
         delta_t = vor - rue
@@ -302,6 +341,8 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
         return {
             "flow_rate_heating_m3h": self._flow_heating,
             "flow_rate_dhw_m3h": self._flow_dhw,
+            "mode_source": self._mode_source,
+            "resolved_mode": _resolve_betriebsart(self._hass, self._mode_source),
         }
 
 
@@ -336,6 +377,7 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         flow_rate_heating: float,
         flow_rate_dhw: float,
         power_entity: str | None,
+        mode_source: str | None,
         hass: HomeAssistant,
     ) -> None:
         super().__init__(coordinator)
@@ -345,6 +387,7 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         self._flow_heating = flow_rate_heating
         self._flow_dhw = flow_rate_dhw
         self._power_entity = power_entity
+        self._mode_source = mode_source
         self._hass = hass
 
     @property
@@ -358,7 +401,8 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         if not freq or freq <= 0:
             return 0.0
 
-        active_flow = _active_flow_rate(data, self._flow_heating, self._flow_dhw)
+        mode = _resolve_betriebsart(self._hass, self._mode_source)
+        active_flow = _active_flow_rate(mode, self._flow_heating, self._flow_dhw)
         if active_flow <= 0:
             return 0.0
 
@@ -383,7 +427,70 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
             "power_entity": self._power_entity,
             "flow_rate_heating_m3h": self._flow_heating,
             "flow_rate_dhw_m3h": self._flow_dhw,
+            "mode_source": self._mode_source,
+            "resolved_mode": _resolve_betriebsart(self._hass, self._mode_source),
         }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Calculated: Betriebsart (read from external mode_source entity)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class BetriebsartCalcSensor(
+    CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
+):
+    """Operating-mode sensor backed by an external mode-source entity.
+
+    The portal's raw API doesn't expose a clean operating-mode field — par15
+    is a heartbeat signal — so the user wires in a separate entity that
+    knows the mode (typically a multiscrape sensor reading the portal's
+    HTML "Unit Current Working Mode" field).  Values are normalised via
+    ``BETRIEBSART_ALIASES`` to one of the canonical strings.
+
+    Returns "Unbekannt" when no source is configured or the source is
+    unavailable, with a hint in the state attributes for the user to
+    configure ``mode_source_entity`` in the options.
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_name = "Betriebsart"
+    _attr_device_class = "enum"
+    _attr_options = BETRIEBSART_OPTIONS
+    _attr_icon = "mdi:heat-pump"
+
+    def __init__(
+        self,
+        coordinator,
+        device_info: DeviceInfo,
+        username: str,
+        mode_source: str | None,
+        hass: HomeAssistant,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_BETRIEBSART}"
+        self._attr_suggested_object_id = "es_hp_betriebsart"
+        self._attr_device_info = device_info
+        self._mode_source = mode_source
+        self._hass = hass
+
+    @property
+    def native_value(self) -> str:
+        return _resolve_betriebsart(self._hass, self._mode_source)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        attrs: dict[str, Any] = {"mode_source": self._mode_source}
+        if not self._mode_source:
+            attrs["hint"] = (
+                "Konfiguriere eine 'Betriebsart-Quelle' (z. B. einen "
+                "Multiscrape-Sensor) in den Plugin-Optionen, damit die "
+                "Betriebsart korrekt erkannt wird."
+            )
+        if self._mode_source:
+            state = self._hass.states.get(self._mode_source)
+            attrs["source_raw"] = state.state if state else None
+        return attrs
 
 
 # ─────────────────────────────────────────────────────────────────────────────

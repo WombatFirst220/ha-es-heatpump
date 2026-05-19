@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .const import (
+    CALC_BETRIEBSART,
     CALC_COP,
     CALC_ELEC_POWER,
     CALC_SPREIZUNG,
@@ -156,6 +157,7 @@ async def _async_migrate_entities(hass: HomeAssistant, entry: ConfigEntry) -> No
         (CALC_THERM_LEISTUNG, "es_hp_thermische_leistung"),
         (CALC_COP, "es_hp_aktueller_cop"),
         (CALC_ELEC_POWER, "es_hp_leistung_elektrisch"),
+        (CALC_BETRIEBSART, "es_hp_betriebsart"),
     ):
         unique_id = f"{DOMAIN}_{username}_{calc_key}"
         current_id = ent_reg.async_get_entity_id("sensor", DOMAIN, unique_id)
