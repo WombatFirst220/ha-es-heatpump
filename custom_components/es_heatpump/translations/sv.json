@@ -12,7 +12,8 @@
           "power_entity": "Effektsensor (valfri, används för COP-beräkning)",
           "flow_rate": "Flöde värmekrets (m³/h)",
           "flow_rate_dhw": "Flöde varmvattenkrets (m³/h)",
-          "mode_source_entity": "Driftläge-källa (valfri, t.ex. multiscrape-sensor som visar 'Heizen'/'Brauchwasser')"
+          "mode_source_entity": "Källa för driftläge (valfritt – sedan v2.3.0 härleds läget automatiskt)",
+          "dhw_margin_k": "Framledningens marginal över värmebörvärdet som markerar varmvatten (K)"
         }
       }
     },
@@ -35,7 +36,8 @@
           "power_entity": "Effektsensor (Shelly m.fl.)",
           "flow_rate": "Flöde värmekrets (m³/h)",
           "flow_rate_dhw": "Flöde varmvattenkrets (m³/h)",
-          "mode_source_entity": "Driftläge-källa (valfri, t.ex. multiscrape-sensor som visar 'Heizen'/'Brauchwasser')"
+          "mode_source_entity": "Källa för driftläge (valfritt – sedan v2.3.0 härleds läget automatiskt)",
+          "dhw_margin_k": "Framledningens marginal över värmebörvärdet som markerar varmvatten (K)"
         }
       }
     }

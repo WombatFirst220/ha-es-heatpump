@@ -12,7 +12,8 @@
           "power_entity": "Stromsensor (optional, für COP-Berechnung)",
           "flow_rate": "Volumenstrom Heizkreislauf (m³/h)",
           "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)",
-          "mode_source_entity": "Betriebsart-Quelle (optional, z. B. Multiscrape-Sensor mit 'Heizen'/'Brauchwasser')"
+          "mode_source_entity": "Betriebsart-Quelle (optional – seit v2.3.0 wird die Betriebsart selbst erkannt)",
+          "dhw_margin_k": "Abstand des Vorlaufs über dem Heizen-Sollwert, ab dem auf Brauchwasser erkannt wird (K)"
         }
       }
     },
@@ -35,7 +36,8 @@
           "power_entity": "Stromsensor (Shelly o.ä.)",
           "flow_rate": "Volumenstrom Heizkreislauf (m³/h)",
           "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)",
-          "mode_source_entity": "Betriebsart-Quelle (optional, z. B. Multiscrape-Sensor mit 'Heizen'/'Brauchwasser')"
+          "mode_source_entity": "Betriebsart-Quelle (optional – seit v2.3.0 wird die Betriebsart selbst erkannt)",
+          "dhw_margin_k": "Abstand des Vorlaufs über dem Heizen-Sollwert, ab dem auf Brauchwasser erkannt wird (K)"
         }
       }
     }
