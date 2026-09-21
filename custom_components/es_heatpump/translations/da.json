@@ -12,7 +12,8 @@
           "power_entity": "Effektsensor (valgfri, til COP-beregning)",
           "flow_rate": "Flow varmekredsløb (m³/t)",
           "flow_rate_dhw": "Flow varmtvandskredsløb (m³/t)",
-          "mode_source_entity": "Driftstilstand-kilde (valgfri, fx multiscrape-sensor med 'Heizen'/'Brauchwasser')"
+          "mode_source_entity": "Kilde til driftstilstand (valgfri – siden v2.3.0 bestemmes tilstanden selv)",
+          "dhw_margin_k": "Fremløbets margin over varmesætpunktet, der markerer varmt brugsvand (K)"
         }
       }
     },
@@ -35,7 +36,8 @@
           "power_entity": "Effektsensor (Shelly m.fl.)",
           "flow_rate": "Flow varmekredsløb (m³/t)",
           "flow_rate_dhw": "Flow varmtvandskredsløb (m³/t)",
-          "mode_source_entity": "Driftstilstand-kilde (valgfri, fx multiscrape-sensor med 'Heizen'/'Brauchwasser')"
+          "mode_source_entity": "Kilde til driftstilstand (valgfri – siden v2.3.0 bestemmes tilstanden selv)",
+          "dhw_margin_k": "Fremløbets margin over varmesætpunktet, der markerer varmt brugsvand (K)"
         }
       }
     }

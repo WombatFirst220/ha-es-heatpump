@@ -9,13 +9,32 @@ CONF_SCAN_INTERVAL    = "scan_interval"
 CONF_POWER_ENTITY     = "power_entity"
 CONF_FLOW_RATE        = "flow_rate"           # Heizen (heating circuit)
 CONF_FLOW_RATE_DHW    = "flow_rate_dhw"       # Brauchwasser (DHW circuit)
-CONF_MODE_SOURCE      = "mode_source_entity"  # external entity that knows the real mode
+CONF_MODE_SOURCE      = "mode_source_entity"  # optional external override for the mode
+CONF_DHW_MARGIN_K     = "dhw_margin_k"        # Vorlauf-über-Soll threshold for DHW detection
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 DEFAULT_BASE_URL        = "https://www.myheatpump.com"
 DEFAULT_SCAN_INTERVAL   = 60        # seconds
-DEFAULT_FLOW_RATE       = 1.2       # m³/h — heating circuit, typical AW12-R32 design value
+DEFAULT_FLOW_RATE       = 1.2       # m³/h — see NOMINAL_FLOW_RATES_M3H, set per model!
 DEFAULT_FLOW_RATE_DHW   = 1.0       # m³/h — DHW coil circuit, typical default
+DEFAULT_DHW_MARGIN_K    = 8.0       # K — Vorlauf above heating setpoint ⇒ DHW mode
+
+# Nominal water flow per model, from the ES datasheet
+# "ES V8 Luft/Wasser Wärmepumpen AWC-R32-M, Monoblock Serie", row
+# "Zulässiger Wasserdurchfluss Min / Nominal" (l/s), converted to m³/h.
+#
+#   Setting flow_rate too low is the single most common configuration error:
+#   the thermal power and COP are CALCULATED from it, so a wrong value makes
+#   both meaningless.  A COP below 1 is physically impossible and always means
+#   the flow rate is too low — see the plausibility warning in sensor.py.
+NOMINAL_FLOW_RATES_M3H = {
+    #  model          min    nominal
+    "AWC6-R32-M-V8":  (0.65, 1.01),
+    "AWC9-R32-M-V8":  (0.94, 1.55),
+    "AWC12-R32-M-V8": (1.44, 2.02),
+    "AWC15-R32-M-V8": (2.23, 2.59),
+    "AWC19-R32-M-V8": (2.66, 3.28),
+}
 
 # Known myheatpump.com regional portals.  Users can still type any custom URL.
 KNOWN_BASE_URLS = [
@@ -36,12 +55,28 @@ CALC_COP            = "calc_cop"
 CALC_ELEC_POWER     = "calc_elec_power"     # mirror of the configured power_entity
 CALC_BETRIEBSART    = "calc_betriebsart"    # derived from mode_source_entity
 
-# ── Betriebsart options ──────────────────────────────────────────────────────
-# Canonical display values for the enum sensor.  The plugin no longer derives
-# the mode from par15 directly (that turned out to be a periodic heartbeat
-# signal, not the working mode); instead it reads from an external mode
-# source entity configured by the user (e.g. a multiscrape sensor that scrapes
-# the portal's HTML "Unit Current Working Mode" field).
+# ── Betriebsart detection ────────────────────────────────────────────────────
+# Since v2.3.0 the mode is derived from the heat pump's OWN values and needs no
+# external helper entity.  The rules, in order:
+#
+#   par20 (compressor Hz) == 0            → "Aus"
+#   par4 − par5 <= DEFROST_SPREAD_K       → "Entfrosten"   (flow colder than return)
+#   par4 > par6 + dhw_margin_k            → "Brauchwasser" (flow far above heating setpoint)
+#   otherwise                             → "Heizen"
+#
+# Comparing the flow temperature against the *heating setpoint* (par6) rather
+# than an absolute threshold makes this work for underfloor heating (≈33 °C)
+# and radiators (≈50 °C) alike: during DHW production the machine drives the
+# flow far above whatever the heating circuit is currently asking for.
+# If par6 is unusable, DHW_ABSOLUTE_FALLBACK_C is used instead.
+#
+# A configured ``mode_source_entity`` still wins when it yields a usable value,
+# so existing setups keep working unchanged.
+DEFROST_SPREAD_K        = -0.5      # K — flow below return means reverse cycle
+DHW_ABSOLUTE_FALLBACK_C = 45.0      # °C — used only when par6 is unavailable
+
+# Canonical display values for the enum sensor.  par15 was assumed to be the
+# mode in v2.0.0–v2.2.0 but turned out to be a periodic heartbeat signal.
 BETRIEBSART_OPTIONS = ["Aus", "Brauchwasser", "Heizen", "Entfrosten", "Unbekannt"]
 
 # Normalisation of typical state strings coming from external mode sources.

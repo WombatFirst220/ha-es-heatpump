@@ -46,9 +46,78 @@ Home Assistant Integration für **Energy Save Wärmepumpen** (Valtop AW12-R32 u.
 | **Portal-URL** | Standard: `https://www.myheatpump.com` |
 | **Aktualisierungsintervall** | Sekunden (10–3600, Default 60) |
 | **Power-Entity** *(optional)* | Sensor mit der elektrischen Leistung (z.B. Shelly) — wird für die COP-Berechnung benötigt |
-| **Flow-Rate** *(optional)* | Volumenstrom des Heizkreises in m³/h (Default 1.2) — für thermische Leistung & COP |
+| **Volumenstrom Heizkreis** | m³/h — **unbedingt an das eigene Modell anpassen**, siehe Tabelle unten |
+| **Volumenstrom Brauchwasser** *(optional)* | m³/h für den Speicherkreis (Default 1.0) |
+| **Brauchwasser-Schwelle** *(optional)* | K über dem Heizen-Sollwert, ab dem auf Brauchwasser erkannt wird (Default 8) |
+| **Betriebsart-Quelle** *(optional)* | Seit v2.3.0 nicht mehr nötig — nur noch als Übersteuerung, falls eine externe Entity die Betriebsart besser kennt |
 
 Nach dem Speichern erscheinen alle Entitäten im Geräte-Eintrag, und das Dashboard **„ES Heatpump"** in der Seitenleiste.
+
+#### ⚠️ Den Volumenstrom richtig einstellen
+
+**Das ist die mit Abstand häufigste Fehlerquelle.** Die Wärmepumpe misst ihren
+Volumenstrom nicht und meldet ihn auch nicht über das Portal. Thermische
+Leistung und COP werden deshalb daraus **berechnet**:
+
+```
+P_therm [W] = Volumenstrom [m³/h] × Spreizung [K] × 1163
+COP         = P_therm / elektrische Leistung
+```
+
+Ein zu niedrig eingestellter Wert macht beide Größen wertlos — und das fällt
+nicht auf, weil die Zahlen plausibel aussehen. Richtwerte aus dem Datenblatt
+der Serie, Zeile **„Zulässiger Wasserdurchfluss Min / Nominal"**:
+
+| Modell | Min | **Nominal** |
+|---|---:|---:|
+| AWC6-R32-M-V8  | 0,65 m³/h | **1,01 m³/h** |
+| AWC9-R32-M-V8  | 0,94 m³/h | **1,55 m³/h** |
+| AWC12-R32-M-V8 | 1,44 m³/h | **2,02 m³/h** |
+| AWC15-R32-M-V8 | 2,23 m³/h | **2,59 m³/h** |
+| AWC19-R32-M-V8 | 2,66 m³/h | **3,28 m³/h** |
+
+*(Datenblatt in l/s: 0,18/0,28 · 0,26/0,43 · 0,40/0,56 · 0,62/0,72 · 0,74/0,91 —
+hier auf m³/h umgerechnet.)*
+
+Am genauesten ist der Wert, den die Umwälzpumpe selbst anzeigt oder den der
+hydraulische Abgleich festgehalten hat. Ohne diese Angabe ist der **Nominalwert**
+die richtige Wahl.
+
+**Gegenprobe:** Ein COP unter 1 ist physikalisch unmöglich — die Maschine gäbe
+weniger Wärme ab, als sie Strom aufnimmt. Tritt das auf, ist der Volumenstrom zu
+niedrig. Seit v2.3.0 schreibt die Integration in diesem Fall einmal pro Neustart
+eine Warnung ins Log. Zur Einordnung: Bei 2,02 m³/h, 2,8 K Spreizung und 1350 W
+elektrisch ergibt sich COP 4,86 — das Datenblatt nennt für eine AWC12 bei
+Wasser 30/35 °C und 7 °C Außentemperatur einen COP zwischen 4,30 und 4,90.
+
+#### 🔄 Betriebsart-Erkennung (seit v2.3.0)
+
+Das Portal liefert kein brauchbares Betriebsart-Feld — `par15` sah danach aus,
+ist aber ein Herzschlagsignal. Bis v2.2.x musste die Betriebsart deshalb aus
+einer externen Hilfs-Entity kommen. Seit v2.3.0 leitet die Integration sie aus
+den eigenen Werten ab, in dieser Reihenfolge:
+
+| # | Bedingung | Betriebsart |
+|---|---|---|
+| 1 | keine Kompressorfrequenz in den Daten | `Unbekannt` |
+| 2 | Kompressorfrequenz = 0 | `Aus` |
+| 3 | Vorlauf kälter als Rücklauf (Spreizung ≤ −0,5 K) | `Entfrosten` |
+| 4 | Vorlauf > Heizen-Soll + Schwelle (Default 8 K) | `Brauchwasser` |
+| 5 | sonst | `Heizen` |
+
+Entscheidend ist Regel 4: Verglichen wird gegen den **Sollwert**, nicht gegen
+eine feste Temperatur. Bei Warmwasserbereitung treibt die Maschine den Vorlauf
+weit über das, was der Heizkreis gerade anfordert — und das gilt für
+Fußbodenheizung (Vorlauf ≈33 °C) genauso wie für Heizkörper (≈50 °C). Eine
+absolute Schwelle würde bei einer der beiden Anlagenarten danebenliegen.
+
+Regel 3 steht bewusst vor Regel 4: Beim Abtauen läuft der Kreisprozess rückwärts,
+der Vorlauf kann dabei hoch sein, ohne dass Warmwasser bereitet wird.
+
+Der Sensor `sensor.…_betriebsart` legt seine Entscheidung offen — das Attribut
+`begruendung` nennt die Regel, die gegriffen hat, dazu Vorlauf, Rücklauf,
+Sollwert und Frequenz. Wer die Erkennung übersteuern will, trägt weiterhin eine
+`Betriebsart-Quelle` in den Optionen ein; sie hat Vorrang.
 
 ### 🌡️ Sensoren
 
@@ -158,7 +227,72 @@ Home Assistant integration for **Energy Save heat pumps** (Valtop AW12-R32 and s
 | Portal URL | Default `https://www.myheatpump.com` |
 | Scan interval | Seconds (10–3600, default 60) |
 | Power entity *(optional)* | Electrical-power sensor (e.g. Shelly) — used for COP |
-| Flow rate *(optional)* | Heating-loop flow rate in m³/h (default 1.2) — for thermal output & COP |
+| Heating-loop flow rate | m³/h — **must be set for your model**, see table below |
+| DHW-loop flow rate *(optional)* | m³/h for the tank circuit (default 1.0) |
+| DHW margin *(optional)* | K above the heating setpoint that marks DHW mode (default 8) |
+| Operating-mode source *(optional)* | No longer needed since v2.3.0 — only as an override |
+
+#### ⚠️ Getting the flow rate right
+
+**This is by far the most common misconfiguration.** The heat pump neither
+measures nor reports its volumetric flow, so thermal output and COP are
+**calculated** from the configured value:
+
+```
+P_therm [W] = flow rate [m³/h] × spread [K] × 1163
+COP         = P_therm / electrical power
+```
+
+A value that is set too low makes both figures worthless — and it goes unnoticed
+because the numbers still look plausible. Reference values from the series
+datasheet, row **"Permissible water flow Min / Nominal"**:
+
+| Model | Min | **Nominal** |
+|---|---:|---:|
+| AWC6-R32-M-V8  | 0.65 m³/h | **1.01 m³/h** |
+| AWC9-R32-M-V8  | 0.94 m³/h | **1.55 m³/h** |
+| AWC12-R32-M-V8 | 1.44 m³/h | **2.02 m³/h** |
+| AWC15-R32-M-V8 | 2.23 m³/h | **2.59 m³/h** |
+| AWC19-R32-M-V8 | 2.66 m³/h | **3.28 m³/h** |
+
+*(Datasheet in l/s: 0.18/0.28 · 0.26/0.43 · 0.40/0.56 · 0.62/0.72 · 0.74/0.91.)*
+
+The most accurate figure is the one your circulation pump displays, or the one
+recorded during hydraulic balancing. Without it, use the **nominal** value.
+
+**Sanity check:** a COP below 1 is physically impossible — the machine would be
+giving off less heat than the electricity it draws. If you see one, the flow
+rate is too low; since v2.3.0 the integration logs a warning once per restart in
+that case. For scale: 2.02 m³/h at 2.8 K spread and 1350 W electrical yields
+COP 4.86, and the datasheet quotes 4.30–4.90 for an AWC12 at water 30/35 °C and
+7 °C ambient.
+
+#### 🔄 Operating-mode detection (since v2.3.0)
+
+The portal exposes no usable operating-mode field — `par15` looked like one but
+is a heartbeat signal. Up to v2.2.x the mode had to come from an external helper
+entity. Since v2.3.0 it is derived from the machine's own values, in this order:
+
+| # | Condition | Mode |
+|---|---|---|
+| 1 | no compressor frequency in the data | `Unbekannt` |
+| 2 | compressor frequency = 0 | `Aus` (off) |
+| 3 | flow colder than return (spread ≤ −0.5 K) | `Entfrosten` (defrost) |
+| 4 | flow > heating setpoint + margin (default 8 K) | `Brauchwasser` (DHW) |
+| 5 | otherwise | `Heizen` (heating) |
+
+Rule 4 compares against the **setpoint**, not a fixed temperature. During hot
+water production the machine drives the flow far above whatever the heating
+circuit is currently asking for — true for underfloor heating (flow ≈33 °C) and
+radiators (≈50 °C) alike, where a fixed threshold would misclassify one of them.
+
+Rule 3 deliberately comes first: during a defrost cycle the refrigeration cycle
+runs in reverse, and the flow temperature can be high without any DHW demand.
+
+The `betriebsart` sensor exposes its decision — the `begruendung` attribute names
+the rule that fired, alongside flow, return, setpoint and frequency. To override
+the detection, configure an operating-mode source entity in the options; it takes
+precedence.
 
 ### 🌡️ Sensors
 
@@ -178,6 +312,33 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 
 <a id="changelog"></a>
 ## 📋 Changelog
+
+### 2.3.0 — 2026-09-21
+
+**Betriebsart wird jetzt selbst erkannt — keine Hilfs-Entity mehr nötig.**
+
+- Die Betriebsart wird aus den eigenen Werten der Wärmepumpe abgeleitet:
+  Kompressorfrequenz (par20), Spreizung (par4 − par5) und dem Abstand des
+  Vorlaufs zum Heizen-Sollwert (par4 gegen par6). Eine konfigurierte
+  `mode_source_entity` hat weiterhin Vorrang, solange sie einen brauchbaren
+  Wert liefert — bestehende Einrichtungen laufen unverändert weiter.
+- Verglichen wird gegen den **Sollwert**, nicht gegen eine feste Temperatur.
+  Dadurch funktioniert die Erkennung bei Fußbodenheizung (Vorlauf ≈33 °C) und
+  bei Heizkörpern (≈50 °C) gleichermaßen; eine absolute Schwelle würde bei
+  einer der beiden Anlagenarten danebenliegen.
+- Neue Option **`dhw_margin_k`** (Standard 8 K): Abstand über dem Sollwert, ab
+  dem auf Brauchwasser erkannt wird.
+- Der Sensor `betriebsart` legt seine Entscheidung offen — Attribut
+  `begruendung` nennt die Regel, die gegriffen hat, dazu Vorlauf, Rücklauf,
+  Sollwert und Frequenz.
+- **Plausibilitätswarnung:** Ergibt die Rechnung im Betrieb einen COP unter 1,
+  schreibt die Integration einmal pro Neustart eine Warnung ins Log — das ist
+  physikalisch unmöglich und bedeutet praktisch immer einen zu niedrig
+  eingestellten Volumenstrom. Die Warnung nennt die Nominalwerte aus dem
+  Datenblatt.
+- **README:** Tabelle der Nennvolumenströme je Modell aus dem ES-Datenblatt.
+- Logik in `mode.py` ausgelagert, ohne Home-Assistant-Abhängigkeit, mit
+  Testfällen unter `tests/test_mode.py` (`python3 tests/test_mode.py`).
 
 ### 2.2.3 — 2026-05-19 (hotfix)
 

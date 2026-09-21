@@ -12,7 +12,8 @@
           "power_entity": "Electrical-power sensor (optional, used for COP calculation)",
           "flow_rate": "Heating-loop flow rate (m³/h)",
           "flow_rate_dhw": "DHW-loop flow rate (m³/h)",
-          "mode_source_entity": "Operating-mode source entity (optional, e.g. multiscrape sensor that reads 'Heizen'/'Brauchwasser')"
+          "mode_source_entity": "Operating-mode source entity (optional — since v2.3.0 the mode is derived automatically)",
+          "dhw_margin_k": "Volumetric-flow margin above the heating setpoint that marks DHW mode (K). Flow temperature above setpoint + margin ⇒ domestic hot water."
         }
       }
     },
@@ -35,7 +36,8 @@
           "power_entity": "Electrical-power sensor (Shelly etc.)",
           "flow_rate": "Heating-loop flow rate (m³/h)",
           "flow_rate_dhw": "DHW-loop flow rate (m³/h)",
-          "mode_source_entity": "Operating-mode source entity (optional, e.g. multiscrape sensor that reads 'Heizen'/'Brauchwasser')"
+          "mode_source_entity": "Operating-mode source entity (optional — since v2.3.0 the mode is derived automatically)",
+          "dhw_margin_k": "Volumetric-flow margin above the heating setpoint that marks DHW mode (K). Flow temperature above setpoint + margin ⇒ domestic hot water."
         }
       }
     }

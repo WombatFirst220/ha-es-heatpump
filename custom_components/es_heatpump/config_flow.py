@@ -26,11 +26,13 @@ from .const import (
     CONF_FLOW_RATE,
     CONF_FLOW_RATE_DHW,
     CONF_MODE_SOURCE,
+    CONF_DHW_MARGIN_K,
     CONF_POWER_ENTITY,
     CONF_SCAN_INTERVAL,
     DEFAULT_BASE_URL,
     DEFAULT_FLOW_RATE,
     DEFAULT_FLOW_RATE_DHW,
+    DEFAULT_DHW_MARGIN_K,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     KNOWN_BASE_URLS,
@@ -43,6 +45,17 @@ def _flow_rate_selector() -> NumberSelector:
         NumberSelectorConfig(
             min=0.01, max=10.0, step=0.01, mode=NumberSelectorMode.BOX,
             unit_of_measurement="m³/h",
+        )
+    )
+
+
+def _dhw_margin_selector() -> NumberSelector:
+    """Vorlauf-ueber-Soll threshold that separates DHW from heating."""
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=2.0, max=25.0, step=0.5,
+            mode=NumberSelectorMode.BOX,
+            unit_of_measurement="K",
         )
     )
 
@@ -122,6 +135,9 @@ class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(
                     CONF_FLOW_RATE_DHW, default=DEFAULT_FLOW_RATE_DHW
                 ): _flow_rate_selector(),
+                vol.Optional(
+                    CONF_DHW_MARGIN_K, default=DEFAULT_DHW_MARGIN_K
+                ): _dhw_margin_selector(),
             }
         )
 
@@ -184,6 +200,13 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
                     data.get(CONF_FLOW_RATE_DHW, DEFAULT_FLOW_RATE_DHW),
                 ),
             ): _flow_rate_selector(),
+            vol.Optional(
+                CONF_DHW_MARGIN_K,
+                default=opts.get(
+                    CONF_DHW_MARGIN_K,
+                    data.get(CONF_DHW_MARGIN_K, DEFAULT_DHW_MARGIN_K),
+                ),
+            ): _dhw_margin_selector(),
         }
 
         # Power-Entity is fully optional. If a value is already set, supply it
