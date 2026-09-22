@@ -13,7 +13,9 @@
           "flow_rate": "Flöde värmekrets (m³/h)",
           "flow_rate_dhw": "Flöde varmvattenkrets (m³/h)",
           "mode_source_entity": "Källa för driftläge (valfritt – sedan v2.3.0 härleds läget automatiskt)",
-          "dhw_margin_k": "Framledningens marginal över värmebörvärdet som markerar varmvatten (K)"
+          "dhw_margin_k": "Framledningens marginal över värmebörvärdet som markerar varmvatten (K)",
+          "flow_entity": "Flödesgivare (valfritt – går före konstanterna, rekommenderas vid modulerande cirkulationspump)",
+          "model": "Värmepumpsmodell – valet fyller i det nominella flödet från databladet"
         }
       }
     },
@@ -37,7 +39,9 @@
           "flow_rate": "Flöde värmekrets (m³/h)",
           "flow_rate_dhw": "Flöde varmvattenkrets (m³/h)",
           "mode_source_entity": "Källa för driftläge (valfritt – sedan v2.3.0 härleds läget automatiskt)",
-          "dhw_margin_k": "Framledningens marginal över värmebörvärdet som markerar varmvatten (K)"
+          "dhw_margin_k": "Framledningens marginal över värmebörvärdet som markerar varmvatten (K)",
+          "flow_entity": "Flödesgivare (valfritt – går före konstanterna, rekommenderas vid modulerande cirkulationspump)",
+          "model": "Värmepumpsmodell – valet fyller i det nominella flödet från databladet"
         }
       }
     }

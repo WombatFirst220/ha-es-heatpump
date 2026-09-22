@@ -11,6 +11,8 @@ CONF_FLOW_RATE        = "flow_rate"           # Heizen (heating circuit)
 CONF_FLOW_RATE_DHW    = "flow_rate_dhw"       # Brauchwasser (DHW circuit)
 CONF_MODE_SOURCE      = "mode_source_entity"  # optional external override for the mode
 CONF_DHW_MARGIN_K     = "dhw_margin_k"        # Vorlauf-über-Soll threshold for DHW detection
+CONF_FLOW_ENTITY      = "flow_entity"         # optional live volumetric-flow sensor
+CONF_MODEL            = "model"               # picks the datasheet nominal flow rate
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 DEFAULT_BASE_URL        = "https://www.myheatpump.com"
@@ -27,6 +29,8 @@ DEFAULT_DHW_MARGIN_K    = 8.0       # K — Vorlauf above heating setpoint ⇒ D
 #   the thermal power and COP are CALCULATED from it, so a wrong value makes
 #   both meaningless.  A COP below 1 is physically impossible and always means
 #   the flow rate is too low — see the plausibility warning in sensor.py.
+MODEL_UNKNOWN = "andere / unbekannt"
+
 NOMINAL_FLOW_RATES_M3H = {
     #  model          min    nominal
     "AWC6-R32-M-V8":  (0.65, 1.01),
@@ -34,6 +38,19 @@ NOMINAL_FLOW_RATES_M3H = {
     "AWC12-R32-M-V8": (1.44, 2.02),
     "AWC15-R32-M-V8": (2.23, 2.59),
     "AWC19-R32-M-V8": (2.66, 3.28),
+}
+
+# A modulating circulation pump (proportional-pressure or "Auto" mode) changes
+# the flow with the load, so a single constant can only ever be exact at one
+# operating point.  Telltale sign in the data: the spread stays roughly flat
+# while the compressor power varies by a factor of two or more.  Users with a
+# flow meter can wire it up via CONF_FLOW_ENTITY and skip the constant
+# altogether.  Unit expected: m³/h (l/min and l/h are converted automatically).
+FLOW_ENTITY_UNITS_TO_M3H = {
+    "m³/h": 1.0, "m3/h": 1.0,
+    "l/min": 0.06, "L/min": 0.06,
+    "l/h": 0.001, "L/h": 0.001,
+    "l/s": 3.6, "L/s": 3.6,
 }
 
 # Known myheatpump.com regional portals.  Users can still type any custom URL.

@@ -90,6 +90,42 @@ eine Warnung ins Log. Zur Einordnung: Bei 2,02 m³/h, 2,8 K Spreizung und 1350 W
 elektrisch ergibt sich COP 4,86 — das Datenblatt nennt für eine AWC12 bei
 Wasser 30/35 °C und 7 °C Außentemperatur einen COP zwischen 4,30 und 4,90.
 
+#### 🌀 Geregelte Umwälzpumpe: wann die Konstante nicht reicht
+
+Die Konstante oben stimmt nur, wenn die Umwälzpumpe **mit fester Drehzahl**
+läuft. Steht sie auf Automatik oder Proportionaldruck, erhöht sie den
+Volumenstrom mit steigender Last — die Konstante ist dann an genau einem
+Betriebspunkt richtig und überall sonst falsch.
+
+**Woran man das erkennt, ohne an die Pumpe zu gehen:** Bei festem Volumenstrom
+muss die Spreizung mit der Verdichterleistung mitwachsen. Tut sie das nicht,
+regelt die Pumpe mit. Beispiel aus einer realen Anlage (ESP III 25-6-180 auf
+„Auto"), über zehn Stunden:
+
+| Lastbereich | elektrisch | Spreizung |
+|---|---:|---:|
+| unteres Drittel | 886 W | 2,15 K |
+| mittleres Drittel | 1333 W | 3,25 K |
+| oberes Drittel | **2307 W** | **3,10 K** |
+
+Zwischen mittlerem und oberem Drittel steigt die Leistung um 73 %, die
+Spreizung aber nicht. Bei konstantem Volumenstrom müsste sie es.
+
+**Zwei Wege, damit umzugehen:**
+
+1. **Volumenstrom-Sensor eintragen** (seit v2.3.1, Feld „Volumenstrom-Sensor").
+   Ein gemessener Wert hat Vorrang vor beiden Konstanten. Erkannte Einheiten:
+   `m³/h`, `l/min`, `l/h`, `l/s` — andere werden als m³/h gewertet und im
+   Attribut `flow_quelle` als solche benannt.
+2. **Pumpe auf feste Drehzahl stellen.** Dann gilt die Konstante wieder, und
+   der Wärmepumpenkreis bekommt den definierten Durchfluss, für den er ausgelegt
+   ist. Welche Stufe die richtige ist, sagt die Auslegung bzw. der hydraulische
+   Abgleich.
+
+Ohne eines von beiden bleibt der COP eine **Größenordnung, kein Messwert**: am
+Auslegungspunkt richtig, bei Teillast tendenziell zu hoch, bei Volllast zu
+niedrig.
+
 #### 🔄 Betriebsart-Erkennung (seit v2.3.0)
 
 Das Portal liefert kein brauchbares Betriebsart-Feld — `par15` sah danach aus,
@@ -267,6 +303,39 @@ that case. For scale: 2.02 m³/h at 2.8 K spread and 1350 W electrical yields
 COP 4.86, and the datasheet quotes 4.30–4.90 for an AWC12 at water 30/35 °C and
 7 °C ambient.
 
+#### 🌀 Modulating circulation pump: when the constant is not enough
+
+The constant above only holds if the circulation pump runs at a **fixed speed**.
+In automatic or proportional-pressure mode it raises the flow as the load rises
+— the constant is then correct at exactly one operating point and wrong
+everywhere else.
+
+**How to spot it without touching the pump:** with a fixed flow the spread has
+to grow with compressor power. If it doesn't, the pump is modulating. Example
+from a real installation (ESP III 25-6-180 set to "Auto"), over ten hours:
+
+| Load band | electrical | Spread |
+|---|---:|---:|
+| lower third | 886 W | 2.15 K |
+| middle third | 1333 W | 3.25 K |
+| upper third | **2307 W** | **3.10 K** |
+
+From the middle to the upper third the power rises by 73 %, the spread does not.
+With a constant flow it would have to.
+
+**Two ways to handle it:**
+
+1. **Configure a flow sensor** (since v2.3.1, field "Live volumetric-flow
+   sensor"). A measured value takes precedence over both constants. Recognised
+   units: `m³/h`, `l/min`, `l/h`, `l/s` — anything else is taken as m³/h and
+   labelled as such in the `flow_quelle` attribute.
+2. **Set the pump to a fixed speed.** The constant is then valid again, and the
+   heat-pump loop gets the defined flow it was designed for.
+
+Without either, treat the COP as an **order of magnitude, not a measurement**:
+right at the design point, on the high side at part load, on the low side at
+full load.
+
 #### 🔄 Operating-mode detection (since v2.3.0)
 
 The portal exposes no usable operating-mode field — `par15` looked like one but
@@ -312,6 +381,26 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 
 <a id="changelog"></a>
 ## 📋 Changelog
+
+### 2.3.1 — 2026-09-22
+
+- **Volumenstrom-Sensor (`flow_entity`), optional.** Ein gemessener Wert hat
+  Vorrang vor den Konstanten. Hintergrund: Läuft die Umwälzpumpe auf Automatik
+  oder Proportionaldruck, regelt sie den Volumenstrom mit der Last mit — eine
+  feste Konstante ist dann nur an einem Betriebspunkt richtig. Einheiten
+  `m³/h`, `l/min`, `l/h`, `l/s` werden umgerechnet.
+- **Modellauswahl (`model`).** Die Wahl des Geräts setzt den Volumenstrom auf
+  den Nennwert aus dem Datenblatt; danach bleibt er von Hand anpassbar.
+- **Fehler behoben: Entity-Felder ließen sich nicht leeren.** Wurde
+  `power_entity`, `mode_source_entity` oder (neu) `flow_entity` im
+  Options-Dialog geleert, fiel die Integration auf den bei der Einrichtung
+  gesetzten Wert in `entry.data` zurück — eine einmal gewählte Entity ließ sich
+  nur ersetzen, nie entfernen. Leere Felder werden jetzt ausdrücklich als solche
+  gespeichert.
+- **README:** Abschnitt zur geregelten Umwälzpumpe, mit der Prüfung „wächst die
+  Spreizung mit der Leistung mit?" und Messwerten aus einer realen Anlage.
+- Volumenstrom-Logik nach `flow.py` ausgelagert, mit `tests/test_flow.py`
+  (7 Prüfungen, keine HA-Instanz nötig).
 
 ### 2.3.0 — 2026-09-21
 

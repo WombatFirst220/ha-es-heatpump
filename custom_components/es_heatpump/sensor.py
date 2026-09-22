@@ -36,6 +36,7 @@ from .const import (
     CONF_FLOW_RATE_DHW,
     CONF_MODE_SOURCE,
     CONF_DHW_MARGIN_K,
+    CONF_FLOW_ENTITY,
     CONF_POWER_ENTITY,
     DEFAULT_FLOW_RATE,
     DEFAULT_FLOW_RATE_DHW,
@@ -49,6 +50,7 @@ from .const import (
     WATER_VOL_HEAT_CAPACITY_WH,
 )
 from .mode import derive_betriebsart as _derive_betriebsart
+from .flow import active_flow_rate as _active_flow_rate, flow_from_entity
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -102,6 +104,13 @@ def _mode_from_source(hass: HomeAssistant, mode_source: str | None) -> str:
     return "Unbekannt"
 
 
+def _live_flow(hass: HomeAssistant, flow_entity: str | None) -> tuple[float | None, str]:
+    """Read the optional live flow sensor, converted to m³/h."""
+    if not flow_entity:
+        return None, "keine Volumenstrom-Entity konfiguriert"
+    return flow_from_entity(hass.states.get(flow_entity))
+
+
 def _resolve_betriebsart(
     hass: HomeAssistant,
     mode_source: str | None,
@@ -124,20 +133,6 @@ def _resolve_betriebsart(
     return "Unbekannt"
 
 
-def _active_flow_rate(
-    mode: str, flow_heating: float, flow_dhw: float
-) -> float:
-    """Return the volumetric flow rate appropriate for the resolved mode."""
-    if mode == "Heizen":
-        return flow_heating
-    if mode == "Brauchwasser":
-        return flow_dhw
-    if mode == "Unbekannt":
-        # Should be rare since v2.3.0 (the mode is derived from own data).
-        # Heating is the dominant mode, so it stays the best-effort guess.
-        return flow_heating
-    # "Aus" / "Entfrosten"
-    return 0.0
 from .coordinator import ESHeatpumpCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -181,6 +176,10 @@ async def async_setup_entry(
         CONF_MODE_SOURCE,
         entry.data.get(CONF_MODE_SOURCE),
     ) or None
+    flow_entity = entry.options.get(
+        CONF_FLOW_ENTITY,
+        entry.data.get(CONF_FLOW_ENTITY),
+    ) or None
     dhw_margin_k = float(
         entry.options.get(
             CONF_DHW_MARGIN_K,
@@ -207,13 +206,13 @@ async def async_setup_entry(
     entities.append(
         ThermLeistungSensor(
             coordinator, device_info, username,
-            flow_rate, flow_rate_dhw, mode_source, hass, dhw_margin_k,
+            flow_rate, flow_rate_dhw, mode_source, hass, dhw_margin_k, flow_entity,
         )
     )
     entities.append(
         COPSensor(
             coordinator, device_info, username,
-            flow_rate, flow_rate_dhw, power_entity, mode_source, hass, dhw_margin_k,
+            flow_rate, flow_rate_dhw, power_entity, mode_source, hass, dhw_margin_k, flow_entity,
         )
     )
     entities.append(
@@ -361,6 +360,7 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
         mode_source: str | None,
         hass: HomeAssistant,
         dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
+        flow_entity: str | None = None,
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_THERM_LEISTUNG}"
@@ -371,6 +371,7 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
         self._mode_source = mode_source
         self._hass = hass
         self._dhw_margin_k = dhw_margin_k
+        self._flow_entity = flow_entity
 
     @property
     def native_value(self) -> float | None:
@@ -383,7 +384,10 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
         mode = _resolve_betriebsart(
             self._hass, self._mode_source, data, self._dhw_margin_k
         )
-        active_flow = _active_flow_rate(mode, self._flow_heating, self._flow_dhw)
+        live, _ = _live_flow(self._hass, self._flow_entity)
+        active_flow = _active_flow_rate(
+            mode, self._flow_heating, self._flow_dhw, live
+        )
         if active_flow <= 0:
             return 0.0
         delta_t = vor - rue
@@ -396,6 +400,8 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
         return {
             "flow_rate_heating_m3h": self._flow_heating,
             "flow_rate_dhw_m3h": self._flow_dhw,
+            "flow_entity": self._flow_entity,
+            "flow_quelle": _live_flow(self._hass, self._flow_entity)[1],
             "mode_source": self._mode_source,
             "resolved_mode": _resolve_betriebsart(
                 self._hass, self._mode_source, self.coordinator.data, self._dhw_margin_k
@@ -437,6 +443,7 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         mode_source: str | None,
         hass: HomeAssistant,
         dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
+        flow_entity: str | None = None,
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_COP}"
@@ -448,6 +455,7 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         self._mode_source = mode_source
         self._hass = hass
         self._dhw_margin_k = dhw_margin_k
+        self._flow_entity = flow_entity
         self._warned_implausible = False
 
     @property
@@ -464,7 +472,10 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         mode = _resolve_betriebsart(
             self._hass, self._mode_source, data, self._dhw_margin_k
         )
-        active_flow = _active_flow_rate(mode, self._flow_heating, self._flow_dhw)
+        live, _ = _live_flow(self._hass, self._flow_entity)
+        active_flow = _active_flow_rate(
+            mode, self._flow_heating, self._flow_dhw, live
+        )
         if active_flow <= 0:
             return 0.0
 
@@ -512,6 +523,8 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
             "power_entity": self._power_entity,
             "flow_rate_heating_m3h": self._flow_heating,
             "flow_rate_dhw_m3h": self._flow_dhw,
+            "flow_entity": self._flow_entity,
+            "flow_quelle": _live_flow(self._hass, self._flow_entity)[1],
             "mode_source": self._mode_source,
             "resolved_mode": _resolve_betriebsart(
                 self._hass, self._mode_source, self.coordinator.data, self._dhw_margin_k

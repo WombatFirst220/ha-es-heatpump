@@ -13,7 +13,9 @@
           "flow_rate": "Volumenstrom Heizkreislauf (m³/h)",
           "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)",
           "mode_source_entity": "Betriebsart-Quelle (optional – seit v2.3.0 wird die Betriebsart selbst erkannt)",
-          "dhw_margin_k": "Abstand des Vorlaufs über dem Heizen-Sollwert, ab dem auf Brauchwasser erkannt wird (K)"
+          "dhw_margin_k": "Abstand des Vorlaufs über dem Heizen-Sollwert, ab dem auf Brauchwasser erkannt wird (K)",
+          "flow_entity": "Volumenstrom-Sensor (optional – hat Vorrang vor den Konstanten, empfohlen bei geregelter Umwälzpumpe)",
+          "model": "Wärmepumpen-Modell – die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt"
         }
       }
     },
@@ -37,7 +39,9 @@
           "flow_rate": "Volumenstrom Heizkreislauf (m³/h)",
           "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)",
           "mode_source_entity": "Betriebsart-Quelle (optional – seit v2.3.0 wird die Betriebsart selbst erkannt)",
-          "dhw_margin_k": "Abstand des Vorlaufs über dem Heizen-Sollwert, ab dem auf Brauchwasser erkannt wird (K)"
+          "dhw_margin_k": "Abstand des Vorlaufs über dem Heizen-Sollwert, ab dem auf Brauchwasser erkannt wird (K)",
+          "flow_entity": "Volumenstrom-Sensor (optional – hat Vorrang vor den Konstanten, empfohlen bei geregelter Umwälzpumpe)",
+          "model": "Wärmepumpen-Modell – die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt"
         }
       }
     }

@@ -13,7 +13,9 @@
           "flow_rate": "Volumestroom verwarmingscircuit (m³/u)",
           "flow_rate_dhw": "Volumestroom warmwatercircuit (m³/u)",
           "mode_source_entity": "Bron voor bedrijfsmodus (optioneel – sinds v2.3.0 wordt de modus zelf bepaald)",
-          "dhw_margin_k": "Marge van de aanvoertemperatuur boven het setpoint die warmtapwater aanduidt (K)"
+          "dhw_margin_k": "Marge van de aanvoertemperatuur boven het setpoint die warmtapwater aanduidt (K)",
+          "flow_entity": "Debietsensor (optioneel – gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp)",
+          "model": "Warmtepompmodel – de keuze vult het nominale debiet uit het datablad in"
         }
       }
     },
@@ -37,7 +39,9 @@
           "flow_rate": "Volumestroom verwarmingscircuit (m³/u)",
           "flow_rate_dhw": "Volumestroom warmwatercircuit (m³/u)",
           "mode_source_entity": "Bron voor bedrijfsmodus (optioneel – sinds v2.3.0 wordt de modus zelf bepaald)",
-          "dhw_margin_k": "Marge van de aanvoertemperatuur boven het setpoint die warmtapwater aanduidt (K)"
+          "dhw_margin_k": "Marge van de aanvoertemperatuur boven het setpoint die warmtapwater aanduidt (K)",
+          "flow_entity": "Debietsensor (optioneel – gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp)",
+          "model": "Warmtepompmodel – de keuze vult het nominale debiet uit het datablad in"
         }
       }
     }
