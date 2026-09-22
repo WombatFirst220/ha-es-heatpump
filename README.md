@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-3.0.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-3.0.1-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 
@@ -32,6 +32,8 @@ Home Assistant Integration für **Energy Save Wärmepumpen** (Valtop AW12-R32 u.
   einsehbar und wiederherstellbar (seit v3.0.0)
 - 🏷 **Stammdaten der Anlage** — Modell, beide Seriennummern, Inbetriebnahme,
   Garantieende, Installateur (seit v3.0.0)
+- 📈 **Alles langzeitfähig** — jede Einstellung ist eine eigene Entity mit
+  Verlauf; Textzustände (Betriebsart, Modell, Auswahllisten) ebenfalls
 - 🛠 Mehrsprachig: Deutsch, Englisch, Niederländisch, Schwedisch, Dänisch (Fallback auf Englisch)
 
 ### 📦 Installation via HACS
@@ -422,6 +424,26 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 
 <a id="changelog"></a>
 ## 📋 Changelog
+
+### 3.0.1 — 2026-09-22
+
+**Alle Einstellungen sind jetzt standardmäßig aktiv.**
+
+In v3.0.0 waren 54 der 74 Einstellungs-Entities abgeschaltet angelegt, um die
+Oberfläche nicht zu überladen. Das war die falsche Abwägung: **Eine
+abgeschaltete Entity liefert gar keine Daten** — weder an eine
+Langzeitstatistik noch an eine externe Zeitreihendatenbank. Ausgerechnet die
+Werte, die man über Jahre beobachten will (die fünf Stützstellen jeder
+Heizkurve), wären damit die einzigen ohne Verlauf gewesen.
+
+Die Entities tragen `EntityCategory.CONFIG` und stehen deshalb unter
+„Konfiguration" auf der Geräteseite, nicht zwischen den Messwerten. Wer einzelne
+nicht braucht, schaltet sie in den Entity-Einstellungen ab.
+
+> **Beim Update von v3.0.0:** Bereits abgeschaltet angelegte Entities bleiben
+> abgeschaltet — Home Assistant merkt sich das je Entity im Register. Zum
+> Nachholen: Geräteseite → „+N Entitäten deaktiviert" → aktivieren, dann die
+> Integration neu laden.
 
 ### 3.0.0 — 2026-09-22
 
