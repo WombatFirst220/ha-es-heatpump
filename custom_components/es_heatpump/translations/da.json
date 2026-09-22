@@ -13,7 +13,9 @@
           "flow_rate": "Flow varmekredsløb (m³/t)",
           "flow_rate_dhw": "Flow varmtvandskredsløb (m³/t)",
           "mode_source_entity": "Kilde til driftstilstand (valgfri – siden v2.3.0 bestemmes tilstanden selv)",
-          "dhw_margin_k": "Fremløbets margin over varmesætpunktet, der markerer varmt brugsvand (K)"
+          "dhw_margin_k": "Fremløbets margin over varmesætpunktet, der markerer varmt brugsvand (K)",
+          "flow_entity": "Flowsensor (valgfri – har forrang over konstanterne, anbefales ved modulerende cirkulationspumpe)",
+          "model": "Varmepumpemodel – valget udfylder det nominelle flow fra databladet"
         }
       }
     },
@@ -37,7 +39,9 @@
           "flow_rate": "Flow varmekredsløb (m³/t)",
           "flow_rate_dhw": "Flow varmtvandskredsløb (m³/t)",
           "mode_source_entity": "Kilde til driftstilstand (valgfri – siden v2.3.0 bestemmes tilstanden selv)",
-          "dhw_margin_k": "Fremløbets margin over varmesætpunktet, der markerer varmt brugsvand (K)"
+          "dhw_margin_k": "Fremløbets margin over varmesætpunktet, der markerer varmt brugsvand (K)",
+          "flow_entity": "Flowsensor (valgfri – har forrang over konstanterne, anbefales ved modulerende cirkulationspumpe)",
+          "model": "Varmepumpemodel – valget udfylder det nominelle flow fra databladet"
         }
       }
     }

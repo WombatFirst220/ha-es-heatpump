@@ -27,12 +27,16 @@ from .const import (
     CONF_FLOW_RATE_DHW,
     CONF_MODE_SOURCE,
     CONF_DHW_MARGIN_K,
+    CONF_FLOW_ENTITY,
+    CONF_MODEL,
     CONF_POWER_ENTITY,
     CONF_SCAN_INTERVAL,
     DEFAULT_BASE_URL,
     DEFAULT_FLOW_RATE,
     DEFAULT_FLOW_RATE_DHW,
     DEFAULT_DHW_MARGIN_K,
+    MODEL_UNKNOWN,
+    NOMINAL_FLOW_RATES_M3H,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     KNOWN_BASE_URLS,
@@ -45,6 +49,16 @@ def _flow_rate_selector() -> NumberSelector:
         NumberSelectorConfig(
             min=0.01, max=10.0, step=0.01, mode=NumberSelectorMode.BOX,
             unit_of_measurement="m³/h",
+        )
+    )
+
+
+def _model_selector() -> SelectSelector:
+    """Pick the unit so the datasheet nominal flow can be filled in."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=list(NOMINAL_FLOW_RATES_M3H) + [MODEL_UNKNOWN],
+            mode=SelectSelectorMode.DROPDOWN,
         )
     )
 
@@ -138,6 +152,10 @@ class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(
                     CONF_DHW_MARGIN_K, default=DEFAULT_DHW_MARGIN_K
                 ): _dhw_margin_selector(),
+                vol.Optional(CONF_MODEL, default=MODEL_UNKNOWN): _model_selector(),
+                vol.Optional(CONF_FLOW_ENTITY): EntitySelector(
+                    EntitySelectorConfig(domain="sensor")
+                ),
             }
         )
 
@@ -165,10 +183,30 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         if user_input is not None:
-            # Drop empty strings from optional EntitySelector fields
-            for key in (CONF_POWER_ENTITY, CONF_MODE_SOURCE):
+            # Leere Entity-Felder AUSDRUECKLICH als "" ablegen, nicht verwerfen.
+            # Wuerde der Schluessel fehlen, faende `opts.get(key, data.get(key))`
+            # den bei der Einrichtung gesetzten Wert in entry.data wieder - eine
+            # einmal gewaehlte Entity liesse sich dann nie mehr entfernen,
+            # sondern nur ersetzen (Fehler bis v2.3.0).
+            for key in (CONF_POWER_ENTITY, CONF_MODE_SOURCE, CONF_FLOW_ENTITY):
                 if user_input.get(key) in (None, ""):
-                    user_input.pop(key, None)
+                    user_input[key] = ""
+
+            # Modellwahl setzt den Volumenstrom auf den Nennwert des Datenblatts,
+            # sobald sich das Modell geaendert hat. Danach bleibt der Wert von
+            # Hand anpassbar.
+            modell = user_input.get(CONF_MODEL)
+            vorher = self._config_entry.options.get(
+                CONF_MODEL, self._config_entry.data.get(CONF_MODEL)
+            )
+            if modell and modell != vorher and modell in NOMINAL_FLOW_RATES_M3H:
+                user_input[CONF_FLOW_RATE] = NOMINAL_FLOW_RATES_M3H[modell][1]
+                _LOGGER.info(
+                    "ES Heatpump: Modell %s gewaehlt, Volumenstrom auf den "
+                    "Nennwert %.2f m3/h gesetzt.",
+                    modell, NOMINAL_FLOW_RATES_M3H[modell][1],
+                )
+
             return self.async_create_entry(title="", data=user_input)
 
         opts = self._config_entry.options
@@ -207,6 +245,10 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
                     data.get(CONF_DHW_MARGIN_K, DEFAULT_DHW_MARGIN_K),
                 ),
             ): _dhw_margin_selector(),
+            vol.Optional(
+                CONF_MODEL,
+                default=opts.get(CONF_MODEL, data.get(CONF_MODEL, MODEL_UNKNOWN)),
+            ): _model_selector(),
         }
 
         # Power-Entity is fully optional. If a value is already set, supply it
@@ -229,6 +271,17 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
             )
         else:
             schema_dict[vol.Optional(CONF_MODE_SOURCE)] = EntitySelector(
+                EntitySelectorConfig(domain="sensor")
+            )
+
+        # Optionale Volumenstrom-Entity (beliebiger Sensor, m³/h, l/min, l/h, l/s)
+        current_flow_entity = opts.get(CONF_FLOW_ENTITY, data.get(CONF_FLOW_ENTITY))
+        if current_flow_entity:
+            schema_dict[vol.Optional(CONF_FLOW_ENTITY, default=current_flow_entity)] = (
+                EntitySelector(EntitySelectorConfig(domain="sensor"))
+            )
+        else:
+            schema_dict[vol.Optional(CONF_FLOW_ENTITY)] = EntitySelector(
                 EntitySelectorConfig(domain="sensor")
             )
 
