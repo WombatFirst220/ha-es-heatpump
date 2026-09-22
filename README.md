@@ -417,6 +417,40 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 <a id="changelog"></a>
 ## 📋 Changelog
 
+### 2.5.0 — 2026-09-22
+
+**Sechs Parameter aus der Bedieneinheit zugeordnet — zwei davon standen mit der
+falschen Einheit im Dashboard.**
+
+Grundlage sind Fotos des Anlagenschaubilds und der Diagnoseseiten der
+Bedieneinheit, abgeglichen gegen gleichzeitige Abrufe des JSON-Endpunkts.
+
+| Feld | neu | bis v2.4.1 | Beleg |
+|---|---|---|---|
+| `par22` | **Hochdruck Pd (bar)** | „vermutl. Kondensation Tc" in **°C** | Anzeige 20,6 bar gegen par22 = 20,7–20,9 |
+| `par23` | **Saugdruck Ps (bar)** | „vermutl. Sauggas Ts" in **°C** | Anzeige 7,5 bar gegen par23 = 7,4–7,8 |
+| `par21` | **Expansionsventil Öffnung** | „vermutl. Kompressor Sollwert" | Anzeige „Open 349" gegen par21 = 349–376 |
+| `par27` | **Lamellentauscher Tp (°C)** | „vermutl. Verdampfung Te" | Anzeige 2,5–3,3 gegen par27 = 2,6–3,7 |
+| `par28` | **Ventilator Drehzahl (rpm)** | nicht abgebildet | Anzeige 557 und 560 gegen par28 = 557 und 560 |
+| `par30` | **Stromaufnahme Verdichter (A)** | nicht abgebildet | par30 × par31 gegen gemessene Wirkleistung: Leistungsfaktor 0,94 |
+
+⚠️ **`par22` und `par23` waren als Temperaturen in °C angelegt.** Wer sie
+aktiviert hatte, sah „20,9 °C" für 20,9 bar — die Werte wanderten damit auch in
+Temperatur-Statistiken. Jetzt mit `device_class: pressure` und Einheit `bar`.
+
+Die sechs sind **standardmäßig aktiv**: Drücke, Ventilstellung,
+Ventilatordrehzahl und Verdichterstrom sind die Größen, mit denen sich ein
+Kältekreis beurteilen lässt.
+
+`par26`, `par39` und `par40` heißen jetzt ehrlich „unbestätigt" statt „vermutl.
+…". Für `par39` ist belegt, was es **nicht** ist: der Verdichterstrom. Die Probe
+`par39 × Spannung` gegen die gemessene Wirkleistung ergab einen Faktor von 2,08,
+also einen unmöglichen Leistungsfaktor.
+
+**Kein Volumenstrom.** Weder im Portal noch auf den fünf Diagnoseseiten der
+Bedieneinheit noch im Anlagenschaubild gibt es einen Durchflusswert. Für die
+thermische Leistung bleibt es bei der Konstante oder einem externen Sensor.
+
 ### 2.4.1 — 2026-09-22 (hotfix)
 
 - **Entity-Felder lassen sich jetzt wirklich leeren.** v2.3.1 hatte nur den
