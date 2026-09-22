@@ -8,6 +8,8 @@
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 
 <p align="center">
+  <img src="brand/icon.png" alt="ES Heatpump" width="120">
+  <br>
   <img src="docs/dashboard-mobile.png" alt="ES Heatpump Dashboard auf dem Smartphone" width="320">
 </p>
 
@@ -839,6 +841,12 @@ Die Volumenstrom-Frage aus v2.3.1 bleibt also offen.
 See git history.
 
 ---
+
+## 🎨 Logo
+
+Ein Rotor über zwei Wasserwellen auf einem Verlauf von Kaltblau nach Warmorange
+— die Aussage einer Luft/Wasser-Wärmepumpe in einem Bild. Vorlage, PNGs und der
+Weg ins `home-assistant/brands`-Repository: [`brand/`](brand/).
 
 ## 📚 Weitere Dokumente / Further reading
 

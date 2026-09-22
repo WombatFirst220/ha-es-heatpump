@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="ES Heatpump">
+  <title>ES Heatpump</title>
+  <desc>Ventilatorrotor über zwei Wasserwellen auf einem Verlauf von Kaltblau nach Warmorange — Luft/Wasser-Wärmepumpe.</desc>
+
+  <defs>
+    <!-- Kalt oben links (Luft, die Wärme abgibt), warm unten rechts (Wasser,
+         das sie aufnimmt). Der Verlauf ist die ganze Aussage des Logos. -->
+    <linearGradient id="wp" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0"    stop-color="#22B8F0"/>
+      <stop offset="0.52" stop-color="#2E8BD6"/>
+      <stop offset="1"    stop-color="#F2930B"/>
+    </linearGradient>
+    <!-- Sehr flacher Schatten unter dem Rotor: hebt ihn ab, ohne bei 48 px zu matschen. -->
+    <filter id="tiefe" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#0B3B5C" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="256" height="256" rx="56" ry="56" fill="url(#wp)"/>
+
+  <!-- Rotor: drei Flügel um die Nabe bei (128,104). Ein Flügel, zweimal
+       gedreht — so bleibt die Form garantiert gleich. -->
+  <g filter="url(#tiefe)" fill="#FFFFFF">
+    <g>
+      <path d="M128,104 C118,74 121,46 134,26 C163,42 170,78 153,101 Z"/>
+      <path d="M128,104 C118,74 121,46 134,26 C163,42 170,78 153,101 Z"
+            transform="rotate(120 128 104)"/>
+      <path d="M128,104 C118,74 121,46 134,26 C163,42 170,78 153,101 Z"
+            transform="rotate(240 128 104)"/>
+    </g>
+    <circle cx="128" cy="104" r="15"/>
+  </g>
+  <circle cx="128" cy="104" r="6.5" fill="#2E8BD6"/>
+
+  <!-- Wasser: zwei Wellen, die zweite schwächer — Tiefe ohne zusätzliche Farbe. -->
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-width="13">
+    <path d="M44,186 C64,170 84,170 104,186 C124,202 144,202 164,186 C184,170 200,170 212,180"/>
+    <path d="M44,222 C64,206 84,206 104,222 C124,238 144,238 164,222 C184,206 200,206 212,216"
+          opacity="0.55"/>
+  </g>
+</svg>
