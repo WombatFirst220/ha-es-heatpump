@@ -108,3 +108,52 @@ Diese Slugs werden via `_attr_suggested_object_id` an HA übergeben, damit die f
 | (berechnet) | `sensor.es_hp_spreizung` |
 | (berechnet) | `sensor.es_hp_thermische_leistung` |
 | (berechnet) | `sensor.es_hp_aktueller_cop` |
+
+---
+
+## Nachtrag 22.09.2026: Beschriftungen direkt aus dem Portal
+
+Die bisherige Zuordnung stammte aus Pearson-Korrelation gegen Multiscrape-
+Sensoren. Am 22.09.2026 hat sich gezeigt, dass das Portal die Beschriftungen
+selbst mitliefert: Auf `/a/amt/realdata/form?mn=<mn>&devid=<devid>` stehen
+Beschriftung und Feld-ID im selben `<div class="form-group">`. Die Werte füllt
+JavaScript aus `/a/amt/realdata/get` nach, deshalb sind die `value=""`-Attribute
+leer — die **Zuordnung** ist aber im HTML.
+
+18 Felder werden dort benannt:
+
+| Feld | Portal-Bezeichnung | Status vorher |
+|---|---|---|
+| `par1` | **Unit Current Working Mode** | nicht zugeordnet |
+| `par7` | Sanitary Hot Water Temp. - TW(℃) | bestätigt |
+| `par8` | Cooling/Heating Water Temp. - TC(℃) | bestätigt |
+| `par9` | Water Temp. After Mixing Valve 1(℃) | bestätigt |
+| `par10` | Water Temp. After Mixing Valve 2(℃) | bestätigt |
+| `par11` | Room Temp. - TR(℃) | bestätigt |
+| `par20` | Comp. Speed: (Hz) | bestätigt |
+| `par24` | Actual Ambient Temp. - Ta(℃) | bestätigt |
+| `par31` | Voltage(V) | bestätigt |
+| `par33` | Pump statue-P0 | nicht zugeordnet |
+| `par34` | Pump statue-P1 | nicht zugeordnet |
+| `par35` | Pump statue-P2 | nicht zugeordnet |
+| `par36` | Set Temperature | bestätigt |
+| `par37` | Software Version | bestätigt |
+| `par38` | Calculated Comp. Speed | nicht zugeordnet |
+| `par41` | AH Working Time (Min.) | bestätigt |
+| `par42` | HBH Working Time (Min.) | bestätigt |
+| `par43` | HWTBH Working Time (Min.) | bestätigt |
+
+`par1` ist im Portal ein `<select>`; seine Optionen geben die Betriebsarten:
+0 Standby, 1 Sanitary Hot Water, 2 Heating, **3 Cooling**, 4 SHW+Heating,
+5 SHW+Cooling. Die bis v2.3.1 verwendete Zuordnung `3 = Entfrosten` war damit
+falsch.
+
+**Nicht benannt und weiterhin offen:** `par4`, `par5`, `par6`, `par25` und die
+Diagnosefelder — sie stehen nicht auf dem Formular und bleiben korrelativ
+belegt. `par28 = 680` ist der einzige unbenannte Kandidat mit auffälligem Wert;
+die Größenordnung passt zur Lüfterdrehzahl (`es_wp_luefter_f1`, 0–622 rpm), ist
+aber unbestätigt.
+
+**Kein Durchflusswert.** Weder im JSON noch auf einer der zehn geprüften
+HTML-Seiten gibt es ein Feld für Volumenstrom. Die thermische Leistung bleibt
+auf die konfigurierte Konstante bzw. einen externen Sensor angewiesen.

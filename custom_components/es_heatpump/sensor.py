@@ -49,7 +49,11 @@ from .const import (
     TEMP_SENTINEL,
     WATER_VOL_HEAT_CAPACITY_WH,
 )
-from .mode import derive_betriebsart as _derive_betriebsart
+from .mode import (
+    betriebsart_aus_par1 as _betriebsart_aus_par1,
+    derive_betriebsart as _derive_betriebsart,
+    ist_abtauen as _ist_abtauen,
+)
 from .flow import active_flow_rate as _active_flow_rate, flow_from_entity
 
 
@@ -117,20 +121,39 @@ def _resolve_betriebsart(
     data: dict[str, Any] | None = None,
     dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
 ) -> str:
-    """Canonical operating mode.
+    """Canonical operating mode, with the reason as second element.
 
-    A configured ``mode_source_entity`` wins as long as it yields something
-    usable — that keeps setups from v2.2.x working unchanged. Otherwise the
-    mode is derived from the heat pump's own values (since v2.3.0), so no
-    helper entity is required any more.
+    Order of precedence:
+
+    1. **``par1``** — the unit's own "Unit Current Working Mode" (since
+       v2.4.0). Authoritative, because it is what the machine reports.
+    2. **``mode_source_entity``** — the external helper some setups configured
+       before v2.4.0. It reads the same information from the portal's HTML, one
+       step removed, so it only applies when ``par1`` is unavailable.
+    3. **derivation** from frequency, spread and flow-vs-setpoint (v2.3.0) —
+       the fallback for units that report no ``par1``.
+
+    On top of that: defrosting is not a mode in the portal's vocabulary. While
+    the cycle runs in reverse the unit keeps reporting "Heating", so that case
+    is corrected here.
     """
-    if mode_source:
-        external = _mode_from_source(hass, mode_source)
-        if external != "Unbekannt":
-            return external
-    if data:
-        return _derive_betriebsart(data, dhw_margin_k)[0]
-    return "Unbekannt"
+    data = data or {}
+
+    modus, grund = _betriebsart_aus_par1(data)
+    if modus is None and mode_source:
+        extern = _mode_from_source(hass, mode_source)
+        if extern != "Unbekannt":
+            modus, grund = extern, f"externe Entity {mode_source} meldet {extern}"
+    if modus is None and data:
+        modus, grund = _derive_betriebsart(data, dhw_margin_k)
+    if modus is None:
+        return "Unbekannt", grund
+
+    if modus in ("Heizen", "Brauchwasser + Heizen") and _ist_abtauen(data):
+        return "Entfrosten", (
+            f"{grund}, aber Vorlauf unter Rücklauf — Kreisprozess umgekehrt"
+        )
+    return modus, grund
 
 
 from .coordinator import ESHeatpumpCoordinator
@@ -381,7 +404,7 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
             return None
         if not freq or freq <= 0:
             return 0.0
-        mode = _resolve_betriebsart(
+        mode, _ = _resolve_betriebsart(
             self._hass, self._mode_source, data, self._dhw_margin_k
         )
         live, _ = _live_flow(self._hass, self._flow_entity)
@@ -405,7 +428,7 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
             "mode_source": self._mode_source,
             "resolved_mode": _resolve_betriebsart(
                 self._hass, self._mode_source, self.coordinator.data, self._dhw_margin_k
-            ),
+            )[0],
         }
 
 
@@ -469,7 +492,7 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         if not freq or freq <= 0:
             return 0.0
 
-        mode = _resolve_betriebsart(
+        mode, _ = _resolve_betriebsart(
             self._hass, self._mode_source, data, self._dhw_margin_k
         )
         live, _ = _live_flow(self._hass, self._flow_entity)
@@ -528,7 +551,7 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
             "mode_source": self._mode_source,
             "resolved_mode": _resolve_betriebsart(
                 self._hass, self._mode_source, self.coordinator.data, self._dhw_margin_k
-            ),
+            )[0],
         }
 
 
@@ -584,19 +607,25 @@ class BetriebsartCalcSensor(
     def native_value(self) -> str:
         return _resolve_betriebsart(
             self._hass, self._mode_source, self.coordinator.data, self._dhw_margin_k
-        )
+        )[0]
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         data = self.coordinator.data or {}
-        abgeleitet, begruendung = _derive_betriebsart(data, self._dhw_margin_k)
-
-        externe = _mode_from_source(self._hass, self._mode_source) if self._mode_source else "Unbekannt"
-        quelle = "externe Entity" if externe != "Unbekannt" else "eigene Werte"
+        modus, begruendung = _resolve_betriebsart(
+            self._hass, self._mode_source, data, self._dhw_margin_k
+        )
+        aus_par1, _ = _betriebsart_aus_par1(data)
+        abgeleitet, _ = _derive_betriebsart(data, self._dhw_margin_k)
+        quelle = ("Geräteangabe par1" if aus_par1 is not None
+                  else ("externe Entity" if self._mode_source
+                        and _mode_from_source(self._hass, self._mode_source) != "Unbekannt"
+                        else "eigene Werte"))
 
         attrs: dict[str, Any] = {
             "quelle": quelle,
             "begruendung": begruendung,
+            "par1_roh": data.get("par1"),
             "abgeleitet_aus_eigenen_werten": abgeleitet,
             "dhw_margin_k": self._dhw_margin_k,
             "vorlauf_c": data.get("par4"),

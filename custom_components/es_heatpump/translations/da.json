@@ -12,7 +12,7 @@
           "power_entity": "Effektsensor (valgfri, til COP-beregning)",
           "flow_rate": "Flow varmekredsløb (m³/t)",
           "flow_rate_dhw": "Flow varmtvandskredsløb (m³/t)",
-          "mode_source_entity": "Kilde til driftstilstand (valgfri – siden v2.3.0 bestemmes tilstanden selv)",
+          "mode_source_entity": "Kilde til driftstilstand (unødvendig siden v2.4.0 – enheden melder tilstanden i par1)",
           "dhw_margin_k": "Fremløbets margin over varmesætpunktet, der markerer varmt brugsvand (K)",
           "flow_entity": "Flowsensor (valgfri – har forrang over konstanterne, anbefales ved modulerende cirkulationspumpe)",
           "model": "Varmepumpemodel – valget udfylder det nominelle flow fra databladet"
@@ -38,7 +38,7 @@
           "power_entity": "Effektsensor (Shelly m.fl.)",
           "flow_rate": "Flow varmekredsløb (m³/t)",
           "flow_rate_dhw": "Flow varmtvandskredsløb (m³/t)",
-          "mode_source_entity": "Kilde til driftstilstand (valgfri – siden v2.3.0 bestemmes tilstanden selv)",
+          "mode_source_entity": "Kilde til driftstilstand (unødvendig siden v2.4.0 – enheden melder tilstanden i par1)",
           "dhw_margin_k": "Fremløbets margin over varmesætpunktet, der markerer varmt brugsvand (K)",
           "flow_entity": "Flowsensor (valgfri – har forrang over konstanterne, anbefales ved modulerende cirkulationspumpe)",
           "model": "Varmepumpemodel – valget udfylder det nominelle flow fra databladet"

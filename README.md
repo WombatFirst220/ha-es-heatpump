@@ -126,7 +126,42 @@ Ohne eines von beiden bleibt der COP eine **Größenordnung, kein Messwert**: am
 Auslegungspunkt richtig, bei Teillast tendenziell zu hoch, bei Volllast zu
 niedrig.
 
-#### 🔄 Betriebsart-Erkennung (seit v2.3.0)
+#### 🔄 Betriebsart (seit v2.4.0 aus dem Gerät)
+
+**Die Wärmepumpe meldet ihre Betriebsart selbst — in `par1`.** Die
+Formularseite des Portals (`/a/amt/realdata/form`) benennt das Feld als
+„Unit Current Working Mode" und liefert die Bedeutungen als
+Auswahlmöglichkeiten gleich mit:
+
+| `par1` | Portal-Bezeichnung | Integration |
+|---:|---|---|
+| 0 | Standby | `Aus` |
+| 1 | Sanitary Hot Water | `Brauchwasser` |
+| 2 | Heating | `Heizen` |
+| 3 | **Cooling** | `Kuehlen` |
+| 4 | Sanitary Hot Water + Heating | `Brauchwasser + Heizen` |
+| 5 | Sanitary Hot Water + Cooling | `Brauchwasser + Kuehlen` |
+
+`par1` steckt im selben JSON-Endpunkt, den die Integration seit jeher abruft —
+es war nur nie zugeordnet. Bis v2.2.0 galt `par15` als Betriebsart (es ist ein
+Herzschlagsignal), bis v2.3.1 wurde sie aus Frequenz, Spreizung und Vorlauf
+abgeleitet.
+
+⚠️ **Wer von v2.3.x kommt:** In der alten Zuordnung stand `3 = Entfrosten`.
+Richtig ist **Kühlen**. Bei einem Gerät im Kühlbetrieb meldete die Integration
+also Abtauen — und setzte damit thermische Leistung und COP auf 0.
+
+**Rangfolge:** `par1` → externe `mode_source_entity` (nur falls `par1` fehlt) →
+Ableitung aus eigenen Werten. Die Hilfs-Entity aus v2.2.x wird nicht mehr
+gebraucht und kann in den Optionen geleert werden.
+
+**Entfrosten kennt das Portal nicht.** Abtauen ist keine Betriebsart, sondern ein
+Vorgang innerhalb des Heizbetriebs: `par1` meldet weiter „Heating", während die
+Maschine dem Heizwasser Wärme *entzieht*. Die Integration erkennt das an der
+negativen Spreizung (Vorlauf unter Rücklauf) und korrigiert die Betriebsart —
+die Ableitung aus v2.3.0 ergänzt `par1` also, statt ersetzt zu werden.
+
+#### 🔄 Ableitung als Rückfallebene (seit v2.3.0)
 
 Das Portal liefert kein brauchbares Betriebsart-Feld — `par15` sah danach aus,
 ist aber ein Herzschlagsignal. Bis v2.2.x musste die Betriebsart deshalb aus
@@ -381,6 +416,41 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 
 <a id="changelog"></a>
 ## 📋 Changelog
+
+### 2.4.0 — 2026-09-22
+
+**Die Wärmepumpe meldet ihre Betriebsart selbst — `par1` war die ganze Zeit da.**
+
+- Die Formularseite des Portals (`/a/amt/realdata/form`) benennt `par1` als
+  „Unit Current Working Mode" und liefert die sechs Bedeutungen als
+  `<select>`-Optionen mit. Das Feld steckt im selben JSON-Endpunkt, den die
+  Integration seit jeher abruft — es wurde nur nie zugeordnet. Weder das
+  Herzschlag-Missverständnis um `par15` (bis v2.2.0) noch die externe
+  Hilfs-Entity (v2.2.1) noch die Ableitung aus eigenen Werten (v2.3.0) wären
+  nötig gewesen.
+- ⚠️ **Fehler behoben: `3` ist Kühlen, nicht Entfrosten.** Die alte Zuordnung
+  hätte ein Gerät im Kühlbetrieb als Abtauen gemeldet und damit thermische
+  Leistung und COP auf 0 gesetzt. Neu dazu: die Kombimodi `4` und `5`
+  (Brauchwasser + Heizen bzw. + Kühlen), die vorher auf „Unbekannt" fielen.
+- **Entfrosten bleibt abgeleitet.** Das Portal kennt keinen Abtaumodus — `par1`
+  meldet währenddessen weiter „Heating". Die Erkennung über die negative
+  Spreizung aus v2.3.0 korrigiert das und ergänzt `par1`, statt ersetzt zu
+  werden.
+- **Rangfolge:** `par1` → externe `mode_source_entity` (nur noch falls `par1`
+  fehlt) → Ableitung. Die Hilfs-Entity kann geleert werden (seit v2.3.1 geht
+  das auch).
+- **Vier neue Sensoren** aus der Portal-Benennung, alle default deaktiviert:
+  `pumpe_p0`, `pumpe_p1`, `pumpe_p2` (Pump statue-P0…P2) und `frequenz_soll`
+  (Calculated Comp. Speed) — der Sollwert, gegen den die Ist-Frequenz läuft.
+- In den Betriebsarten `Kuehlen` und `Brauchwasser + Kuehlen` ist die
+  thermische Leistung 0: Das ist Kälteleistung, die die Integration nicht
+  rechnet — lieber 0 als ein falsches Vorzeichen.
+- `tests/test_mode.py` deckt die `par1`-Übersetzung, die Kühlen-Korrektur und
+  die Abtau-Erkennung mit ab (9 Prüfungen).
+
+**Von 100 gelieferten `parXX`-Feldern sind damit 29 zugeordnet.** Einen
+Durchflusswert liefert das Portal nicht — auf keiner der zehn geprüften Seiten.
+Die Volumenstrom-Frage aus v2.3.1 bleibt also offen.
 
 ### 2.3.1 — 2026-09-22
 

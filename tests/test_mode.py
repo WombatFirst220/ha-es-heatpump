@@ -88,9 +88,59 @@ def test_margin_wirkt():
     assert derive_betriebsart(daten, 12.0)[0] == "Heizen"        # Schwelle 43,6
 
 
+def _alle_tests():
+    return [v for k, v in sorted(globals().items())
+            if k.startswith("test_") and callable(v)]
+
+
+# ── par1: die Geräteangabe (seit v2.4.0) ─────────────────────────────────────
+
+betriebsart_aus_par1 = _lade("mode").betriebsart_aus_par1
+ist_abtauen = _lade("mode").ist_abtauen
+
+
+def test_par1_wird_nach_der_portal_liste_uebersetzt():
+    """Werte und Namen stammen aus den <select>-Optionen von
+    /a/amt/realdata/form, abgelesen am 22.09.2026."""
+    for wert, erwartet in (
+        (0, "Aus"), (1, "Brauchwasser"), (2, "Heizen"), (3, "Kuehlen"),
+        (4, "Brauchwasser + Heizen"), (5, "Brauchwasser + Kuehlen"),
+    ):
+        modus, grund = betriebsart_aus_par1({"par1": float(wert)})
+        assert modus == erwartet, f"par1={wert}: {modus} statt {erwartet} ({grund})"
+
+
+def test_par1_drei_ist_kuehlen_nicht_entfrosten():
+    """Bis v2.3.1 stand in der Zuordnung faelschlich 3 = Entfrosten. Das Portal
+    sagt Cooling - ein Geraet im Kuehlbetrieb waere als Abtauen gemeldet und der
+    Volumenstrom auf 0 gesetzt worden."""
+    assert betriebsart_aus_par1({"par1": 3.0})[0] == "Kuehlen"
+
+
+def test_par1_fehlend_oder_unbekannt():
+    for daten in ({}, {"par1": None}, {"par1": "abc"}, {"par1": 9.0}):
+        modus, grund = betriebsart_aus_par1(daten)
+        assert modus is None, f"{daten} haette None ergeben muessen"
+        assert grund
+
+
+def test_abtauen_nur_bei_laufendem_kompressor_und_negativer_spreizung():
+    assert ist_abtauen({"par20": 60, "par4": 25.0, "par5": 28.0}) is True
+    assert ist_abtauen({"par20": 60, "par4": 33.0, "par5": 31.0}) is False
+    assert ist_abtauen({"par20": 0,  "par4": 25.0, "par5": 28.0}) is False
+    assert ist_abtauen({"par20": 60, "par4": -99.0, "par5": 28.0}) is False
+
+
+def test_gemessener_betriebspunkt_vom_22_09_2026():
+    """Realer Abruf: par1=2 bei laufendem Kompressor, Vorlauf über Rücklauf."""
+    daten = {"par1": 2.0, "par20": 55.0, "par4": 34.1, "par5": 31.4, "par6": 31.6}
+    assert betriebsart_aus_par1(daten)[0] == "Heizen"
+    assert ist_abtauen(daten) is False
+
+
 if __name__ == "__main__":
-    for fn in (test_betriebsart_erkennung, test_begruendung_ist_immer_gesetzt,
-               test_abtauen_schlaegt_brauchwasser, test_margin_wirkt):
+    fns = _alle_tests()
+    for fn in fns:
         fn()
         print(f"  ok  {fn.__name__}")
-    print(f"\n{len(FAELLE)} Fälle und 3 Sonderprüfungen bestanden.")
+    print(f"\n{len(fns)} Prüfungen bestanden ({len(FAELLE)} Ableitungsfälle darin).")
