@@ -427,6 +427,57 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 <a id="changelog"></a>
 ## 📋 Changelog
 
+### Beim Update auf v2.5.0 oder neuer: „Die Einheit von … hat sich geändert"
+
+Home Assistant meldet nach dem Update bis zu drei Reparaturen:
+
+| Sensor | war | ist |
+|---|---|---|
+| `sensor.es_hp_hochdruck_pd` | °C | **bar** |
+| `sensor.es_hp_saugdruck_ps` | °C | **bar** |
+| `sensor.es_hp_comp_speed_berechnet` | Hz | ohne Einheit |
+
+Das ist die Folge der Korrekturen aus v2.5.0 und v2.4.1 — die Felder waren mit
+der falschen Einheit angelegt. Home Assistant hat dafür Langzeitstatistiken mit
+der alten Einheit und fragt nach.
+
+**Der Reparatur-Dialog bietet nur „Statistiken löschen" an**, weil °C nach bar
+keine bekannte Umrechnung ist. Das ist unnötig: **Die gespeicherten Zahlen sind
+bereits richtig** — es waren immer die Rohwerte des Portals, also bar. Falsch ist
+nur das Etikett.
+
+Statt zu löschen lässt sich die Einheit in den Statistik-Metadaten umschreiben.
+Die Werte bleiben dabei unberührt (`update_unit_of_measurement` in
+`recorder/table_managers/statistics_meta.py` ist ein reines `UPDATE` auf die
+Metadatentabelle).
+
+**Entwicklerwerkzeuge → Aktionen** reichen dafür nicht, es braucht die
+WebSocket-API. Ein kurzes Skript mit einem Long-Lived Access Token:
+
+```python
+# je Sensor einmal senden
+{"type": "recorder/update_statistics_metadata",
+ "statistic_id": "sensor.es_hp_hochdruck_pd",
+ "unit_of_measurement": "bar",
+ "unit_class": "pressure"}
+
+{"type": "recorder/update_statistics_metadata",
+ "statistic_id": "sensor.es_hp_saugdruck_ps",
+ "unit_of_measurement": "bar",
+ "unit_class": "pressure"}
+
+{"type": "recorder/update_statistics_metadata",
+ "statistic_id": "sensor.es_hp_comp_speed_berechnet",
+ "unit_of_measurement": None,
+ "unit_class": None}
+```
+
+Danach `{"type": "recorder/update_statistics_issues"}` senden — die Meldungen
+verschwinden ohne Neustart.
+
+Wem die Historie dieser drei Werte egal ist, der kann im Dialog auch einfach
+löschen. Beim Hochdruck hingen hier 187 Tage daran.
+
 ### 3.0.2 — 2026-09-22
 
 **Eigenes Symbol.** Ein Rotor über zwei Wasserwellen auf einem Verlauf von
