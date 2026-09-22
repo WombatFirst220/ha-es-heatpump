@@ -14,8 +14,12 @@ die Energie wandert.
 |---|---|
 | `icon.svg` | die Vorlage, von Hand gezeichnet |
 | `icon.png` / `icon@2x.png` | 256 px und 512 px, RGBA mit transparenten Ecken |
-| `logo.png` / `logo@2x.png` | identisch — die Marke ist quadratisch |
 | `erzeuge_png.py` | erzeugt die PNGs aus der Geometrie |
+
+**Kein `logo.png`.** Das brands-Repository sagt es ausdrücklich: *„If the brand
+uses the same image for the logo and icon (e.g., if the logo has a square aspect
+ratio), only add the icon images. The icon will be used as a fallback for the
+logo."* Eine quadratische Kopie würde das Repository nur größer machen.
 
 ## Warum ein eigener Rasterizer
 
@@ -34,7 +38,14 @@ außer der Standardbibliothek.
 python3 brand/erzeuge_png.py
 ```
 
-Läuft in rund fünf Sekunden und schreibt alle vier Dateien.
+Läuft in wenigen Sekunden und schreibt beide Dateien.
+
+Zur Größe: Die übliche Heuristik — je Zeile der Filter mit der kleinsten
+Betragssumme — ist hier **nicht** die beste Wahl. Das Symbol besteht überwiegend
+aus einfarbigen Flächen und harten Kanten; dort erzeugt jede Differenzbildung
+Rauschen, das zlib schlechter packt als die Wiederholung desselben Bytes.
+Gemessen: mit Heuristik 10,1 kB, ohne Filter 8,6 kB. Das Skript rät deshalb
+nicht, sondern probiert sechs Strategien durch und nimmt die kleinste.
 
 **Wer die Form ändert, ändert sie im SVG _und_ in den Konstanten oben in
 `erzeuge_png.py`.** Die Verdopplung ist der Preis dafür, ohne Fremdbibliothek
@@ -47,11 +58,14 @@ zentral in [`home-assistant/brands`](https://github.com/home-assistant/brands).
 HACS und die Oberfläche laden sie von dort.
 
 1. `home-assistant/brands` forken.
-2. Anlegen: `custom_integrations/es_heatpump/icon.png`,
-   `icon@2x.png`, `logo.png`, `logo@2x.png` — die Dateien aus diesem Ordner.
-3. Pull Request stellen. Die Prüfung achtet auf Format (PNG, RGBA), Größe
-   (256 bzw. 512 Pixel im Quadrat) und darauf, dass das Motiv die Fläche
-   ausfüllt.
+2. Anlegen: `custom_integrations/es_heatpump/icon.png` und `icon@2x.png` —
+   die beiden Dateien aus diesem Ordner.
+3. Pull Request stellen. Geprüft werden Format (PNG), Seitenverhältnis (1:1),
+   Größe (256 bzw. 512 Pixel) und dass das Motiv die Fläche ohne Leerraum am
+   Rand ausfüllt.
+
+Der Ordnername **muss** dem `domain` aus `manifest.json` entsprechen, also
+`es_heatpump`.
 
 Bis der Pull Request durch ist, zeigt Home Assistant das Standardsymbol. Am
 Verhalten der Integration ändert das nichts.

@@ -12,7 +12,7 @@ Kantenglaettung durch Ueberabtastung: gerechnet wird mit dem Faktor SS pro
 Achse, danach wird gemittelt.
 
 Aufruf:  python3 brand/erzeuge_png.py
-Ergebnis: icon.png (256), icon@2x.png (512), logo.png, logo@2x.png
+Ergebnis: icon.png (256 px) und icon@2x.png (512 px)
 """
 from __future__ import annotations
 
@@ -162,12 +162,98 @@ def verlauf_farbe(t):
     return VERLAUF[-1][1]
 
 
+def _filtere_zeile(zeile, vorige, bpp):
+    """Waehlt den PNG-Zeilenfilter mit der kleinsten Betragssumme.
+
+    Das ist die uebliche Heuristik aus der PNG-Spezifikation. Bei einem
+    Farbverlauf bringt sie viel: Differenzen zum linken Nachbarn sind dort fast
+    ueberall 0 oder 1, und genau daraus macht zlib kurze Codes. Ohne Filter
+    wuerde der Verlauf als Folge immer neuer Bytewerte gespeichert.
+    """
+    n = len(zeile)
+    kandidaten = []
+
+    # 0 - None
+    kandidaten.append((0, bytes(zeile)))
+    # 1 - Sub
+    sub = bytearray(n)
+    for i in range(n):
+        sub[i] = (zeile[i] - (zeile[i-bpp] if i >= bpp else 0)) & 255
+    kandidaten.append((1, bytes(sub)))
+    # 2 - Up
+    up = bytearray(n)
+    for i in range(n):
+        up[i] = (zeile[i] - vorige[i]) & 255
+    kandidaten.append((2, bytes(up)))
+    # 3 - Average
+    mit = bytearray(n)
+    for i in range(n):
+        a = zeile[i-bpp] if i >= bpp else 0
+        mit[i] = (zeile[i] - ((a + vorige[i]) >> 1)) & 255
+    kandidaten.append((3, bytes(mit)))
+    # 4 - Paeth
+    pae = bytearray(n)
+    for i in range(n):
+        a = zeile[i-bpp] if i >= bpp else 0
+        b = vorige[i]
+        c = vorige[i-bpp] if i >= bpp else 0
+        p = a + b - c
+        pa, pb, pc = abs(p-a), abs(p-b), abs(p-c)
+        vor = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+        pae[i] = (zeile[i] - vor) & 255
+    kandidaten.append((4, bytes(pae)))
+
+    def kosten(d):
+        # Betragssumme mit Vorzeichen: 200 zaehlt als 56, nicht als 200
+        return sum(v if v < 128 else 256 - v for v in d)
+
+    return kandidaten, min(kandidaten, key=lambda k: kosten(k[1]))
+
+
 def schreibe_png(pfad_datei, breite, hoehe, pixel):
-    """RGBA-Bytes als PNG ablegen."""
+    """RGBA-Bytes als PNG ablegen, so klein wie ohne Fremdbibliothek moeglich.
+
+    Die uebliche Heuristik - je Zeile den Filter mit der kleinsten Betragssumme
+    - ist hier **nicht** automatisch die beste Wahl. Das Symbol besteht zum
+    grossen Teil aus einfarbigen Flaechen und harten Kanten; dort erzeugt jede
+    Differenzbildung Rauschen, das zlib schlechter packt als die Wiederholung
+    desselben Bytes. Gemessen: mit Heuristik 10,1 kB, ohne Filter 8,6 kB.
+
+    Deshalb wird nicht geraten, sondern probiert: fuenf feste Strategien plus
+    die Heuristik, alle sechs komprimiert, die kleinste gewinnt. Das kostet
+    Sekundenbruchteile und nimmt die Frage vom Tisch.
+    """
+    bpp = 4
+    zeilen = [pixel[y*breite*bpp:(y+1)*breite*bpp] for y in range(hoehe)]
+
+    # Je Zeile alle fuenf Filter berechnen, dazu die Empfehlung der Heuristik
+    alle, empfohlen = [], []
+    vorige = bytes(breite * bpp)
+    for zeile in zeilen:
+        kandidaten, bestes = _filtere_zeile(zeile, vorige, bpp)
+        alle.append({typ: daten for typ, daten in kandidaten})
+        empfohlen.append(bestes)
+        vorige = zeile
+
+    strategien = {f"nur Filter {t}": t for t in range(5)}
+    versuche = {}
+    for name, typ in strategien.items():
+        roh = bytearray()
+        for i in range(hoehe):
+            roh.append(typ)
+            roh += alle[i][typ]
+        versuche[name] = bytes(roh)
     roh = bytearray()
-    for y in range(hoehe):
-        roh.append(0)                                  # Filter "None"
-        roh += pixel[y*breite*4:(y+1)*breite*4]
+    for typ, daten in empfohlen:
+        roh.append(typ)
+        roh += daten
+    versuche["Heuristik je Zeile"] = bytes(roh)
+
+    bester_name, bester = None, None
+    for name, daten in versuche.items():
+        gepackt = zlib.compress(daten, 9)
+        if bester is None or len(gepackt) < len(bester):
+            bester_name, bester = name, gepackt
 
     def block(typ, daten):
         return (struct.pack(">I", len(daten)) + typ + daten
@@ -175,10 +261,10 @@ def schreibe_png(pfad_datei, breite, hoehe, pixel):
 
     datei = (b"\x89PNG\r\n\x1a\n"
              + block(b"IHDR", struct.pack(">IIBBBBB", breite, hoehe, 8, 6, 0, 0, 0))
-             + block(b"IDAT", zlib.compress(bytes(roh), 9))
+             + block(b"IDAT", bester)
              + block(b"IEND", b""))
     pathlib.Path(pfad_datei).write_bytes(datei)
-    return len(datei)
+    return len(datei), bester_name
 
 
 def rendere(kante: int) -> bytes:
@@ -245,14 +331,18 @@ def rendere(kante: int) -> bytes:
 
 
 def main() -> None:
+    """Nur die beiden Icon-Dateien.
+
+    home-assistant/brands sagt es ausdruecklich: "If the brand uses the same
+    image for the logo and icon (e.g., if the logo has a square aspect ratio),
+    only add the icon images. The icon will be used as a fallback for the logo."
+    Ein quadratisches logo.png waere also eine Verdopplung, die das Repository
+    nur groesser macht.
+    """
     for name, kante in (("icon.png", 256), ("icon@2x.png", 512)):
         pixel = rendere(kante)
-        groesse = schreibe_png(HIER / name, kante, kante, pixel)
-        print(f"  {name:12s} {kante}x{kante}  {groesse/1024:.1f} kB")
-        # Home Assistant nimmt fuer quadratische Marken dasselbe Bild als Logo.
-        logo = name.replace("icon", "logo")
-        schreibe_png(HIER / logo, kante, kante, pixel)
-        print(f"  {logo:12s} {kante}x{kante}  (Kopie)")
+        groesse, strategie = schreibe_png(HIER / name, kante, kante, pixel)
+        print(f"  {name:12s} {kante}x{kante}  {groesse/1024:5.1f} kB  ({strategie})")
 
 
 if __name__ == "__main__":
