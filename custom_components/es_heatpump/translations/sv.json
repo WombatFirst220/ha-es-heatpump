@@ -15,7 +15,11 @@
           "mode_source_entity": "Källa för driftläge (onödig sedan v2.4.0 – enheten rapporterar läget i par1)",
           "dhw_margin_k": "Framledningens marginal över värmebörvärdet som markerar varmvatten (K)",
           "flow_entity": "Flödesgivare (valfritt – går före konstanterna, rekommenderas vid modulerande cirkulationspump)",
-          "model": "Värmepumpsmodell – valet fyller i det nominella flödet från databladet"
+          "model": "Värmepumpsmodell – valet fyller i det nominella flödet från databladet",
+          "enable_writes": "Allow writing to the unit (off by default — required for settings entities, the restore service and parameter_setzen)",
+          "settings_interval": "Configuration poll interval (seconds) — settings change rarely, 900 is plenty",
+          "backup_interval_h": "Automatic backup interval (hours) — a change is always backed up immediately, this is the idle heartbeat",
+          "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted."
         }
       }
     },
@@ -41,7 +45,11 @@
           "mode_source_entity": "Källa för driftläge (onödig sedan v2.4.0 – enheten rapporterar läget i par1)",
           "dhw_margin_k": "Framledningens marginal över värmebörvärdet som markerar varmvatten (K)",
           "flow_entity": "Flödesgivare (valfritt – går före konstanterna, rekommenderas vid modulerande cirkulationspump)",
-          "model": "Värmepumpsmodell – valet fyller i det nominella flödet från databladet"
+          "model": "Värmepumpsmodell – valet fyller i det nominella flödet från databladet",
+          "enable_writes": "Allow writing to the unit (off by default — required for settings entities, the restore service and parameter_setzen)",
+          "settings_interval": "Configuration poll interval (seconds) — settings change rarely, 900 is plenty",
+          "backup_interval_h": "Automatic backup interval (hours) — a change is always backed up immediately, this is the idle heartbeat",
+          "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted."
         }
       }
     }

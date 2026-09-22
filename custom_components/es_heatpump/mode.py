@@ -19,12 +19,42 @@ devices that do not report ``par1``, and it keeps doing one thing ``par1``
 cannot: the portal's list has no defrost state, because defrosting is not a
 mode but an event inside heating.
 
-The older derivation, retained as fallback: The
-decisive insight is to compare the flow temperature against the *heating
-setpoint* (par6) rather than an absolute threshold: during hot-water production
-the machine drives the flow far above whatever the heating circuit currently
-asks for. That holds for underfloor heating (flow ≈33 °C) and radiators
-(flow ≈50 °C) alike, where a fixed threshold would misclassify one of them.
+The older derivation, retained as fallback: during hot-water production the
+machine drives the flow far above whatever the heating circuit currently asks
+for. That holds for underfloor heating (flow ≈33 °C) and radiators (flow
+≈50 °C) alike, where a fixed threshold would misclassify one of them.
+
+Korrektur 22.09.2026 (v3.0.0)
+-----------------------------
+Bis v2.5.0 verglich die Ableitung gegen ``par6``, im Glauben, das sei der
+Heizen-Sollwert. Das Anlagenschaubild des Portals nennt ``par6`` **Tup** - eine
+gemessene Wassertemperatur. Der Beweis steht in der Historie: ``par6`` faellt in
+80 Sekunden um 18 K, sobald die Umwaelzpumpe stehenbleibt, waehrend der Vorlauf
+steht. Ein Sollwert tut das nicht.
+
+Die Folge war ein echter Fehler: Kurz nach einem Verdichterstart stand ``par6``
+noch bei 14 °C und der Vorlauf bei 32 °C - die Ableitung meldete dann
+"Brauchwasser", obwohl geheizt wurde.
+
+Verglichen wird stattdessen gegen ``par8`` - "Cooling/Heating Water Temp. - TC",
+die Temperatur des Heizwassers im Puffer. Das ist physikalisch der richtige
+Bezug: Bei der Warmwasserbereitung treibt die Maschine den Vorlauf weit ueber
+das, was der Heizkreis gerade fuehrt, waehrend der Puffer auf seiner Temperatur
+stehen bleibt.
+
+``par8`` hat genau die Eigenschaft, die ``par6`` fehlt: **thermische Traegheit.**
+Ein Puffer kuehlt in Minuten um Zehntelgrad aus, nicht um 18 K. Beleg aus
+sechs Stunden Historie: ``par8`` blieb durchgehend zwischen 28,2 und 34,0 °C -
+auch waehrend einer Warmwasserladung, bei der der Vorlauf auf 58,2 °C stieg.
+
+Der Vergleich gegen eine Wassertemperatur statt gegen einen Sollwert traegt
+ausserdem beide Anlagenarten: Fussbodenheizung (Vorlauf ~33 °C, TC ~33 °C) und
+Heizkoerper (Vorlauf ~50 °C, TC ~49 °C) liegen beide dicht beieinander, waehrend
+der Abstand bei Warmwasser 20 K und mehr betraegt. Eine feste Schwelle koennte
+das nicht: Sie muesste unter 50 liegen, um Heizkoerper nicht als Warmwasser zu
+lesen, und ueber 50, um Warmwasser ueberhaupt zu erkennen.
+
+Faellt ``par8`` aus, bleibt ``DHW_ABSOLUTE_FALLBACK_C`` als grobe Ersatzschwelle.
 """
 from __future__ import annotations
 
@@ -41,7 +71,8 @@ from .const import (
 # Parameter ids used by the rules, named for readability
 PAR_VORLAUF   = "par4"    # flow temperature (Tuo)
 PAR_RUECKLAUF = "par5"    # return temperature (Tui)
-PAR_SOLL      = "par6"    # heating setpoint
+PAR_TUP       = "par6"    # Tup - gemessene Wassertemperatur, KEIN Sollwert
+PAR_HEIZWASSER = "par8"  # TC - Heizwassertemperatur im Puffer, traege
 PAR_FREQUENZ  = "par20"   # compressor frequency in Hz
 
 
@@ -108,7 +139,7 @@ def derive_betriebsart(
     freq = data.get(PAR_FREQUENZ)
     vor  = data.get(PAR_VORLAUF)
     rue  = data.get(PAR_RUECKLAUF)
-    soll = data.get(PAR_SOLL)
+    heizwasser = data.get(PAR_HEIZWASSER)
 
     if freq is None:
         return "Unbekannt", "keine Kompressorfrequenz (par20) in den Daten"
@@ -125,25 +156,19 @@ def derive_betriebsart(
             f"Kreisprozess also umgekehrt"
         )
 
-    if usable(soll):
-        schwelle = soll + dhw_margin_k
-        if vor > schwelle:
-            return "Brauchwasser", (
-                f"Vorlauf {vor:.1f} °C über Heizen-Soll {soll:.1f} °C "
-                f"+ {dhw_margin_k:.1f} K = {schwelle:.1f} °C"
-            )
-        return "Heizen", (
-            f"Vorlauf {vor:.1f} °C unter Schwelle {schwelle:.1f} °C "
-            f"(Heizen-Soll {soll:.1f} °C + {dhw_margin_k:.1f} K)"
+    if usable(heizwasser):
+        schwelle = heizwasser + dhw_margin_k
+        herkunft = (
+            f"{schwelle:.1f} °C (Heizwasser TC {heizwasser:.1f} °C "
+            f"+ {dhw_margin_k:.1f} K)"
+        )
+    else:
+        schwelle = DHW_ABSOLUTE_FALLBACK_C
+        herkunft = (
+            f"{DHW_ABSOLUTE_FALLBACK_C:.0f} °C (feste Ersatzschwelle, "
+            f"Heizwasser par8 nicht verfügbar)"
         )
 
-    # No usable setpoint — fall back to an absolute threshold
-    if vor > DHW_ABSOLUTE_FALLBACK_C:
-        return "Brauchwasser", (
-            f"Vorlauf {vor:.1f} °C über {DHW_ABSOLUTE_FALLBACK_C:.0f} °C "
-            f"(Heizen-Soll par6 nicht verfügbar)"
-        )
-    return "Heizen", (
-        f"Vorlauf {vor:.1f} °C unter {DHW_ABSOLUTE_FALLBACK_C:.0f} °C "
-        f"(Heizen-Soll par6 nicht verfügbar)"
-    )
+    if vor > schwelle:
+        return "Brauchwasser", f"Vorlauf {vor:.1f} °C über {herkunft}"
+    return "Heizen", f"Vorlauf {vor:.1f} °C unter {herkunft}"

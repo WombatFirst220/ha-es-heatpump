@@ -15,7 +15,11 @@
           "mode_source_entity": "Bron voor bedrijfsmodus (sinds v2.4.0 overbodig – het toestel meldt de modus in par1)",
           "dhw_margin_k": "Marge van de aanvoertemperatuur boven het setpoint die warmtapwater aanduidt (K)",
           "flow_entity": "Debietsensor (optioneel – gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp)",
-          "model": "Warmtepompmodel – de keuze vult het nominale debiet uit het datablad in"
+          "model": "Warmtepompmodel – de keuze vult het nominale debiet uit het datablad in",
+          "enable_writes": "Allow writing to the unit (off by default — required for settings entities, the restore service and parameter_setzen)",
+          "settings_interval": "Configuration poll interval (seconds) — settings change rarely, 900 is plenty",
+          "backup_interval_h": "Automatic backup interval (hours) — a change is always backed up immediately, this is the idle heartbeat",
+          "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted."
         }
       }
     },
@@ -41,7 +45,11 @@
           "mode_source_entity": "Bron voor bedrijfsmodus (sinds v2.4.0 overbodig – het toestel meldt de modus in par1)",
           "dhw_margin_k": "Marge van de aanvoertemperatuur boven het setpoint die warmtapwater aanduidt (K)",
           "flow_entity": "Debietsensor (optioneel – gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp)",
-          "model": "Warmtepompmodel – de keuze vult het nominale debiet uit het datablad in"
+          "model": "Warmtepompmodel – de keuze vult het nominale debiet uit het datablad in",
+          "enable_writes": "Allow writing to the unit (off by default — required for settings entities, the restore service and parameter_setzen)",
+          "settings_interval": "Configuration poll interval (seconds) — settings change rarely, 900 is plenty",
+          "backup_interval_h": "Automatic backup interval (hours) — a change is always backed up immediately, this is the idle heartbeat",
+          "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted."
         }
       }
     }

@@ -193,3 +193,104 @@ auseinander.
 
 **Kein Durchflusswert.** Weder im JSON (100 Felder), noch auf den zehn geprüften
 Portal-Seiten, noch auf den fünf Diagnoseseiten der Bedieneinheit.
+
+---
+
+## Der zweite Namensraum: `setdata` (seit v3.0.0)
+
+**Das Portal führt `parXX` zweimal.** Dieselben Feldnamen, völlig verschiedene
+Bedeutung:
+
+| Endpunkt | Inhalt | `par1` | `par4` |
+|---|---|---|---|
+| `/a/amt/realdata/get` | Messwerte | aktuelle Betriebsart | Vorlauf Tuo |
+| `/a/amt/setdata/get` | Einstellungen | Anlage ein/aus | Betriebsart-Vorwahl |
+
+Alles in diesem Dokument oberhalb dieser Zeile gehört zum **realdata**-Raum.
+Der Katalog des **setdata**-Raums steht in `custom_components/es_heatpump/settings.py`
+und ist aus `/a/amt/setdata/form` abgelesen — das Formular liefert Beschriftung,
+Typ, Wertebereich und Auswahllisten serverseitig mit.
+
+Die Konfigurations-Entities tragen deshalb das Präfix `es_hp_cfg_`.
+
+### Umfang
+
+| | Anzahl |
+|---|---:|
+| Felder in `/a/amt/setdata/get` | 300 |
+| davon im Formular bedienbar | 74 |
+| davon schreibbar (ohne Firmware-Versionen) | 70 |
+| Gruppen | 14 |
+
+Gesichert werden alle 300. Wiederhergestellt werden nur die 70 — was das Portal
+nicht zum Bearbeiten anbietet, lässt sich auch nicht zurückschreiben. Die
+übrigen sind Zähler, Werkseinstellungen und Messwerte; sie werden gesichert,
+damit man *sieht*, wie sie waren, nicht damit man sie setzt.
+
+### Schreiben
+
+```
+POST /a/amt/setdata/update
+     id=<Satz-Kennung aus setdata/get>&mn=…&devid=…
+     &parNN=<Wert>&fieldName=parNN&fieldValue=<Wert>
+```
+
+Ein Feld je Aufruf — das Portal kennt keinen Sammelauftrag. Die Nutzlast ist
+genau die, die der „Setting parameters"-Knopf neben jedem Formularfeld sendet
+(`doSave()` in `/a/amt/setdata/form`). Die Antwort ist jeesite-typisch
+`{"result": "true"|"false", "message": "…"}`.
+
+### Das Anlagenschaubild als Wörterbuch
+
+`/a/amt/realdata/img?mn=…&devid=…` ist die ergiebigste Seite des Portals. Sie
+legt die Messwerte mit **festen Pixelkoordinaten** über ein Hintergrundbild
+(`/static/amt/real/1.jpg`), und **das Bild trägt die Beschriftungen**.
+Beschriftung und Feld stehen im konstanten Versatz von etwa +40 px rechts und
+20 px höher.
+
+| Beschriftung | Feld | Bedeutung |
+|---|---|---|
+| Tuo | `par4` | Vorlauf |
+| Tui | `par5` | Rücklauf |
+| **Tup** | **`par6`** | **Wassertemperatur — KEIN Sollwert** |
+| Ps | `par23` | Saugdruck |
+| **Ts** | **`par26`** | **Sauggastemperatur** |
+| Pd | `par22` | Hochdruck |
+| Td | `par25` | Heißgastemperatur |
+| Tp | `par27` | Lamellentauscher |
+| Ambient Temp. | `par24` | Außentemperatur |
+| HZ | `par20` | Verdichterfrequenz |
+| A | `par30` | Stromaufnahme Verdichter |
+| Fan 1 / Fan 2 | `par28` / `par29` | Ventilatordrehzahlen |
+| Open | `par21` | Expansionsventil |
+| Pump | `par33` | Umwälzpumpe |
+
+`realimg.js` rechnet nichts um (`js.formatNumber(value, 1, false)`) — die
+JSON-Werte sind exakt das, was das Schaubild anzeigt.
+
+Ein zweiter Beleg für die Druckfelder fiel beim Stillstand ab: Steht der
+Verdichter, gleichen sich `par22` und `par23` auf 0,1 genau an. Zwei
+Temperaturen an verschiedenen Stellen des Kreises täten das nie.
+
+Das zweite Schaubild (`1-2.jpg`, „Operation diagram II") zeigt die Hydraulik:
+Pufferspeicher, zwei Mischventile, Brauchwasserspeicher, Plattentauscher. **An
+keiner Stelle ein Durchflusszähler** — die Frage nach dem Volumenstrom ist damit
+über alle Quellen hinweg gleich beantwortet.
+
+### Stammdaten
+
+`/a/amt/deviceList/listData` liefert sie ohne zusätzliche Abfrage mit:
+
+| Feld | Inhalt |
+|---|---|
+| `devicetype` | Modell |
+| `devicenum` | Seriennummer (bei diesem Gerät die des Außengeräts) |
+| `note` | beide Seriennummern, `IG:` Innengerät, `AG:` Außengerät |
+| `mac` | MAC der Steuerung |
+| `firstruntime` | Inbetriebnahme |
+| `warrantyperiod` | Garantieende |
+| `office.officeName` | Installateur |
+| `user.userName` | eingetragener Besitzer |
+
+Installateur-Klartext und Artikelnummer stehen zusätzlich im Kopf von
+`/a/amt/setdata/form`.

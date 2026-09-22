@@ -22,6 +22,14 @@ from homeassistant.helpers.selector import (
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .const import (
+    CONF_BACKUP_INTERVAL,
+    CONF_BACKUP_KEEP,
+    CONF_ENABLE_WRITES,
+    CONF_SETTINGS_INTERVAL,
+    DEFAULT_BACKUP_INTERVAL,
+    DEFAULT_BACKUP_KEEP,
+    DEFAULT_ENABLE_WRITES,
+    DEFAULT_SETTINGS_INTERVAL,
     CONF_BASE_URL,
     CONF_FLOW_RATE,
     CONF_FLOW_RATE_DHW,
@@ -249,6 +257,39 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
                 CONF_MODEL,
                 default=opts.get(CONF_MODEL, data.get(CONF_MODEL, MODEL_UNKNOWN)),
             ): _model_selector(),
+
+            # ── Schreibzugriff und Sicherungen (v3.0.0) ──────────────────
+            # Standardmaessig AUS. Eine Cloud-Integration, die ungefragt in eine
+            # Heizung schreiben darf, ist eine andere Art von Software als eine,
+            # die nur liest - diese Entscheidung gehoert dem Betreiber.
+            vol.Optional(
+                CONF_ENABLE_WRITES,
+                default=opts.get(
+                    CONF_ENABLE_WRITES,
+                    data.get(CONF_ENABLE_WRITES, DEFAULT_ENABLE_WRITES),
+                ),
+            ): bool,
+            vol.Optional(
+                CONF_SETTINGS_INTERVAL,
+                default=opts.get(
+                    CONF_SETTINGS_INTERVAL,
+                    data.get(CONF_SETTINGS_INTERVAL, DEFAULT_SETTINGS_INTERVAL),
+                ),
+            ): vol.All(int, vol.Range(min=60, max=86400)),
+            vol.Optional(
+                CONF_BACKUP_INTERVAL,
+                default=opts.get(
+                    CONF_BACKUP_INTERVAL,
+                    data.get(CONF_BACKUP_INTERVAL, DEFAULT_BACKUP_INTERVAL),
+                ),
+            ): vol.All(int, vol.Range(min=1, max=720)),
+            vol.Optional(
+                CONF_BACKUP_KEEP,
+                default=opts.get(
+                    CONF_BACKUP_KEEP,
+                    data.get(CONF_BACKUP_KEEP, DEFAULT_BACKUP_KEEP),
+                ),
+            ): vol.All(int, vol.Range(min=0, max=1000)),
         }
 
         # Power-Entity is fully optional. If a value is already set, supply it

@@ -18,9 +18,14 @@ from .const import (
     DEVICE_LIST_PATH,
     LOGIN_PATH,
     REALDATA_PATH,
+    SETDATA_READ_PATH,
+    SETDATA_WRITE_PATH,
+    SETDATA_FORM_PATH,
     DOMAIN,
     SESSION_COOKIE_NAME,
 )
+from .metadata import Stammdaten, aus_formularkopf, aus_geraeteliste
+from .settings import SETTINGS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -79,6 +84,10 @@ class ESHeatpumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._devid: str | None = None
         # Diagnostic flag — log non-par response keys once per session
         self._logged_non_par_keys: bool = False
+        # Stammdaten der Anlage (Modell, Seriennummern, Garantie, Installateur).
+        # Fallen bei der Geraetesuche mit ab und aendern sich praktisch nie.
+        self.stammdaten: Stammdaten = Stammdaten()
+        self._kopf_gelesen: bool = False
 
     # ------------------------------------------------------------------
     # Session helpers
@@ -182,9 +191,9 @@ class ESHeatpumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # ── Extract mn + devid from the first device ───────────────────
         # Known response shapes:
-        #   {"rows": [{"mn": "10309", "devid": "1", ...}, ...]}
+        #   {"rows": [{"mn": "99999", "devid": "1", ...}, ...]}
         #   {"data": {"rows": [...]}}
-        #   [{"mn": "10309", "devid": "1", ...}]
+        #   [{"mn": "99999", "devid": "1", ...}]
         devices: list[dict] = []
 
         if isinstance(result, list):
@@ -214,6 +223,14 @@ class ESHeatpumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         first = devices[0]
         self._mn    = str(first.get("mn")    or first.get("Mn")    or "")
         self._devid = str(first.get("devid") or first.get("DevId") or first.get("id") or "1")
+
+        # Stammdaten fallen hier kostenlos mit ab: Modell, beide Seriennummern,
+        # Garantiedatum, Inbetriebnahme und Installateur stehen bereits in
+        # dieser Antwort. Ein Fehler darf die Geraetesuche nie anhalten.
+        try:
+            self.stammdaten = aus_geraeteliste(first)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("ES Heatpump: Stammdaten nicht lesbar: %s", err)
 
         if not self._mn:
             raise UpdateFailed(
@@ -279,7 +296,7 @@ class ESHeatpumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Extract all parXX keys from the response into {par_id: float_value}.
 
         Confirmed live response shape (flat, top-level):
-          {"isNewRecord": true, "mn": 10309, "devid": 1,
+          {"isNewRecord": true, "mn": 99999, "devid": 1,
            "par1": 2.0, "par2": 0.0, "par3": 0.0, ...}
 
         Non-parXX keys other than housekeeping fields are logged ONCE so we
@@ -328,6 +345,152 @@ class ESHeatpumpCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         _LOGGER.debug("ES Heatpump: received %d sensor values from portal", len(result) - 1)
         return result
+
+
+    # ------------------------------------------------------------------
+    # Konfiguration lesen und schreiben (Portal-Seite "setdata")
+    # ------------------------------------------------------------------
+    #
+    # ACHTUNG: eigener parXX-Namensraum. /a/amt/setdata/get liefert par1 =
+    # "Anlage ein/aus", waehrend par1 in /a/amt/realdata/get die aktuelle
+    # Betriebsart ist. Die beiden Saetze duerfen nie vermischt werden - siehe
+    # den Kopf von settings.py.
+
+    async def _async_sicherstellen_angemeldet(self) -> None:
+        if self._session_age == 0.0 or self._session_expired():
+            await self._login()
+        if self._mn is None:
+            await self._discover_device()
+
+    async def async_lies_konfiguration(self) -> dict[str, float]:
+        """Liest den vollstaendigen Konfigurationsstand (rund 300 Werte).
+
+        Das ist die Grundlage sowohl fuer die Bedien-Entities als auch fuer
+        jede Sicherung. Bewusst wird *alles* gelesen, nicht nur die 74
+        bedienbaren Felder: Was eine Sicherung nicht enthaelt, kann sie
+        spaeter auch nicht zeigen.
+        """
+        await self._async_sicherstellen_angemeldet()
+
+        session = async_get_clientsession(self.hass)
+        url = f"{self._base_url}{SETDATA_READ_PATH}"
+        try:
+            async with asyncio.timeout(25):
+                resp = await session.post(
+                    url,
+                    data={"mn": self._mn, "devid": self._devid},
+                    headers={"X-Requested-With": "XMLHttpRequest"},
+                )
+                resp.raise_for_status()
+                raw: dict = await resp.json(content_type=None)
+        except aiohttp.ClientResponseError as err:
+            if err.status in (401, 403):
+                self._session_age = 0.0
+            raise UpdateFailed(
+                f"Konfiguration konnte nicht gelesen werden (HTTP {err.status})"
+            ) from err
+        except Exception as err:  # noqa: BLE001
+            raise UpdateFailed(f"Konfiguration konnte nicht gelesen werden: {err}") from err
+
+        import re as _re
+        muster = _re.compile(r"^par\d+$")
+        werte = {k: _safe_float(v) for k, v in raw.items() if muster.match(str(k))}
+        werte = {k: v for k, v in werte.items() if v is not None}
+        if not werte:
+            raise UpdateFailed(
+                "Die Konfigurationsantwort enthaelt keine parXX-Felder. "
+                f"Vorhandene Schluessel: {list(raw.keys())[:10]}"
+            )
+        # Die Satz-Kennung braucht der Schreibaufruf mit.
+        self._setdata_id = str(raw.get("id") or "")
+        return werte
+
+    async def async_lies_stammdaten_kopf(self) -> None:
+        """Holt Installateur-Klartext und Artikelnummer aus dem Formularkopf.
+
+        Nur einmal je Sitzung - die Seite ist 70 kB gross, und die beiden
+        Angaben aendern sich nie.
+        """
+        if self._kopf_gelesen:
+            return
+        self._kopf_gelesen = True   # auch bei Fehlschlag nicht erneut versuchen
+
+        await self._async_sicherstellen_angemeldet()
+        session = async_get_clientsession(self.hass)
+        url = f"{self._base_url}{SETDATA_FORM_PATH}?mn={self._mn}&devid={self._devid}"
+        try:
+            async with asyncio.timeout(30):
+                resp = await session.get(url)
+                resp.raise_for_status()
+                text = await resp.text()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("ES Heatpump: Formularkopf nicht lesbar: %s", err)
+            return
+        try:
+            self.stammdaten = aus_formularkopf(text, self.stammdaten)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("ES Heatpump: Formularkopf nicht auswertbar: %s", err)
+
+    async def async_schreibe_konfiguration(self, par: str, wert: int) -> None:
+        """Setzt genau einen Konfigurationswert in der Waermepumpe.
+
+        Das Portal kennt keinen Sammelauftrag - jeder Wert geht einzeln, so
+        wie es auch der "Setting parameters"-Knopf neben jedem Feld tut.
+
+        Geprueft wird **vor** dem Senden gegen den Katalog: Wertebereich,
+        erlaubte Auswahl, Schreibbarkeit. Das ist die letzte Stelle, an der
+        ein falscher Wert noch aufzuhalten ist; danach steht er in der Anlage.
+        """
+        eintrag = SETTINGS.get(par)
+        if eintrag is None:
+            raise ValueError(
+                f"{par} steht nicht im Katalog der bedienbaren Einstellungen."
+            )
+        geprueft = eintrag.validate(wert)
+
+        await self._async_sicherstellen_angemeldet()
+
+        session = async_get_clientsession(self.hass)
+        url = f"{self._base_url}{SETDATA_WRITE_PATH}"
+        payload = {
+            "id": getattr(self, "_setdata_id", "") or "",
+            "mn": self._mn,
+            "devid": self._devid,
+            par: str(geprueft),
+            "fieldName": par,
+            "fieldValue": str(geprueft),
+        }
+
+        _LOGGER.info(
+            "ES Heatpump: setze %s (%s) auf %s", par, eintrag.name, geprueft
+        )
+        try:
+            async with asyncio.timeout(30):
+                resp = await session.post(
+                    url,
+                    data=payload,
+                    headers={"X-Requested-With": "XMLHttpRequest"},
+                )
+                resp.raise_for_status()
+                antwort: dict = await resp.json(content_type=None)
+        except aiohttp.ClientResponseError as err:
+            if err.status in (401, 403):
+                self._session_age = 0.0
+            raise UpdateFailed(
+                f"Schreiben von {par} abgelehnt (HTTP {err.status})"
+            ) from err
+        except Exception as err:  # noqa: BLE001
+            raise UpdateFailed(f"Schreiben von {par} fehlgeschlagen: {err}") from err
+
+        # jeesite antwortet mit {"result": "true"/"false", "message": "..."}
+        ergebnis = str(antwort.get("result", "")).lower()
+        meldung = str(antwort.get("message") or antwort.get("msg") or "").strip()
+        if ergebnis in ("false", "0") or "fail" in meldung.lower():
+            raise UpdateFailed(
+                f"Das Portal hat {par} = {geprueft} nicht angenommen: "
+                f"{meldung or antwort}"
+            )
+        _LOGGER.debug("ES Heatpump: Portal bestaetigt %s: %s", par, meldung or antwort)
 
     # ------------------------------------------------------------------
     # DataUpdateCoordinator interface

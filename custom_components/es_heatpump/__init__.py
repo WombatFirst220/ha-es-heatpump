@@ -9,7 +9,16 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
+from .backup_store import Sicherungsablage
 from .const import (
+    CONF_BACKUP_INTERVAL,
+    CONF_ENABLE_WRITES,
+    DEFAULT_ENABLE_WRITES,
+    CONF_BACKUP_KEEP,
+    CONF_SETTINGS_INTERVAL,
+    DEFAULT_BACKUP_INTERVAL,
+    DEFAULT_BACKUP_KEEP,
+    DEFAULT_SETTINGS_INTERVAL,
     CALC_BETRIEBSART,
     CALC_COP,
     CALC_ELEC_POWER,
@@ -25,11 +34,20 @@ from .const import (
 )
 from .coordinator import ESHeatpumpCoordinator
 from .dashboard import async_install_dashboard, async_remove_dashboard
+from .services import async_entferne_dienste, async_registriere_dienste
+from .settings_coordinator import ESHeatpumpSettingsCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-# Matches unique_ids of the form "es_heatpump_<username>_parNN"
-_UNIQUE_ID_RE = re.compile(rf"^{DOMAIN}_(.+)_par(\d+)$")
+# Passt auf unique_ids der Form "es_heatpump_<benutzer>_parNN".
+#
+# Das ``(?!.*_cfg_)`` ist nicht kosmetisch: Seit v3.0.0 gibt es zusaetzlich
+# Konfigurations-Entities mit der unique_id "es_heatpump_<benutzer>_cfg_parNN".
+# Ohne die Ausnahme haette der gierige ``(.+)``-Teil auch diese erfasst - die
+# Aufraeumroutine haette dann bei JEDEM Start saemtliche Bedien-Entities
+# geloescht, weil ihre setdata-Feldnummern natuerlich nicht in
+# PARAMETER_SENSORS stehen (das ist der Messwert-Namensraum).
+_UNIQUE_ID_RE = re.compile(rf"^{DOMAIN}_(?!.*_cfg_)(.+)_par(\d+)$")
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -64,7 +82,52 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    # ── Konfigurationszugriff und Sicherungen (v3.0.0) ───────────────────
+    # Eigener, langsamer Takt: Einstellungen aendern sich im Monatsrhythmus,
+    # Messwerte im Sekundenrhythmus.
+    def _option(schluessel, standard):
+        return entry.options.get(schluessel, entry.data.get(schluessel, standard))
+
+    ablage = Sicherungsablage(
+        hass, entry.entry_id,
+        behalten=int(_option(CONF_BACKUP_KEEP, DEFAULT_BACKUP_KEEP)),
+    )
+    await ablage.async_laden()
+
+    version = await _async_integrationsversion(hass)
+    settings_coordinator = ESHeatpumpSettingsCoordinator(
+        hass=hass,
+        api=coordinator,
+        ablage=ablage,
+        scan_interval=int(_option(CONF_SETTINGS_INTERVAL, DEFAULT_SETTINGS_INTERVAL)),
+        backup_interval_h=int(_option(CONF_BACKUP_INTERVAL, DEFAULT_BACKUP_INTERVAL)),
+        version=version,
+    )
+    # Ein Fehlschlag hier darf die Messwerte nicht mitreissen: Wer die
+    # Integration wegen der Temperaturen einsetzt, soll sie behalten, auch wenn
+    # das Portal die Konfigurationsseite gerade nicht herausrueckt.
+    try:
+        await settings_coordinator.async_config_entry_first_refresh()
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning(
+            "ES Heatpump: Konfiguration nicht lesbar (%s). Messwerte laufen "
+            "weiter; Einstellungen und Sicherungen stehen erst nach einem "
+            "erfolgreichen Abruf bereit.", err,
+        )
+
+    settings_coordinator.schreiben_erlaubt = bool(
+        _option(CONF_ENABLE_WRITES, DEFAULT_ENABLE_WRITES)
+    )
+
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+        "api": coordinator,
+        "settings": settings_coordinator,
+        "ablage": ablage,
+        "entry": entry,
+        "version": version,
+    }
+
+    await async_registriere_dienste(hass)
 
     # Forward to sensor platform first.  All entities (raw `parXX` from the
     # config registry + the three freshly-created calculated sensors) are
@@ -97,6 +160,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
         if not hass.data.get(DOMAIN):
+            async_entferne_dienste(hass)
             await async_remove_dashboard(hass)
 
     return unload_ok
@@ -180,6 +244,8 @@ async def _async_migrate_entities(hass: HomeAssistant, entry: ConfigEntry) -> No
             continue
         if ent.config_entry_id != entry.entry_id:
             continue
+        if ent.domain != "sensor":
+            continue   # number/select/switch/button gehoeren zur Konfiguration
         m = _UNIQUE_ID_RE.match(ent.unique_id or "")
         if m is None:
             continue
@@ -195,3 +261,22 @@ async def _async_migrate_entities(hass: HomeAssistant, entry: ConfigEntry) -> No
 
     if removed:
         _LOGGER.info("ES Heatpump: removed %d obsolete parameter entities", removed)
+
+
+async def _async_integrationsversion(hass: HomeAssistant) -> str:
+    """Liest die Version aus dem Manifest - fuer die Sicherungen von Belang.
+
+    Eine Sicherung soll spaeter sagen koennen, mit welcher Fassung der
+    Integration sie entstanden ist. Wenn sich der Katalog der Parameter einmal
+    aendert, ist das die einzige Spur, an der sich das nachvollziehen laesst.
+
+    Ueber den Loader von Home Assistant, nicht ueber einen eigenen Dateizugriff:
+    Letzterer waere ein blockierender Lesevorgang in der Ereignisschleife.
+    """
+    try:
+        from homeassistant.loader import async_get_integration
+
+        integration = await async_get_integration(hass, DOMAIN)
+        return str(integration.version or "")
+    except Exception:  # noqa: BLE001
+        return ""
