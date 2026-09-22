@@ -417,6 +417,22 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 <a id="changelog"></a>
 ## 📋 Changelog
 
+### 2.4.1 — 2026-09-22 (hotfix)
+
+- **Entity-Felder lassen sich jetzt wirklich leeren.** v2.3.1 hatte nur den
+  Handler repariert, nicht das Schema: `vol.Optional(key, default=X)` setzt `X`
+  ein, sobald der Schlüssel fehlt — ein geleertes Feld kam im Handler also nie
+  als leer an. Die drei Entity-Felder (`power_entity`, `mode_source_entity`,
+  `flow_entity`) nutzen jetzt `description={"suggested_value": …}`, was das Feld
+  in der Oberfläche vorfüllt, ohne beim Weglassen etwas einzusetzen.
+- **`par38` war falsch benannt.** In v2.4.0 als „Kompressor Frequenz (Sollwert)"
+  mit Einheit Hz geführt. Gemessen steht `par38` konstant auf 3, während `par20`
+  49 Hz meldet — es ist keine Frequenz, sondern eine Stufe. Jetzt
+  „Berechnete Kompressorleistung (Stufe)", ohne Einheit und ohne `device_class`.
+  Der Sensor heißt neu `comp_speed_berechnet`; wer ihn in v2.4.0 aktiviert
+  hatte, behält seine Entity-ID (die `unique_id` hängt an `par38`, nicht am
+  Namen).
+
 ### 2.4.0 — 2026-09-22
 
 **Die Wärmepumpe meldet ihre Betriebsart selbst — `par1` war die ganze Zeit da.**

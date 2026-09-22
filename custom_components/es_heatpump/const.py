@@ -296,12 +296,18 @@ PARAMETER_SENSORS = {
         "enabled_default": False,
     },
     "par38": {
-        # Portal-Formular: "Calculated Comp. Speed" - der Sollwert, gegen den
-        # par20 (Ist-Frequenz) laeuft.
-        "slug": "frequenz_soll",
-        "name": "Kompressor Frequenz (Sollwert)",
-        "unit": "Hz", "device_class": "frequency", "state_class": "measurement",
-        "icon": "mdi:sine-wave",
+        # Portal-Formular: "Calculated Comp. Speed".
+        #
+        # ⚠ In v2.4.0 als Hz gefuehrt - das war falsch. Gemessen am 22.09.2026
+        # steht par38 konstant auf 3, waehrend par20 (Ist-Frequenz) 49 Hz
+        # meldet. Es ist also keine Frequenz, sondern eine Stufe oder ein
+        # Anforderungsgrad; das Portal nennt keine Einheit. Deshalb ohne
+        # device_class und ohne Einheit, damit daneben keine erfundene Zahl
+        # mit "Hz" steht.
+        "slug": "comp_speed_berechnet",
+        "name": "Berechnete Kompressorleistung (Stufe)",
+        "unit": None, "device_class": None, "state_class": "measurement",
+        "icon": "mdi:speedometer",
         "enabled_default": False,
     },
     "par20": {

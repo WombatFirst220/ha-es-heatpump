@@ -253,36 +253,36 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
 
         # Power-Entity is fully optional. If a value is already set, supply it
         # as default; otherwise leave the field empty.
-        current_power = opts.get(CONF_POWER_ENTITY, data.get(CONF_POWER_ENTITY))
-        if current_power:
-            schema_dict[vol.Optional(CONF_POWER_ENTITY, default=current_power)] = (
-                EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power"))
+        # WICHTIG: description={"suggested_value": ...} statt default=.
+        # vol.Optional(key, default=X) setzt X ein, sobald der Schluessel fehlt -
+        # ein geleertes Feld kaeme im Handler also nie als leer an, und die Entity
+        # liesse sich nur ersetzen, nie entfernen (Fehler bis v2.4.0; v2.3.1 hatte
+        # nur den Handler repariert, nicht das Schema). suggested_value fuellt das
+        # Feld in der Oberflaeche vor, ohne beim Weglassen etwas einzusetzen.
+        schema_dict[
+            vol.Optional(
+                CONF_POWER_ENTITY,
+                description={"suggested_value": opts.get(
+                    CONF_POWER_ENTITY, data.get(CONF_POWER_ENTITY)) or None},
             )
-        else:
-            schema_dict[vol.Optional(CONF_POWER_ENTITY)] = EntitySelector(
-                EntitySelectorConfig(domain="sensor", device_class="power")
-            )
+        ] = EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power"))
 
         # Mode-source entity (any sensor, used to read the real operating mode)
-        current_mode_source = opts.get(CONF_MODE_SOURCE, data.get(CONF_MODE_SOURCE))
-        if current_mode_source:
-            schema_dict[vol.Optional(CONF_MODE_SOURCE, default=current_mode_source)] = (
-                EntitySelector(EntitySelectorConfig(domain="sensor"))
+        schema_dict[
+            vol.Optional(
+                CONF_MODE_SOURCE,
+                description={"suggested_value": opts.get(
+                    CONF_MODE_SOURCE, data.get(CONF_MODE_SOURCE)) or None},
             )
-        else:
-            schema_dict[vol.Optional(CONF_MODE_SOURCE)] = EntitySelector(
-                EntitySelectorConfig(domain="sensor")
-            )
+        ] = EntitySelector(EntitySelectorConfig(domain="sensor"))
 
         # Optionale Volumenstrom-Entity (beliebiger Sensor, m³/h, l/min, l/h, l/s)
-        current_flow_entity = opts.get(CONF_FLOW_ENTITY, data.get(CONF_FLOW_ENTITY))
-        if current_flow_entity:
-            schema_dict[vol.Optional(CONF_FLOW_ENTITY, default=current_flow_entity)] = (
-                EntitySelector(EntitySelectorConfig(domain="sensor"))
+        schema_dict[
+            vol.Optional(
+                CONF_FLOW_ENTITY,
+                description={"suggested_value": opts.get(
+                    CONF_FLOW_ENTITY, data.get(CONF_FLOW_ENTITY)) or None},
             )
-        else:
-            schema_dict[vol.Optional(CONF_FLOW_ENTITY)] = EntitySelector(
-                EntitySelectorConfig(domain="sensor")
-            )
+        ] = EntitySelector(EntitySelectorConfig(domain="sensor"))
 
         return self.async_show_form(step_id="init", data_schema=vol.Schema(schema_dict))
