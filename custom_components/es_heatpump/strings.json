@@ -12,7 +12,7 @@
           "power_entity": "Electrical-power sensor (optional, used for COP calculation)",
           "flow_rate": "Heating-loop flow rate (m³/h)",
           "flow_rate_dhw": "DHW-loop flow rate (m³/h)",
-          "mode_source_entity": "Operating-mode source entity (optional — since v2.3.0 the mode is derived automatically)",
+          "mode_source_entity": "Operating-mode source entity (no longer needed since v2.4.0 — the unit reports its mode in par1)",
           "dhw_margin_k": "Volumetric-flow margin above the heating setpoint that marks DHW mode (K). Flow temperature above setpoint + margin ⇒ domestic hot water.",
           "flow_entity": "Live volumetric-flow sensor (optional — overrides the constants, recommended if the circulation pump modulates)",
           "model": "Heat-pump model — selecting it fills in the datasheet nominal flow rate"
@@ -38,7 +38,7 @@
           "power_entity": "Electrical-power sensor (Shelly etc.)",
           "flow_rate": "Heating-loop flow rate (m³/h)",
           "flow_rate_dhw": "DHW-loop flow rate (m³/h)",
-          "mode_source_entity": "Operating-mode source entity (optional — since v2.3.0 the mode is derived automatically)",
+          "mode_source_entity": "Operating-mode source entity (no longer needed since v2.4.0 — the unit reports its mode in par1)",
           "dhw_margin_k": "Volumetric-flow margin above the heating setpoint that marks DHW mode (K). Flow temperature above setpoint + margin ⇒ domestic hot water.",
           "flow_entity": "Live volumetric-flow sensor (optional — overrides the constants, recommended if the circulation pump modulates)",
           "model": "Heat-pump model — selecting it fills in the datasheet nominal flow rate"

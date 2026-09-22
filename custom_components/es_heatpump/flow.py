@@ -67,11 +67,18 @@ def active_flow_rate(
     In "Aus" and "Entfrosten" no useful heat is delivered, so the flow is 0
     regardless of what a sensor reports.
     """
-    if mode in ("Aus", "Entfrosten"):
+    # Kein nutzbarer Waermeeintrag ins Heizsystem:
+    #   Aus          - Kompressor steht
+    #   Entfrosten   - Kreisprozess laeuft rueckwaerts, Waerme wird entzogen
+    #   Kuehlen      - Kaelteleistung, nicht Waermeleistung; die Integration
+    #                  rechnet sie (noch) nicht, lieber 0 als ein falsches
+    #                  Vorzeichen
+    if mode in ("Aus", "Entfrosten", "Kuehlen", "Brauchwasser + Kuehlen"):
         return 0.0
     if live_flow is not None and live_flow > 0:
         return live_flow
     if mode == "Brauchwasser":
         return flow_dhw
-    # "Heizen" and "Unbekannt" — heating is the dominant mode
+    # "Heizen", "Brauchwasser + Heizen" und "Unbekannt": der Heizkreis laeuft,
+    # er ist der groessere Verbraucher und der besser bekannte Wert.
     return flow_heating

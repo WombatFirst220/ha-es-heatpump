@@ -72,6 +72,26 @@ CALC_COP            = "calc_cop"
 CALC_ELEC_POWER     = "calc_elec_power"     # mirror of the configured power_entity
 CALC_BETRIEBSART    = "calc_betriebsart"    # derived from mode_source_entity
 
+# ── Betriebsart: die Geraeteangabe par1 ──────────────────────────────────────
+# Die Formularseite des Portals (/a/amt/realdata/form) benennt par1 als
+# "Unit Current Working Mode" und liefert die Bedeutungen als <select>-Optionen
+# gleich mit.  par1 steckt im normalen JSON-Endpunkt /a/amt/realdata/get - es
+# wurde bis v2.3.1 nur nie zugeordnet.  Verifiziert am 22.09.2026.
+#
+# Die Portal-Liste kennt KEIN Entfrosten: Abtauen ist keine Betriebsart des
+# Geraets, sondern ein Vorgang innerhalb des Heizbetriebs.  Er wird weiterhin
+# ueber die negative Spreizung erkannt (siehe mode.py).
+PAR_BETRIEBSART = "par1"
+
+PAR1_BETRIEBSART = {
+    0: "Aus",                       # Standby
+    1: "Brauchwasser",              # Sanitary Hot Water
+    2: "Heizen",                    # Heating
+    3: "Kuehlen",                   # Cooling
+    4: "Brauchwasser + Heizen",     # Sanitary Hot Water + Heating
+    5: "Brauchwasser + Kuehlen",    # Sanitary Hot Water + Cooling
+}
+
 # ── Betriebsart detection ────────────────────────────────────────────────────
 # Since v2.3.0 the mode is derived from the heat pump's OWN values and needs no
 # external helper entity.  The rules, in order:
@@ -94,7 +114,11 @@ DHW_ABSOLUTE_FALLBACK_C = 45.0      # °C — used only when par6 is unavailable
 
 # Canonical display values for the enum sensor.  par15 was assumed to be the
 # mode in v2.0.0–v2.2.0 but turned out to be a periodic heartbeat signal.
-BETRIEBSART_OPTIONS = ["Aus", "Brauchwasser", "Heizen", "Entfrosten", "Unbekannt"]
+BETRIEBSART_OPTIONS = [
+    "Aus", "Brauchwasser", "Heizen", "Kuehlen",
+    "Brauchwasser + Heizen", "Brauchwasser + Kuehlen",
+    "Entfrosten", "Unbekannt",
+]
 
 # Normalisation of typical state strings coming from external mode sources.
 # Lower-case key → canonical option from BETRIEBSART_OPTIONS.
@@ -110,6 +134,9 @@ BETRIEBSART_ALIASES = {
     "warmwasser":      "Brauchwasser",
     "dhw":             "Brauchwasser",
     "hot water":       "Brauchwasser",
+    "kuehlen":         "Kuehlen",
+    "kühlen":          "Kuehlen",
+    "cooling":         "Kuehlen",
     "entfrosten":      "Entfrosten",
     "defrost":         "Entfrosten",
     "defrosting":      "Entfrosten",
@@ -244,6 +271,37 @@ PARAMETER_SENSORS = {
         "name": "Diagnose par15 (Heartbeat / unklar)",
         "unit": None, "device_class": None, "state_class": "measurement",
         "icon": "mdi:pulse",
+        "enabled_default": False,
+    },
+    "par33": {
+        # Portal-Formular: "Pump statue-P0" (sic)
+        "slug": "pumpe_p0",
+        "name": "Pumpe P0",
+        "unit": None, "device_class": None, "state_class": "measurement",
+        "icon": "mdi:pump",
+        "enabled_default": False,
+    },
+    "par34": {
+        "slug": "pumpe_p1",
+        "name": "Pumpe P1",
+        "unit": None, "device_class": None, "state_class": "measurement",
+        "icon": "mdi:pump",
+        "enabled_default": False,
+    },
+    "par35": {
+        "slug": "pumpe_p2",
+        "name": "Pumpe P2",
+        "unit": None, "device_class": None, "state_class": "measurement",
+        "icon": "mdi:pump",
+        "enabled_default": False,
+    },
+    "par38": {
+        # Portal-Formular: "Calculated Comp. Speed" - der Sollwert, gegen den
+        # par20 (Ist-Frequenz) laeuft.
+        "slug": "frequenz_soll",
+        "name": "Kompressor Frequenz (Sollwert)",
+        "unit": "Hz", "device_class": "frequency", "state_class": "measurement",
+        "icon": "mdi:sine-wave",
         "enabled_default": False,
     },
     "par20": {
