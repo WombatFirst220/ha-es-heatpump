@@ -35,9 +35,15 @@ derive_betriebsart = _lade("mode").derive_betriebsart
 M = DEFAULT_DHW_MARGIN_K
 
 
-def d(freq=None, vor=None, rue=None, soll=None):
-    """Kurzschreibweise für einen Portal-Datensatz."""
-    return {"par20": freq, "par4": vor, "par5": rue, "par6": soll}
+def d(freq=None, vor=None, rue=None, heizwasser=None):
+    """Kurzschreibweise für einen Portal-Datensatz.
+
+    Der vierte Wert war bis v2.5.0 par6, im Glauben, das sei der Heizen-Soll.
+    Seit v3.0.0 ist es par8 (TC, Heizwassertemperatur im Puffer) - par6 ist in
+    Wahrheit Tup, eine Rohrtemperatur, die beim Pumpenstopp binnen 80 Sekunden
+    um 18 K einbricht.
+    """
+    return {"par20": freq, "par4": vor, "par5": rue, "par8": heizwasser}
 
 
 # (Beschreibung, Datensatz, erwartete Betriebsart)
@@ -49,14 +55,14 @@ FAELLE = [
     ("Heizen, Median im Betrieb",   d(58,  33.5, 31.2, 31.6), "Heizen"),
     ("Warmwasser, gemessene Spitze",d(70,  58.8, 55.9, 31.6), "Brauchwasser"),
     ("Abtauen, Vorlauf kälter",     d(60,  25.0, 28.0, 31.6), "Entfrosten"),
-    # Heizkörperanlage: hoher Vorlauf, aber nahe am Sollwert. Eine absolute
-    # Schwelle bei 45 °C würde hier fälschlich Brauchwasser erkennen - der
-    # Vergleich gegen den Sollwert nicht.
+    # Heizkörperanlage: hoher Vorlauf, aber nahe an der Puffertemperatur. Eine
+    # absolute Schwelle bei 45 °C würde hier fälschlich Brauchwasser erkennen -
+    # der Vergleich gegen das Heizwasser nicht.
     ("Heizkörper 50 °C",            d(55,  50.0, 46.0, 49.0), "Heizen"),
     ("Heizkörper + Warmwasser",     d(70,  62.0, 58.0, 49.0), "Brauchwasser"),
-    # Ohne Sollwert greift die absolute Ersatzschwelle
-    ("Soll fehlt, Vorlauf 33",      d(50,  33.0, 30.5, -99.0), "Heizen"),
-    ("Soll fehlt, Vorlauf 55",      d(70,  55.0, 52.0, -99.0), "Brauchwasser"),
+    # Fällt der Puffer-Fühler aus, greift die absolute Ersatzschwelle
+    ("TC fehlt, Vorlauf 33",        d(50,  33.0, 30.5, -99.0), "Heizen"),
+    ("TC fehlt, Vorlauf 55",        d(70,  55.0, 52.0, -99.0), "Brauchwasser"),
     # Defekte oder fehlende Werte dürfen nicht raten
     ("Vorlauf-Sensor defekt",       d(50, -99.0, 30.0, 31.6), "Unbekannt"),
     ("keine Frequenz im Datensatz", d(None, 33.0, 31.0, 31.6), "Unbekannt"),
@@ -136,6 +142,27 @@ def test_gemessener_betriebspunkt_vom_22_09_2026():
     daten = {"par1": 2.0, "par20": 55.0, "par4": 34.1, "par5": 31.4, "par6": 31.6}
     assert betriebsart_aus_par1(daten)[0] == "Heizen"
     assert ist_abtauen(daten) is False
+
+
+# ── Rückfall auf par6 darf nicht wiederkehren (v3.0.0) ───────────────────────
+
+def test_kein_einbruch_direkt_nach_dem_verdichterstart():
+    """Der Fehler, der bis v2.5.0 in der Ableitung steckte.
+
+    Bis dahin verglich sie gegen par6 im Glauben, das sei der Heizen-Soll.
+    par6 ist Tup - eine Rohrtemperatur, die beim Pumpenstopp binnen 80 Sekunden
+    um 18 K einbricht. Kurz nach einem Verdichterstart stand par6 damit bei
+    14 °C und der Vorlauf bei 32 °C, und die Ableitung meldete "Brauchwasser",
+    obwohl geheizt wurde.
+
+    Gemessene Werte vom 22.09.2026, 06:11 Uhr (Pumpe gerade wieder an):
+        par4 Vorlauf 32,0   par5 Rücklauf 30,4   par6 Tup 14,2   par8 TC 33,1
+    """
+    daten = {"par20": 36, "par4": 32.0, "par5": 30.4, "par6": 14.2, "par8": 33.1}
+    mode, grund = derive_betriebsart(daten, M)
+    assert mode == "Heizen", f"{mode} statt Heizen ({grund})"
+    # Und mit der alten Bezugsgröße wäre es schiefgegangen:
+    assert daten["par4"] > daten["par6"] + M
 
 
 if __name__ == "__main__":

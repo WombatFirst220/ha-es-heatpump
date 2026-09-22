@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-2.2.3-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-3.0.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 
@@ -26,6 +26,12 @@ Home Assistant Integration für **Energy Save Wärmepumpen** (Valtop AW12-R32 u.
 - ⚡ Berechnete Werte: **Spreizung**, **Thermische Leistung**, **Aktueller COP**
 - 📋 Dashboard wird automatisch in der Seitenleiste installiert
 - 🧹 Saubere Entity-IDs (`sensor.es_hp_*`) — keine kryptischen Parameter-Nummern
+- 🎛 **Einstellungen der Anlage direkt in Home Assistant** — 70 bedienbare Parameter
+  aus dem Portal als `number`, `select` und `switch` (seit v3.0.0)
+- 💾 **Versionierte Konfigurationssicherung** — jeder Stand vollständig, jederzeit
+  einsehbar und wiederherstellbar (seit v3.0.0)
+- 🏷 **Stammdaten der Anlage** — Modell, beide Seriennummern, Inbetriebnahme,
+  Garantieende, Installateur (seit v3.0.0)
 - 🛠 Mehrsprachig: Deutsch, Englisch, Niederländisch, Schwedisch, Dänisch (Fallback auf Englisch)
 
 ### 📦 Installation via HACS
@@ -416,6 +422,187 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 
 <a id="changelog"></a>
 ## 📋 Changelog
+
+### 3.0.0 — 2026-09-22
+
+**Die Integration kann jetzt schreiben — und macht das Schreiben erst sicher.**
+
+Drei Dinge kommen zusammen: die Einstellungen der Anlage in Home Assistant, eine
+versionierte Sicherung der gesamten Konfiguration, und die Stammdaten des
+Geräts. Dazu eine Korrektur, die einen echten Fehler in der
+Betriebsart-Erkennung beseitigt.
+
+#### 💾 Versionierte Konfigurationssicherung
+
+Die Bedieneinheit der Wärmepumpe kennt kein Zurück. Wer eine Heizkurve
+verstellt, einen Legionellenschutz abschaltet oder während einer Fehlersuche
+zehn Werte anfasst, hat hinterher keine Möglichkeit, den vorherigen Stand
+wiederherzustellen — außer aus dem Gedächtnis. Ein Servicetechniker, der „mal
+eben etwas probiert", hinterlässt denselben Zustand.
+
+Die Integration hält deshalb den **vollständigen Satz von rund 300
+Konfigurationswerten** als Zeitreihe. Jede Sicherung ist ein vollständiger
+Stand, kein Delta — eine beschädigte Kette macht sonst alle folgenden
+unbrauchbar.
+
+Eine Sicherung entsteht automatisch:
+
+| Anlass | Wann |
+|---|---|
+| `erstaufnahme` | einmalig bei der Einrichtung |
+| `automatisch` | sobald sich **irgendein** Wert geändert hat — auch wenn die Änderung an der Bedieneinheit im Keller gemacht wurde |
+| `vor-schreibzugriff` | vor jedem Schreibvorgang aus Home Assistant |
+| `vor-wiederherstellung` | bevor eine Wiederherstellung den ersten Wert setzt |
+| `manuell` | Knopf „Konfiguration jetzt sichern" oder Dienstaufruf |
+
+**Beim Aufräumen werden die drei Eingriffs-Anlässe nie gelöscht.** Der Stand
+*vor* einem Eingriff ist zwangsläufig älter als alles, was danach kam — einem
+reinen Zeitfenster fiele genau er als Erstes zum Opfer.
+
+Gespeichert wird über den Store von Home Assistant, also unter
+`.storage/es_heatpump.backups_<eintrag>`. Damit landen die Sicherungen in jedem
+HA-Backup, ohne dass dafür etwas eingerichtet werden müsste.
+
+#### 🔧 Dienste
+
+| Dienst | Zweck |
+|---|---|
+| `es_heatpump.sicherung_erstellen` | Stand sichern, mit Bezeichnung und Grund |
+| `es_heatpump.sicherungen_auflisten` | Übersicht mit Zeitpunkt, Anlass, Prüfsumme |
+| `es_heatpump.sicherung_anzeigen` | eine Sicherung vollständig ansehen — Stammdaten, alle benannten Werte im Klartext, Rohwerte |
+| `es_heatpump.sicherungen_vergleichen` | Unterschiede zwischen zwei Ständen oder gegen den jetzigen |
+| `es_heatpump.sicherung_wiederherstellen` | zurückschreiben — **standardmäßig als Probelauf** |
+| `es_heatpump.sicherung_loeschen` | einzelne Sicherung entfernen |
+| `es_heatpump.sicherung_exportieren` | als JSON-Datei ablegen |
+| `es_heatpump.parameter_setzen` | einzelnen Wert über seine Portal-Kennung setzen |
+
+Alle lesenden Dienste liefern eine Antwort (`response_variable`). Eine Sicherung
+**einsehen**, ohne sie wiederherzustellen, ist der häufigere Fall: Man will
+wissen, wie ein Wert vor drei Wochen stand, nicht sechzig Werte zurücksetzen.
+
+#### 🎛 Einstellungen als Entities
+
+Das Portal bietet 74 Felder in 14 Gruppen zum Bearbeiten an — Heizkurven mit je
+fünf Stützstellen, Warmwasser, Legionellenschutz, Zusatzheizung, Urlaubsmodus,
+EVU-Sperre. Sie erscheinen als `number`, `select` und `switch`.
+
+Standardmäßig sichtbar sind nur die 20 Felder, die man wirklich bedient
+(Schnelleinstellung, Warmwasserspeicher, Legionellenschutz, Urlaub). Der Rest ist
+angelegt, aber abgeschaltet — einschaltbar über die Entity-Einstellungen.
+
+⚠️ **Zwei getrennte `parXX`-Namensräume.** Das Portal verwendet dieselben
+Feldnamen zweimal mit völlig verschiedener Bedeutung:
+
+```
+/a/amt/realdata/get   Messwerte       par1 = aktuelle Betriebsart, par4 = Vorlauf Tuo
+/a/amt/setdata/get    Einstellungen   par1 = Anlage ein/aus,       par4 = Betriebsart-Vorwahl
+```
+
+Deshalb tragen alle Konfigurations-Entities das Präfix `es_hp_cfg_`.
+
+#### 🔒 Schreiben ist standardmäßig aus
+
+Eine Cloud-Integration, die ungefragt in eine Heizung schreiben darf, ist eine
+andere Art von Software als eine, die nur liest. Diese Entscheidung gehört dem
+Betreiber, nicht der Voreinstellung.
+
+Freigabe unter **Einstellungen → Geräte & Dienste → ES Heatpump → Konfigurieren
+→ „Schreibzugriff auf die Anlage erlauben"**. Ohne Freigabe:
+
+- lehnen die Entities jede Änderung mit einer erklärenden Meldung ab,
+- verweigern `parameter_setzen` und ein echter Wiederherstellungslauf den Dienst,
+- funktioniert alles Lesende unverändert.
+
+Zusätzlich prüft der Katalog **jeden** Wert vor dem Senden gegen Wertebereich und
+Auswahlliste. Das ist die letzte Stelle, an der ein Tippfehler noch aufzuhalten
+ist; danach steht er in der Anlage.
+
+#### 🏷 Stammdaten der Anlage
+
+Neue Entity `sensor.es_hp_anlagendaten`. Zustand ist das Modell, alles Weitere
+hängt als Attribut daran:
+
+| Angabe | Beispiel |
+|---|---|
+| Modell | `AW12-R32-M-V8` |
+| Seriennummer Außengerät | `230101-240117-0042` |
+| Seriennummer Innengerät | `230098-240115-0041` |
+| MAC | `A1B2C3D4E5F6` |
+| Inbetriebnahme | `2024-01-17` |
+| Garantie bis / Restjahre | `2029-01-17` / `3.16` |
+| Installateur | Name und Kürzel des Fachbetriebs |
+
+**Es gibt zwei Seriennummern**, und das Portal-Feld `devicenum` nennt nur eine.
+Die zweite steckt im Freitextfeld `note` (`IG:` Innengerät, `AG:` Außengerät).
+Wer ein Ersatzteil fürs Innengerät bestellt, braucht die andere.
+
+Modell, Seriennummer und Firmware-Stand stehen jetzt außerdem im Geräteeintrag
+von Home Assistant, sichtbar ohne eine einzige Entity zu öffnen.
+
+#### 🐛 `par6` war nie der Heizen-Sollwert
+
+Das Anlagenschaubild des Portals nennt `par6` **Tup** — eine *gemessene*
+Wassertemperatur. Die Historie beweist es:
+
+```
+06:08:21   Pumpe P0 = 1    par6 = 32.9    Vorlauf 34.2
+06:09:41   Pumpe P0 = 0    par6 = 23.8    Vorlauf 32.3
+06:11:02   Pumpe P0 = 0    par6 = 14.2    Vorlauf 32.0
+```
+
+18 K in 80 Sekunden, sobald die Umwälzpumpe stehenbleibt, während der Vorlauf
+steht. Ein Sollwert tut das nicht.
+
+**Der Fehler war real:** Die Betriebsart-Ableitung verglich `Vorlauf > par6 + 8 K`.
+Kurz nach einem Verdichterstart stand `par6` bei 14 °C und der Vorlauf bei 32 °C
+— die Ableitung meldete „Brauchwasser", obwohl geheizt wurde.
+
+Verglichen wird jetzt gegen **`par8` (TC, Heizwassertemperatur im Puffer)**. Der
+hat die Eigenschaft, die `par6` fehlt: thermische Trägheit. Über sechs Stunden
+Historie blieb `par8` zwischen 28,2 und 34,0 °C — auch während einer
+Warmwasserladung, bei der der Vorlauf auf 58,2 °C stieg.
+
+Der Vergleich gegen eine Wassertemperatur trägt beide Anlagenarten:
+Fußbodenheizung (Vorlauf ~33 °C, TC ~33 °C) und Heizkörper (Vorlauf ~50 °C,
+TC ~49 °C) liegen dicht beieinander, während der Abstand bei Warmwasser 20 K und
+mehr beträgt. Eine feste Schwelle könnte das nicht — sie müsste unter 50 liegen,
+um Heizkörper nicht als Warmwasser zu lesen, und über 50, um Warmwasser
+überhaupt zu erkennen.
+
+Die Entity-ID `sensor.es_hp_heizen_soll` **bleibt**, damit Dashboards und
+Statistiken nicht brechen. Der Anzeigename heißt jetzt „Wassertemperatur Tup".
+
+#### ✏️ Weitere Korrekturen
+
+- **`par26` ist Ts**, die Sauggastemperatur (war `diag_par26 (unbestätigt)`).
+  Zusammen mit `par23` (Ps) ergibt sich die Sauggasüberhitzung — die einzige
+  Größe, an der sich eine Kältemittelfüllung beurteilen lässt.
+- **`par29` ergänzt**: Ventilator 2. Bei der AW12 dauerhaft 0, größere Geräte der
+  Reihe haben zwei.
+- **`par28`** heißt jetzt „Ventilator 1 Drehzahl".
+- **Aufräumroutine abgesichert:** Der reguläre Ausdruck, der verwaiste
+  `parXX`-Entities entfernt, hätte die neuen Konfigurations-Entities erfasst
+  (`es_heatpump_<benutzer>_cfg_par55` passte auf `^es_heatpump_(.+)_par(\d+)$`)
+  und sie bei **jedem Start** gelöscht.
+
+#### ⚙️ Neue Optionen
+
+| Option | Standard | Bedeutung |
+|---|---|---|
+| Schreibzugriff erlauben | **aus** | Voraussetzung für alles Schreibende |
+| Abstand Konfigurationsabruf | 900 s | Einstellungen ändern sich selten |
+| Abstand automatischer Sicherungen | 24 h | Leerlauftakt; Änderungen werden immer sofort gesichert |
+| Aufbewahrte Sicherungen | 60 | 0 = unbegrenzt; Eingriffs-Sicherungen zählen nicht mit |
+
+#### 🧪 Tests
+
+`tests/test_settings.py` (11 Prüfungen) und `tests/test_backup.py` (21 Prüfungen)
+laufen ohne Home-Assistant-Installation, ebenso wie die bestehenden
+`test_mode.py` (10) und `test_flow.py` (7).
+
+```bash
+python3 -m pytest tests/ -q
+```
 
 ### 2.5.0 — 2026-09-22
 

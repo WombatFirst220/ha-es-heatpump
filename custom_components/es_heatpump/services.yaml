@@ -1,0 +1,182 @@
+sicherung_erstellen:
+  name: Konfiguration sichern
+  description: >-
+    Legt eine Sicherung des vollständigen Konfigurationsstandes an (rund 300
+    Werte). Vor jedem Eingriff an der Anlage empfehlenswert – und vor jedem
+    Besuch des Heizungsbauers.
+  fields:
+    bezeichnung:
+      name: Bezeichnung
+      description: Kurzer Name, unter dem die Sicherung später wiederzufinden ist.
+      example: vor Heizkurvenanpassung
+      selector:
+        text:
+    grund:
+      name: Grund
+      description: Warum gesichert wurde – steht später in der Übersicht.
+      example: Vorlauf war bei -5 °C zu niedrig
+      selector:
+        text:
+    eintrag:
+      name: Anlage
+      description: Nur nötig, wenn mehrere Anlagen eingerichtet sind.
+      selector:
+        text:
+
+sicherungen_auflisten:
+  name: Sicherungen auflisten
+  description: >-
+    Liefert alle vorhandenen Sicherungen mit Zeitpunkt, Anlass und Prüfsumme.
+    Liefert eine Antwort – in einem Skript über „response_variable“ abholen.
+  fields:
+    eintrag:
+      name: Anlage
+      description: Nur nötig, wenn mehrere Anlagen eingerichtet sind.
+      selector:
+        text:
+
+sicherung_anzeigen:
+  name: Sicherung ansehen
+  description: >-
+    Zeigt eine Sicherung vollständig – Stammdaten, alle benannten Einstellungen
+    im Klartext und die Rohwerte. Verändert nichts an der Anlage.
+  fields:
+    sicherung:
+      name: Sicherung
+      description: >-
+        Kennung der Sicherung, oder „neueste“ bzw. „aelteste“.
+      required: true
+      example: "20260922-081500"
+      selector:
+        text:
+    eintrag:
+      name: Anlage
+      selector:
+        text:
+
+sicherungen_vergleichen:
+  name: Sicherungen vergleichen
+  description: >-
+    Zeigt alle Unterschiede zwischen zwei Ständen – standardmäßig zwischen einer
+    Sicherung und dem jetzigen Zustand der Anlage. Die Antwort nennt jeden
+    geänderten Wert mit Name, Gruppe und Klartext-Fassung.
+  fields:
+    sicherung:
+      name: Sicherung
+      description: Kennung der Sicherung, oder „neueste“ bzw. „aelteste“.
+      required: true
+      example: "20260922-081500"
+      selector:
+        text:
+    vergleich_mit:
+      name: Verglichen mit
+      description: >-
+        Kennung einer zweiten Sicherung, oder „jetzt“ für den aktuellen Stand
+        der Anlage.
+      default: jetzt
+      selector:
+        text:
+    eintrag:
+      name: Anlage
+      selector:
+        text:
+
+sicherung_wiederherstellen:
+  name: Sicherung wiederherstellen
+  description: >-
+    Schreibt einen gesicherten Stand zurück in die Wärmepumpe. Standardmäßig als
+    Probelauf, der nur zeigt, was geschehen würde. Ein echter Lauf verlangt
+    zusätzlich, dass der Schreibzugriff in den Optionen freigegeben ist, und legt
+    vorher automatisch eine Sicherung des jetzigen Standes an.
+  fields:
+    sicherung:
+      name: Sicherung
+      description: Kennung der Sicherung, oder „neueste“ bzw. „aelteste“.
+      required: true
+      example: "20260922-081500"
+      selector:
+        text:
+    probelauf:
+      name: Probelauf
+      description: >-
+        An: es wird nichts geschrieben, die Antwort zeigt nur den Plan.
+        Aus: die Werte werden tatsächlich gesetzt.
+      default: true
+      selector:
+        boolean:
+    eintrag:
+      name: Anlage
+      selector:
+        text:
+
+sicherung_loeschen:
+  name: Sicherung löschen
+  description: >-
+    Entfernt eine Sicherung endgültig. Sicherungen, die einen Eingriff
+    dokumentieren, lassen sich so entfernen – das automatische Aufräumen rührt
+    sie nicht an.
+  fields:
+    sicherung:
+      name: Sicherung
+      required: true
+      example: "20260922-081500"
+      selector:
+        text:
+    eintrag:
+      name: Anlage
+      selector:
+        text:
+
+sicherung_exportieren:
+  name: Sicherung als Datei exportieren
+  description: >-
+    Schreibt eine Sicherung als JSON-Datei – zum Aufbewahren außerhalb von Home
+    Assistant oder zum Weitergeben an den Heizungsbauer.
+  fields:
+    sicherung:
+      name: Sicherung
+      required: true
+      example: "20260922-081500"
+      selector:
+        text:
+    pfad:
+      name: Pfad
+      description: >-
+        Zieldatei. Ohne Angabe landet sie im Konfigurationsverzeichnis von Home
+        Assistant. Andere Verzeichnisse müssen in „allowlist_external_dirs“
+        stehen.
+      example: /config/backup/wp_2026-09-22.json
+      selector:
+        text:
+    eintrag:
+      name: Anlage
+      selector:
+        text:
+
+parameter_setzen:
+  name: Einzelnen Parameter setzen
+  description: >-
+    Setzt einen Konfigurationswert direkt über seine Portal-Kennung. Gedacht für
+    Felder, die keine eigene Entity haben oder deren Entity abgeschaltet ist.
+    Der Wert wird vorher gegen Wertebereich und Auswahlliste geprüft.
+  fields:
+    parameter:
+      name: Parameter
+      description: Portal-Kennung im setdata-Namensraum, z. B. par55.
+      required: true
+      example: par55
+      selector:
+        text:
+    wert:
+      name: Wert
+      required: true
+      example: 50
+      selector:
+        number:
+          min: -999
+          max: 9999
+          mode: box
+    eintrag:
+      name: Anlage
+      selector:
+        text:

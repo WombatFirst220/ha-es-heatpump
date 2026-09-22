@@ -1,7 +1,7 @@
 """Constants for the ES Heatpump integration."""
 
 DOMAIN = "es_heatpump"
-PLATFORMS = ["sensor"]
+PLATFORMS = ["sensor", "number", "select", "switch", "button"]
 
 # ── Config entry keys ────────────────────────────────────────────────────────
 CONF_BASE_URL         = "base_url"
@@ -14,12 +14,25 @@ CONF_DHW_MARGIN_K     = "dhw_margin_k"        # Vorlauf-über-Soll threshold for
 CONF_FLOW_ENTITY      = "flow_entity"         # optional live volumetric-flow sensor
 CONF_MODEL            = "model"               # picks the datasheet nominal flow rate
 
+# ── Schreibzugriff und Sicherungen (v3.0.0) ──────────────────────────────────
+# Schreiben ist standardmaessig AUS. Eine Cloud-Integration, die ungefragt in
+# eine Heizung schreiben darf, ist eine andere Art von Software als eine, die
+# nur liest - diese Entscheidung trifft der Betreiber, nicht die Voreinstellung.
+CONF_ENABLE_WRITES    = "enable_writes"
+CONF_SETTINGS_INTERVAL = "settings_interval"   # Sekunden zwischen Konfig-Abrufen
+CONF_BACKUP_INTERVAL  = "backup_interval_h"    # Stunden zwischen automatischen Sicherungen
+CONF_BACKUP_KEEP      = "backup_keep"          # Anzahl aufbewahrter Sicherungen
+
 # ── Defaults ─────────────────────────────────────────────────────────────────
 DEFAULT_BASE_URL        = "https://www.myheatpump.com"
 DEFAULT_SCAN_INTERVAL   = 60        # seconds
 DEFAULT_FLOW_RATE       = 1.2       # m³/h — see NOMINAL_FLOW_RATES_M3H, set per model!
 DEFAULT_FLOW_RATE_DHW   = 1.0       # m³/h — DHW coil circuit, typical default
 DEFAULT_DHW_MARGIN_K    = 8.0       # K — Vorlauf above heating setpoint ⇒ DHW mode
+DEFAULT_ENABLE_WRITES    = False    # Schreibzugriff bewusst abgeschaltet
+DEFAULT_SETTINGS_INTERVAL = 900     # s — Einstellungen aendern sich selten
+DEFAULT_BACKUP_INTERVAL  = 24       # h — eine automatische Sicherung am Tag
+DEFAULT_BACKUP_KEEP      = 60       # Staende; Eingriffs-Sicherungen zaehlen nicht mit
 
 # Nominal water flow per model, from the ES datasheet
 # "ES V8 Luft/Wasser Wärmepumpen AWC-R32-M, Monoblock Serie", row
@@ -63,7 +76,23 @@ KNOWN_BASE_URLS = [
 LOGIN_PATH          = "/a/login"
 DEVICE_LIST_PATH    = "/a/amt/deviceList/listData"
 REALDATA_PATH       = "/a/amt/realdata/get"
+# Konfiguration lesen/schreiben (verifiziert 22.09.2026 am Live-Portal).
+# WARNUNG: setdata hat einen EIGENEN parXX-Namensraum, siehe settings.py.
+SETDATA_READ_PATH   = "/a/amt/setdata/get"
+SETDATA_WRITE_PATH  = "/a/amt/setdata/update"
+SETDATA_FORM_PATH   = "/a/amt/setdata/form"
+DIAGRAM_PATH        = "/a/amt/realdata/img"
 SESSION_COOKIE_NAME = "JSESSIONID"
+
+# ── Dienste (v3.0.0) ─────────────────────────────────────────────────────────
+SERVICE_BACKUP_CREATE  = "sicherung_erstellen"
+SERVICE_BACKUP_LIST    = "sicherungen_auflisten"
+SERVICE_BACKUP_SHOW    = "sicherung_anzeigen"
+SERVICE_BACKUP_DIFF    = "sicherungen_vergleichen"
+SERVICE_BACKUP_RESTORE = "sicherung_wiederherstellen"
+SERVICE_BACKUP_DELETE  = "sicherung_loeschen"
+SERVICE_BACKUP_EXPORT  = "sicherung_exportieren"
+SERVICE_SET_PARAMETER  = "parameter_setzen"
 
 # ── Calculated sensor identifiers (not from API) ─────────────────────────────
 CALC_SPREIZUNG      = "calc_spreizung"
@@ -190,10 +219,25 @@ PARAMETER_SENSORS = {
         "enabled_default": True,
     },
     "par6": {
+        # ⚠ KEIN Sollwert - das Feld heisst im Anlagenschaubild des Portals
+        # "Tup" und ist eine GEMESSENE Wassertemperatur.
+        #
+        # Beleg (Historie vom 22.09.2026):
+        #     06:08:21  Pumpe P0 = 1   par6 = 32.9   Vorlauf 34.2
+        #     06:09:41  Pumpe P0 = 0   par6 = 23.8   Vorlauf 32.3
+        #     06:11:02  Pumpe P0 = 0   par6 = 14.2   Vorlauf 32.0
+        # 18 K in 80 Sekunden, sobald die Umwaelzpumpe steht, waehrend der
+        # Vorlauf steht. Ein Sollwert tut das nicht, ein Fuehler an einem Rohr
+        # ohne Durchfluss tut genau das. Beim Warmwasserladen stieg par6 auf
+        # 55 °C, waehrend par36 ("Set Temperature") unbewegt bei 31,0 blieb.
+        #
+        # Die Entity-ID bleibt `sensor.es_hp_heizen_soll`, damit vorhandene
+        # Dashboards und Statistiken nicht brechen. Der Slug ist historisch,
+        # die Bedeutung steht im Namen.
         "slug": "heizen_soll",
-        "name": "Heizen Solltemperatur",
+        "name": "Wassertemperatur Tup",
         "unit": "°C", "device_class": "temperature", "state_class": "measurement",
-        "icon": "mdi:thermometer-check",
+        "icon": "mdi:thermometer-water",
         "enabled_default": True,
     },
     "par7": {
@@ -277,10 +321,20 @@ PARAMETER_SENSORS = {
         # Bedieneinheit Seite 5/5: "Ventilator Drehzahl 1". Beleg: Anzeige 560
         # bzw. 557 gegen gleichzeitiges par28 = 560 bzw. 557 - auf den Wert genau.
         "slug": "luefter_drehzahl",
-        "name": "Ventilator Drehzahl",
+        "name": "Ventilator 1 Drehzahl",
         "unit": "rpm", "device_class": None, "state_class": "measurement",
         "icon": "mdi:fan",
         "enabled_default": True,
+    },
+    "par29": {
+        # Anlagenschaubild: "Fan 2", direkt unter Fan 1. Bei der AW12 dauerhaft
+        # 0 - die Baugroesse hat nur einen Ventilator. Groessere Geraete der
+        # Reihe haben zwei, deshalb abgebildet, aber ausgeschaltet.
+        "slug": "luefter_2_drehzahl",
+        "name": "Ventilator 2 Drehzahl",
+        "unit": "rpm", "device_class": None, "state_class": "measurement",
+        "icon": "mdi:fan",
+        "enabled_default": False,
     },
     "par30": {
         # Bedieneinheit Seite 5/5: "Stromaufnahme- Verdichter".
@@ -415,11 +469,15 @@ PARAMETER_SENSORS = {
         "enabled_default": True,
     },
     "par26": {
-        "slug": "diag_par26",
-        "name": "Diagnose par26 (unbestätigt)",
+        # Anlagenschaubild des Portals: "Ts", direkt unter Ps - Druck und
+        # Temperatur der Saugseite als Paar, so wie Pd/Td auf der Druckseite.
+        # Zusammen mit par23 ergibt sich die Sauggasueberhitzung, die einzige
+        # Groesse, an der sich eine Kaeltemittelfuellung beurteilen laesst.
+        "slug": "sauggas_ts",
+        "name": "Sauggastemperatur Ts",
         "unit": "°C", "device_class": "temperature", "state_class": "measurement",
-        "icon": "mdi:thermometer",
-        "enabled_default": False,
+        "icon": "mdi:thermometer-low",
+        "enabled_default": True,
     },
     "par27": {
         # Bedieneinheit: "Aussengeraet Lamellentauscher Temperatur - Tp".

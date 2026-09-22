@@ -12,10 +12,14 @@
           "power_entity": "Stromsensor (optional, für COP-Berechnung)",
           "flow_rate": "Volumenstrom Heizkreislauf (m³/h)",
           "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)",
-          "mode_source_entity": "Betriebsart-Quelle (seit v2.4.0 überflüssig – das Gerät meldet die Betriebsart in par1)",
+          "mode_source_entity": "Entity für die Betriebsart (seit v2.4.0 nicht mehr nötig — die Anlage meldet sie in par1)",
           "dhw_margin_k": "Abstand des Vorlaufs über dem Heizen-Sollwert, ab dem auf Brauchwasser erkannt wird (K)",
           "flow_entity": "Volumenstrom-Sensor (optional – hat Vorrang vor den Konstanten, empfohlen bei geregelter Umwälzpumpe)",
-          "model": "Wärmepumpen-Modell – die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt"
+          "model": "Wärmepumpen-Modell – die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt",
+          "enable_writes": "Schreibzugriff auf die Anlage erlauben (standardmäßig aus — nötig für die Einstellungs-Entities, das Wiederherstellen und „Parameter setzen“)",
+          "settings_interval": "Abstand zwischen Konfigurationsabrufen (Sekunden) — Einstellungen ändern sich selten, 900 genügt",
+          "backup_interval_h": "Abstand automatischer Sicherungen (Stunden) — eine Änderung wird immer sofort gesichert, dies ist nur der Leerlauftakt",
+          "backup_keep": "Anzahl aufbewahrter Sicherungen (0 = unbegrenzt). Sicherungen vor einem Schreibzugriff oder einer Wiederherstellung werden nie gelöscht."
         }
       }
     },
@@ -38,10 +42,14 @@
           "power_entity": "Stromsensor (Shelly o.ä.)",
           "flow_rate": "Volumenstrom Heizkreislauf (m³/h)",
           "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)",
-          "mode_source_entity": "Betriebsart-Quelle (seit v2.4.0 überflüssig – das Gerät meldet die Betriebsart in par1)",
+          "mode_source_entity": "Entity für die Betriebsart (seit v2.4.0 nicht mehr nötig — die Anlage meldet sie in par1)",
           "dhw_margin_k": "Abstand des Vorlaufs über dem Heizen-Sollwert, ab dem auf Brauchwasser erkannt wird (K)",
           "flow_entity": "Volumenstrom-Sensor (optional – hat Vorrang vor den Konstanten, empfohlen bei geregelter Umwälzpumpe)",
-          "model": "Wärmepumpen-Modell – die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt"
+          "model": "Wärmepumpen-Modell – die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt",
+          "enable_writes": "Schreibzugriff auf die Anlage erlauben (standardmäßig aus — nötig für die Einstellungs-Entities, das Wiederherstellen und „Parameter setzen“)",
+          "settings_interval": "Abstand zwischen Konfigurationsabrufen (Sekunden) — Einstellungen ändern sich selten, 900 genügt",
+          "backup_interval_h": "Abstand automatischer Sicherungen (Stunden) — eine Änderung wird immer sofort gesichert, dies ist nur der Leerlauftakt",
+          "backup_keep": "Anzahl aufbewahrter Sicherungen (0 = unbegrenzt). Sicherungen vor einem Schreibzugriff oder einer Wiederherstellung werden nie gelöscht."
         }
       }
     }

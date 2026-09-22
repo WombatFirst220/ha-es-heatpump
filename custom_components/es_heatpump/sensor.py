@@ -16,13 +16,16 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from .device import baue_device_info
 
 from .const import (
     BETRIEBSART_ALIASES,
@@ -167,15 +170,19 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up sensors for one ES Heatpump config entry."""
-    coordinator: ESHeatpumpCoordinator = hass.data[DOMAIN][entry.entry_id]
+    # Seit v3.0.0 liegt unter der Eintrags-Kennung ein Buendel statt eines
+    # einzelnen Koordinators - Messwerte, Konfiguration, Sicherungsablage.
+    _daten = hass.data[DOMAIN][entry.entry_id]
+    coordinator: ESHeatpumpCoordinator = _daten["api"]
     username = entry.data[CONF_USERNAME]
 
-    device_info = DeviceInfo(
-        identifiers={(DOMAIN, username)},
-        name=DEVICE_NAME,
-        manufacturer=DEVICE_MANUFACTURER,
-        model=DEVICE_MODEL,
-        configuration_url=coordinator._base_url,
+    # Modell, Seriennummer und Firmware kommen seit v3.0.0 aus dem Portal.
+    _settings = _daten.get("settings")
+    device_info = baue_device_info(
+        username,
+        coordinator._base_url,
+        coordinator.stammdaten,
+        _settings.data if _settings is not None else None,
     )
 
     # Read calculation settings from options first, fallback to initial data
@@ -247,8 +254,13 @@ async def async_setup_entry(
         )
     )
 
+    # ── Stammdaten und Sicherungsstand (v3.0.0) ──────────────────────────
+    entities.append(StammdatenSensor(coordinator, device_info, username))
+    if _settings is not None:
+        entities.append(SicherungenSensor(_settings, device_info, username))
+
     _LOGGER.info(
-        "ES Heatpump: creating %d entities (%d raw, 3 calculated)",
+        "ES Heatpump: creating %d entities (%d raw, calculated + diagnostics)",
         len(entities), len(PARAMETER_SENSORS),
     )
     async_add_entities(entities)
@@ -630,7 +642,10 @@ class BetriebsartCalcSensor(
             "dhw_margin_k": self._dhw_margin_k,
             "vorlauf_c": data.get("par4"),
             "ruecklauf_c": data.get("par5"),
-            "heizen_soll_c": data.get("par6"),
+            # par6 ist Tup (Rohrtemperatur), par8 das Heizwasser im Puffer -
+            # Letzteres ist seit v3.0.0 der Bezug der Ableitung.
+            "wassertemperatur_tup_c": data.get("par6"),
+            "heizwasser_tc_c": data.get("par8"),
             "kompressor_hz": data.get("par20"),
             "mode_source": self._mode_source,
         }
@@ -706,3 +721,115 @@ class ElectricalPowerMirrorSensor(
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {"power_entity": self._power_entity}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stammdaten und Sicherungsstand  (v3.0.0)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class StammdatenSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
+    """Modell, Seriennummern, Garantie und Installateur an einer Stelle.
+
+    Der Zustand ist das Modell - das ist die Angabe, die man in einer Karte
+    sehen will. Alles Uebrige haengt als Attribut daran: beide Seriennummern,
+    MAC, Inbetriebnahme, Garantieende samt Restlaufzeit in Jahren,
+    Installateur und Standort.
+
+    Warum das eine eigene Entity verdient: Diese Angaben stehen sonst auf einem
+    Aufkleber hinter der Verkleidung und in einer E-Mail von 2024. Im
+    Garantiefall braucht man sie in genau dem Moment, in dem man nicht in den
+    Heizungskeller kommt.
+    """
+
+    _attr_icon = "mdi:identifier"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, device_info: DeviceInfo, username: str) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_{username}_stammdaten"
+        self._attr_name = "WP Anlagendaten"
+        self.entity_id = "sensor.es_hp_anlagendaten"
+        self._attr_device_info = device_info
+
+    @property
+    def native_value(self) -> str | None:
+        return self.coordinator.stammdaten.modell or "unbekannt"
+
+    @property
+    def available(self) -> bool:
+        return True   # Stammdaten ueberdauern einen Abrufausfall
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        s = self.coordinator.stammdaten
+        attribute: dict[str, Any] = {
+            "modell": s.modell,
+            "seriennummer_aussengeraet": s.seriennummer_aussengeraet or s.seriennummer,
+            "seriennummer_innengeraet": s.seriennummer_innengeraet,
+            "artikelnummer": s.artikelnummer,
+            "mac": s.mac,
+            "portal_kennung": f"mn={s.mn}, devid={s.devid}" if s.mn else None,
+            "inbetriebnahme": s.inbetriebnahme,
+            "garantie_bis": s.garantie_bis,
+            "installateur": s.installateur,
+            "besitzer": s.besitzer,
+            "standort": s.standort,
+            "im_portal_angelegt": s.angelegt_am,
+            "im_portal_geaendert": s.zuletzt_geaendert,
+        }
+        rest = s.garantie_restjahre
+        if rest is not None:
+            attribute["garantie_restjahre"] = rest
+            attribute["garantie_aktiv"] = rest > 0
+        return {k: v for k, v in attribute.items() if v is not None}
+
+
+class SicherungenSensor(CoordinatorEntity, SensorEntity):
+    """Wie viele Konfigurationssicherungen vorliegen und wie alt die juengste ist."""
+
+    _attr_icon = "mdi:content-save-cog-outline"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, settings_coordinator, device_info: DeviceInfo, username: str) -> None:
+        super().__init__(settings_coordinator)
+        self._attr_unique_id = f"{DOMAIN}_{username}_sicherungen"
+        self._attr_name = "WP Konfigurationssicherungen"
+        self.entity_id = "sensor.es_hp_konfigurationssicherungen"
+        self._attr_device_info = device_info
+
+    @property
+    def native_value(self) -> int:
+        return len(self.coordinator.ablage.alle)
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        ablage = self.coordinator.ablage
+        neueste = ablage.neueste
+        attribute: dict[str, Any] = {
+            "anzahl": len(ablage.alle),
+            "schreibzugriff_aktiv": getattr(self.coordinator, "schreiben_erlaubt", None),
+        }
+        if neueste is not None:
+            attribute.update(
+                letzte_sicherung=neueste.zeitpunkt,
+                letzte_kennung=neueste.id,
+                letzter_anlass=neueste.anlass,
+                letzte_bezeichnung=neueste.label,
+                letzter_grund=neueste.grund,
+                pruefsumme=neueste.pruefsumme,
+                gesicherte_werte=neueste.anzahl,
+            )
+            if self.coordinator.data:
+                from .backup import pruefsumme_von
+                attribute["stand_unveraendert"] = (
+                    pruefsumme_von(self.coordinator.data) == neueste.pruefsumme
+                )
+        # Die letzten zehn Staende als Liste - genug fuer eine Karte, ohne die
+        # Attributtabelle zu sprengen.
+        attribute["sicherungen"] = [s.kurzfassung() for s in ablage.alle[:10]]
+        return {k: v for k, v in attribute.items() if v is not None}
