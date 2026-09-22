@@ -157,3 +157,39 @@ aber unbestätigt.
 **Kein Durchflusswert.** Weder im JSON noch auf einer der zehn geprüften
 HTML-Seiten gibt es ein Feld für Volumenstrom. Die thermische Leistung bleibt
 auf die konfigurierte Konstante bzw. einen externen Sensor angewiesen.
+
+---
+
+## Nachtrag 22.09.2026 (2): Abgleich gegen die Bedieneinheit
+
+Das Portal-Formular benennt 18 Felder. Die **Bedieneinheit** zeigt darüber hinaus
+den Kältekreis — Anlagenschaubild plus fünf Diagnoseseiten. Durch Abgleich von
+Fotos gegen gleichzeitige Abrufe des JSON-Endpunkts ließen sich sechs weitere
+Felder zuordnen:
+
+| Feld | Bedieneinheit | Beleg |
+|---|---|---|
+| `par21` | „Open" (Expansionsventil, Schritte) | Schaubild 349 gegen par21 349–376 |
+| `par22` | „Pd" Hochdruck (**bar**) | Schaubild 20,6 gegen par22 20,7–20,9 |
+| `par23` | „Ps" Saugdruck (**bar**) | Schaubild 7,5 gegen par23 7,4–7,8 |
+| `par27` | „Aussengerät Lamellentauscher Temperatur - Tp" | Anzeige 2,5–3,3 gegen par27 2,6–3,7 |
+| `par28` | „Ventilator Drehzahl 1" (rpm) | Anzeige 557/560 gegen par28 557/560 |
+| `par30` | „Stromaufnahme- Verdichter" (A) | par30 × par31 gegen Wirkleistung: cos φ = 0,94 |
+
+**Die Methode ist übertragbar:** Ein Foto der Bedieneinheit und ein Abruf im
+selben Moment genügen, um ein Feld festzunageln — bei `par28` stimmten sogar
+beide Ablesungen auf die Einerstelle. Wo das nicht reicht, hilft eine physikalische
+Probe: Für `par30` ergab `par30 × Spannung` gegen die extern gemessene
+Wirkleistung einen Leistungsfaktor von 0,94, für `par39` dagegen 2,08 — damit
+ist `par39` als Strom ausgeschlossen.
+
+**Weiterhin unbestätigt:** `par26`, `par39`, `par40`. Sie bewegen sich mit dem
+Betrieb, ließen sich aber keiner angezeigten Größe zuordnen.
+
+**Diskrepanz, die eine gleichzeitige Gegenprobe braucht:** `par25` ist als
+Heißgastemperatur geführt und zeigte 57,5–60,7 °C, während die Bedieneinheit
+„Td 41,8 °C" anzeigte — die Ablesungen lagen allerdings rund 45 Minuten
+auseinander.
+
+**Kein Durchflusswert.** Weder im JSON (100 Felder), noch auf den zehn geprüften
+Portal-Seiten, noch auf den fünf Diagnoseseiten der Bedieneinheit.

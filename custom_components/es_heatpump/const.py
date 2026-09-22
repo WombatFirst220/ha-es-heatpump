@@ -273,6 +273,26 @@ PARAMETER_SENSORS = {
         "icon": "mdi:pulse",
         "enabled_default": False,
     },
+    "par28": {
+        # Bedieneinheit Seite 5/5: "Ventilator Drehzahl 1". Beleg: Anzeige 560
+        # bzw. 557 gegen gleichzeitiges par28 = 560 bzw. 557 - auf den Wert genau.
+        "slug": "luefter_drehzahl",
+        "name": "Ventilator Drehzahl",
+        "unit": "rpm", "device_class": None, "state_class": "measurement",
+        "icon": "mdi:fan",
+        "enabled_default": True,
+    },
+    "par30": {
+        # Bedieneinheit Seite 5/5: "Stromaufnahme- Verdichter".
+        # Beleg: par30 x par31 gegen die am Shelly gemessene Wirkleistung ergibt
+        # einen Leistungsfaktor von 0,94 - passend fuer einen Inverter-Verdichter.
+        # Die Probe mit par39 an derselben Stelle ergab 2,08, also unmoeglich.
+        "slug": "verdichter_strom",
+        "name": "Stromaufnahme Verdichter",
+        "unit": "A", "device_class": "current", "state_class": "measurement",
+        "icon": "mdi:current-ac",
+        "enabled_default": True,
+    },
     "par33": {
         # Portal-Formular: "Pump statue-P0" (sic)
         "slug": "pumpe_p0",
@@ -362,50 +382,65 @@ PARAMETER_SENSORS = {
     # canonical multiscrape label. They're kept as opt-in diagnostics for
     # future investigation.
     "par21": {
-        "slug": "diag_par21",
-        "name": "Diagnose par21 (vermutl. Kompressor Sollwert)",
+        # Bedieneinheit/Portal-Schaubild: "Open" - die Oeffnung des elektronischen
+        # Expansionsventils in Schritten. Bis v2.4.1 als "vermutl. Kompressor
+        # Sollwert" gefuehrt. Beleg: Schaubild zeigt 349 bei gleichzeitigem
+        # par21 in der Spanne 349-376, und der Wert wandert mit der Ueberhitzung.
+        "slug": "ventil_oeffnung",
+        "name": "Expansionsventil Öffnung",
         "unit": None, "device_class": None, "state_class": "measurement",
-        "icon": "mdi:gauge",
-        "enabled_default": False,
+        "icon": "mdi:valve",
+        "enabled_default": True,
     },
     "par22": {
-        "slug": "diag_par22",
-        "name": "Diagnose par22 (vermutl. Kondensation Tc)",
-        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
-        "icon": "mdi:thermometer",
-        "enabled_default": False,
+        # ⚠ Bis v2.4.1 als Temperatur in °C gefuehrt - es ist ein DRUCK.
+        # Bedieneinheit: "Pd" (Hochdruckseite). Beleg: Schaubild 20,6 bar gegen
+        # gleichzeitiges par22 = 20,7-20,9, und par22/par23 ergeben ein
+        # Druckverhaeltnis von rund 2,7 - fuer zwei Temperaturen gaebe es dafuer
+        # keinen Grund.
+        "slug": "hochdruck_pd",
+        "name": "Hochdruck Pd",
+        "unit": "bar", "device_class": "pressure", "state_class": "measurement",
+        "icon": "mdi:gauge-full",
+        "enabled_default": True,
     },
     "par23": {
-        "slug": "diag_par23",
-        "name": "Diagnose par23 (vermutl. Sauggas Ts)",
-        "unit": "°C", "device_class": "temperature", "state_class": "measurement",
-        "icon": "mdi:thermometer",
-        "enabled_default": False,
+        # ⚠ Bis v2.4.1 als Temperatur in °C gefuehrt - es ist ein DRUCK.
+        # Bedieneinheit: "Ps" (Niederdruckseite). Beleg: Schaubild 7,5 bar gegen
+        # gleichzeitiges par23 = 7,4-7,8.
+        "slug": "saugdruck_ps",
+        "name": "Saugdruck Ps",
+        "unit": "bar", "device_class": "pressure", "state_class": "measurement",
+        "icon": "mdi:gauge-low",
+        "enabled_default": True,
     },
     "par26": {
         "slug": "diag_par26",
-        "name": "Diagnose par26 (vermutl. Niederdruck-Sättigung)",
+        "name": "Diagnose par26 (unbestätigt)",
         "unit": "°C", "device_class": "temperature", "state_class": "measurement",
         "icon": "mdi:thermometer",
         "enabled_default": False,
     },
     "par27": {
-        "slug": "diag_par27",
-        "name": "Diagnose par27 (vermutl. Verdampfung Te)",
+        # Bedieneinheit: "Aussengeraet Lamellentauscher Temperatur - Tp".
+        # Beleg: Anzeige 2,5-3,3 °C gegen gleichzeitiges par27 = 2,6-3,7.
+        # Faellt beim Abtauen deutlich unter die Aussentemperatur.
+        "slug": "lamellentauscher_tp",
+        "name": "Lamellentauscher Tp",
         "unit": "°C", "device_class": "temperature", "state_class": "measurement",
-        "icon": "mdi:thermometer",
-        "enabled_default": False,
+        "icon": "mdi:snowflake-thermometer",
+        "enabled_default": True,
     },
     "par39": {
         "slug": "diag_par39",
-        "name": "Diagnose par39",
+        "name": "Diagnose par39 (unbestätigt, nicht der Strom)",
         "unit": None, "device_class": None, "state_class": "measurement",
         "icon": "mdi:gauge",
         "enabled_default": False,
     },
     "par40": {
         "slug": "diag_par40",
-        "name": "Diagnose par40 (vermutl. Überhitzung)",
+        "name": "Diagnose par40 (unbestätigt)",
         "unit": "K", "device_class": "temperature", "state_class": "measurement",
         "icon": "mdi:delta",
         "enabled_default": False,
