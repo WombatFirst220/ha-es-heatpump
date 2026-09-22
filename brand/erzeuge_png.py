@@ -12,7 +12,7 @@ Kantenglaettung durch Ueberabtastung: gerechnet wird mit dem Faktor SS pro
 Achse, danach wird gemittelt.
 
 Aufruf:  python3 brand/erzeuge_png.py
-Ergebnis: icon.png (256 px) und icon@2x.png (512 px)
+Ergebnis: custom_components/es_heatpump/brand/icon.png und icon@2x.png
 """
 from __future__ import annotations
 
@@ -21,6 +21,10 @@ import struct
 import zlib
 
 HIER = pathlib.Path(__file__).parent
+# Ausgeliefert wird in die Integration selbst, nicht in diesen Ordner:
+# Home Assistant sucht die Markenbilder seit 2026.3 unter
+# <custom_components>/<domain>/brand/. Hier liegt nur die Quelle.
+ZIEL = HIER.parent / "custom_components" / "es_heatpump" / "brand"
 SS = 3                      # Ueberabtastung je Achse
 
 # ── Geometrie, identisch zu icon.svg ────────────────────────────────────────
@@ -339,9 +343,10 @@ def main() -> None:
     Ein quadratisches logo.png waere also eine Verdopplung, die das Repository
     nur groesser macht.
     """
+    ZIEL.mkdir(parents=True, exist_ok=True)
     for name, kante in (("icon.png", 256), ("icon@2x.png", 512)):
         pixel = rendere(kante)
-        groesse, strategie = schreibe_png(HIER / name, kante, kante, pixel)
+        groesse, strategie = schreibe_png(ZIEL / name, kante, kante, pixel)
         print(f"  {name:12s} {kante}x{kante}  {groesse/1024:5.1f} kB  ({strategie})")
 
 
