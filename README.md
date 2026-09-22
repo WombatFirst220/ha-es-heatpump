@@ -3,12 +3,12 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-3.0.1-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-3.0.2-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 
 <p align="center">
-  <img src="brand/icon.png" alt="ES Heatpump" width="120">
+  <img src="custom_components/es_heatpump/brand/icon.png" alt="ES Heatpump" width="120">
   <br>
   <img src="docs/dashboard-mobile.png" alt="ES Heatpump Dashboard auf dem Smartphone" width="320">
 </p>
@@ -426,6 +426,24 @@ Update your automations and scripts referring to the old entity IDs accordingly.
 
 <a id="changelog"></a>
 ## 📋 Changelog
+
+### 3.0.2 — 2026-09-22
+
+**Eigenes Symbol.** Ein Rotor über zwei Wasserwellen auf einem Verlauf von
+Kaltblau nach Warmorange — kalt oben links, warm unten rechts, in derselben
+Richtung, in der die Energie wandert.
+
+Seit Home Assistant 2026.3 genügt dafür ein Ordner `brand/` auf oberster Ebene
+der Integration; `manifest.json` bleibt unberührt, und lokale Bilder haben
+Vorrang vor dem Brands-CDN. Enthalten sind `icon.png` (256×256) und
+`icon@2x.png` (512×512), beide RGBA mit transparenten Ecken. `logo.png` fehlt
+absichtlich: Home Assistant fällt für alle Logo-Abrufe auf das Icon zurück, eine
+quadratische Kopie wäre nur Ballast.
+
+> Der frühere Weg — ein Pull Request nach `home-assistant/brands` — ist
+> geschlossen. Ein Workflow dort schließt PRs, die einen neuen Ordner unter
+> `custom_integrations/` anlegen, automatisch.
+> [Ankündigung](https://developers.home-assistant.io/blog/2026/02/24/brands-proxy-api)
 
 ### 3.0.1 — 2026-09-22
 
@@ -845,8 +863,15 @@ See git history.
 ## 🎨 Logo
 
 Ein Rotor über zwei Wasserwellen auf einem Verlauf von Kaltblau nach Warmorange
-— die Aussage einer Luft/Wasser-Wärmepumpe in einem Bild. Vorlage, PNGs und der
-Weg ins `home-assistant/brands`-Repository: [`brand/`](brand/).
+— die Aussage einer Luft/Wasser-Wärmepumpe in einem Bild.
+
+**Seit Home Assistant 2026.3 bringt die Integration ihr Symbol selbst mit.** Es
+liegt in `custom_components/es_heatpump/brand/` und wird ohne weitere
+Einrichtung verwendet; lokale Bilder haben Vorrang vor dem Brands-CDN. Der
+frühere Weg über einen Pull Request nach `home-assistant/brands` ist geschlossen
+— dort werden neue Custom-Integrationen automatisch abgelehnt.
+
+Vorlage, Rasterizer und Belege: [`brand/`](brand/).
 
 ## 📚 Weitere Dokumente / Further reading
 
