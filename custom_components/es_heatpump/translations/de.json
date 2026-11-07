@@ -37,21 +37,91 @@
       "init": {
         "title": "ES Wärmepumpe – Einstellungen ändern",
         "data": {
+          "model": "Wärmepumpen-Modell",
+          "flow_rate": "Volumenstrom Heizkreis",
+          "flow_rate_dhw": "Volumenstrom Brauchwasserkreis",
+          "power_entity": "Stromsensor",
+          "flow_entity": "Volumenstrom-Sensor",
+          "dhw_margin_k": "Schwelle Brauchwasser-Erkennung",
+          "mode_source_entity": "Betriebsart-Quelle",
+          "hydraulic_card": "Hydraulik-Schema anzeigen",
+          "dashboard_design": "Design",
+          "enable_writes": "Schreibzugriff auf die Anlage erlauben",
+          "settings_interval": "Abruf der Einstellungen (Sekunden)",
+          "backup_interval_h": "Automatische Sicherung (Stunden)",
+          "backup_keep": "Aufbewahrte Sicherungen",
           "base_url": "Portal-URL",
-          "scan_interval": "Aktualisierungsintervall (Sekunden)",
-          "power_entity": "Stromsensor (Shelly o.ä.)",
-          "flow_rate": "Volumenstrom Heizkreislauf (m³/h)",
-          "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)",
-          "mode_source_entity": "Entity für die Betriebsart (seit v2.4.0 nicht mehr nötig — die Anlage meldet sie in par1)",
-          "dhw_margin_k": "Abstand des Vorlaufs über dem Heizen-Sollwert, ab dem auf Brauchwasser erkannt wird (K)",
-          "flow_entity": "Volumenstrom-Sensor (optional – hat Vorrang vor den Konstanten, empfohlen bei geregelter Umwälzpumpe)",
-          "model": "Wärmepumpen-Modell – die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt",
-          "enable_writes": "Schreibzugriff auf die Anlage erlauben (standardmäßig aus — nötig für die Einstellungs-Entities, das Wiederherstellen und „Parameter setzen“)",
-          "settings_interval": "Abstand zwischen Konfigurationsabrufen (Sekunden) — Einstellungen ändern sich selten, 900 genügt",
-          "backup_interval_h": "Abstand automatischer Sicherungen (Stunden) — eine Änderung wird immer sofort gesichert, dies ist nur der Leerlauftakt",
-          "backup_keep": "Anzahl aufbewahrter Sicherungen (0 = unbegrenzt). Sicherungen vor einem Schreibzugriff oder einer Wiederherstellung werden nie gelöscht.",
-          "hydraulic_card": "Hydraulik-Schema im Dashboard anzeigen (Heat Pump Hydraulic Card, wird mitgeliefert)",
-          "dashboard_design": "Design des Dashboards — „Origami“ braucht das gleichnamige Theme (Marktplatz/HACS)"
+          "scan_interval": "Aktualisierungsintervall (Sekunden)"
+        },
+        "data_description": {
+          "model": "Die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt.",
+          "flow_rate": "Thermische Leistung und COP werden daraus berechnet. Ein COP unter 1 heißt: Wert zu niedrig.",
+          "power_entity": "Elektrische Leistung der Wärmepumpe, z. B. Shelly. Nötig für den COP.",
+          "flow_entity": "Optional. Hat Vorrang vor den Konstanten, empfohlen bei geregelter Umwälzpumpe.",
+          "dhw_margin_k": "Kelvin über dem Heizen-Sollwert, ab denen der Vorlauf als Brauchwasser gilt.",
+          "mode_source_entity": "Seit v2.4.0 nicht mehr nötig, die Anlage meldet die Betriebsart selbst.",
+          "hydraulic_card": "Animiertes Anlagenschema oben in der Übersicht. Die Karte wird mitgeliefert.",
+          "dashboard_design": "„Origami“ braucht das gleichnamige Theme aus Marktplatz/HACS.",
+          "enable_writes": "Standardmäßig aus. Nötig für die Einstellungs-Entities, das Wiederherstellen und „Parameter setzen“.",
+          "settings_interval": "Einstellungen ändern sich selten, 900 genügt.",
+          "backup_interval_h": "Eine Änderung wird immer sofort gesichert, dies ist nur der Leerlauftakt.",
+          "backup_keep": "0 = unbegrenzt. Sicherungen vor einem Schreibzugriff oder einer Wiederherstellung werden nie gelöscht."
+        },
+        "sections": {
+          "messung": {
+            "name": "Messung und Berechnung",
+            "data": {
+              "model": "Wärmepumpen-Modell",
+              "flow_rate": "Volumenstrom Heizkreis",
+              "flow_rate_dhw": "Volumenstrom Brauchwasserkreis",
+              "power_entity": "Stromsensor",
+              "flow_entity": "Volumenstrom-Sensor",
+              "dhw_margin_k": "Schwelle Brauchwasser-Erkennung",
+              "mode_source_entity": "Betriebsart-Quelle"
+            },
+            "data_description": {
+              "model": "Die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt.",
+              "flow_rate": "Thermische Leistung und COP werden daraus berechnet. Ein COP unter 1 heißt: Wert zu niedrig.",
+              "power_entity": "Elektrische Leistung der Wärmepumpe, z. B. Shelly. Nötig für den COP.",
+              "flow_entity": "Optional. Hat Vorrang vor den Konstanten, empfohlen bei geregelter Umwälzpumpe.",
+              "dhw_margin_k": "Kelvin über dem Heizen-Sollwert, ab denen der Vorlauf als Brauchwasser gilt.",
+              "mode_source_entity": "Seit v2.4.0 nicht mehr nötig, die Anlage meldet die Betriebsart selbst."
+            },
+            "description": "Grundlage für thermische Leistung und COP."
+          },
+          "dashboard": {
+            "name": "Dashboard",
+            "data": {
+              "hydraulic_card": "Hydraulik-Schema anzeigen",
+              "dashboard_design": "Design"
+            },
+            "data_description": {
+              "hydraulic_card": "Animiertes Anlagenschema oben in der Übersicht. Die Karte wird mitgeliefert.",
+              "dashboard_design": "„Origami“ braucht das gleichnamige Theme aus Marktplatz/HACS."
+            }
+          },
+          "zugriff": {
+            "name": "Schreibzugriff und Sicherungen",
+            "data": {
+              "enable_writes": "Schreibzugriff auf die Anlage erlauben",
+              "settings_interval": "Abruf der Einstellungen (Sekunden)",
+              "backup_interval_h": "Automatische Sicherung (Stunden)",
+              "backup_keep": "Aufbewahrte Sicherungen"
+            },
+            "data_description": {
+              "enable_writes": "Standardmäßig aus. Nötig für die Einstellungs-Entities, das Wiederherstellen und „Parameter setzen“.",
+              "settings_interval": "Einstellungen ändern sich selten, 900 genügt.",
+              "backup_interval_h": "Eine Änderung wird immer sofort gesichert, dies ist nur der Leerlauftakt.",
+              "backup_keep": "0 = unbegrenzt. Sicherungen vor einem Schreibzugriff oder einer Wiederherstellung werden nie gelöscht."
+            }
+          },
+          "verbindung": {
+            "name": "Verbindung zum Portal",
+            "data": {
+              "base_url": "Portal-URL",
+              "scan_interval": "Aktualisierungsintervall (Sekunden)"
+            }
+          }
         }
       }
     }
@@ -59,7 +129,7 @@
   "selector": {
     "dashboard_design": {
       "options": {
-        "standard": "Standard (aktuelles Theme)",
+        "standard": "Standard (eigenes Theme)",
         "origami": "Origami"
       }
     }

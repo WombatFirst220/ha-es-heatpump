@@ -8,6 +8,11 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import callback
+
+try:  # Abschnitte im Formular gibt es seit HA 2024.7
+    from homeassistant.data_entry_flow import section
+except ImportError:  # pragma: no cover
+    section = None
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.selector import (
     EntitySelector,
@@ -71,7 +76,9 @@ def _model_selector() -> SelectSelector:
     return SelectSelector(
         SelectSelectorConfig(
             options=list(NOMINAL_FLOW_RATES_M3H) + [MODEL_UNKNOWN],
-            mode=SelectSelectorMode.DROPDOWN,
+            # Optionsfelder statt Dropdown: Das Dropdown liess den Dialog auf
+            # dem iPhone nach oben springen (v3.1.1).
+            mode=SelectSelectorMode.LIST,
         )
     )
 
@@ -92,7 +99,7 @@ def _design_selector() -> SelectSelector:
     return SelectSelector(
         SelectSelectorConfig(
             options=DESIGN_OPTIONS,
-            mode=SelectSelectorMode.DROPDOWN,
+            mode=SelectSelectorMode.LIST,
             translation_key=CONF_DASHBOARD_DESIGN,
         )
     )
@@ -197,22 +204,59 @@ class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return ESHeatpumpOptionsFlow(config_entry)
 
 
+# ── Abschnitte des Einstellungsdialogs (v3.1.1) ─────────────────────────────
+# Gruppiert statt einer langen Liste; die Erklärungen stehen als Hilfetext
+# (data_description) unter dem Feld, nicht mehr in der Beschriftung.  Lange
+# Beschriftungen liefen in die Eingabefelder hinein.
+SEC_MESSUNG    = "messung"
+SEC_DASHBOARD  = "dashboard"
+SEC_ZUGRIFF    = "zugriff"
+SEC_VERBINDUNG = "verbindung"
+
+# (Abschnitt, eingeklappt)
+OPTION_SECTIONS: list[tuple[str, bool]] = [
+    (SEC_MESSUNG, False),
+    (SEC_DASHBOARD, False),
+    (SEC_ZUGRIFF, True),
+    (SEC_VERBINDUNG, True),
+]
+
+_ENTITY_KEYS = (CONF_POWER_ENTITY, CONF_MODE_SOURCE, CONF_FLOW_ENTITY)
+
+
+def _flatten(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Abschnitte auflösen: {"messung": {...}, ...} → flaches Options-Dict."""
+    flach: dict[str, Any] = {}
+    for key, wert in user_input.items():
+        if key in dict(OPTION_SECTIONS) and isinstance(wert, dict):
+            flach.update(wert)
+        else:
+            flach[key] = wert
+    return flach
+
+
 class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
     """Allow changing scan interval, base URL, power entity, flow rate."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._config_entry = config_entry
 
+    def _wert(self, key: str, standard: Any = None) -> Any:
+        opts = self._config_entry.options
+        return opts.get(key, self._config_entry.data.get(key, standard))
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.FlowResult:
         if user_input is not None:
+            user_input = _flatten(user_input)
+
             # Leere Entity-Felder AUSDRUECKLICH als "" ablegen, nicht verwerfen.
             # Wuerde der Schluessel fehlen, faende `opts.get(key, data.get(key))`
             # den bei der Einrichtung gesetzten Wert in entry.data wieder - eine
             # einmal gewaehlte Entity liesse sich dann nie mehr entfernen,
             # sondern nur ersetzen (Fehler bis v2.3.0).
-            for key in (CONF_POWER_ENTITY, CONF_MODE_SOURCE, CONF_FLOW_ENTITY):
+            for key in _ENTITY_KEYS:
                 if user_input.get(key) in (None, ""):
                     user_input[key] = ""
 
@@ -220,9 +264,7 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
             # sobald sich das Modell geaendert hat. Danach bleibt der Wert von
             # Hand anpassbar.
             modell = user_input.get(CONF_MODEL)
-            vorher = self._config_entry.options.get(
-                CONF_MODEL, self._config_entry.data.get(CONF_MODEL)
-            )
+            vorher = self._wert(CONF_MODEL)
             if modell and modell != vorher and modell in NOMINAL_FLOW_RATES_M3H:
                 user_input[CONF_FLOW_RATE] = NOMINAL_FLOW_RATES_M3H[modell][1]
                 _LOGGER.info(
@@ -233,129 +275,78 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
 
             return self.async_create_entry(title="", data=user_input)
 
-        opts = self._config_entry.options
-        data = self._config_entry.data
+        return self.async_show_form(step_id="init", data_schema=self._schema())
 
-        schema_dict: dict = {
-            vol.Optional(
-                CONF_BASE_URL,
-                default=opts.get(CONF_BASE_URL, data.get(CONF_BASE_URL, DEFAULT_BASE_URL)),
-            ): _base_url_selector(),
-            vol.Optional(
-                CONF_SCAN_INTERVAL,
-                default=opts.get(
-                    CONF_SCAN_INTERVAL,
-                    data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
-                ),
-            ): vol.All(int, vol.Range(min=10, max=3600)),
-            vol.Optional(
-                CONF_FLOW_RATE,
-                default=opts.get(
-                    CONF_FLOW_RATE,
-                    data.get(CONF_FLOW_RATE, DEFAULT_FLOW_RATE),
-                ),
-            ): _flow_rate_selector(),
-            vol.Optional(
-                CONF_FLOW_RATE_DHW,
-                default=opts.get(
-                    CONF_FLOW_RATE_DHW,
-                    data.get(CONF_FLOW_RATE_DHW, DEFAULT_FLOW_RATE_DHW),
-                ),
-            ): _flow_rate_selector(),
-            vol.Optional(
-                CONF_DHW_MARGIN_K,
-                default=opts.get(
-                    CONF_DHW_MARGIN_K,
-                    data.get(CONF_DHW_MARGIN_K, DEFAULT_DHW_MARGIN_K),
-                ),
-            ): _dhw_margin_selector(),
-            vol.Optional(
-                CONF_MODEL,
-                default=opts.get(CONF_MODEL, data.get(CONF_MODEL, MODEL_UNKNOWN)),
-            ): _model_selector(),
+    def _schema(self) -> vol.Schema:
+        w = self._wert
 
-            # ── Schreibzugriff und Sicherungen (v3.0.0) ──────────────────
-            # Standardmaessig AUS. Eine Cloud-Integration, die ungefragt in eine
-            # Heizung schreiben darf, ist eine andere Art von Software als eine,
-            # die nur liest - diese Entscheidung gehoert dem Betreiber.
-            vol.Optional(
-                CONF_ENABLE_WRITES,
-                default=opts.get(
-                    CONF_ENABLE_WRITES,
-                    data.get(CONF_ENABLE_WRITES, DEFAULT_ENABLE_WRITES),
-                ),
-            ): bool,
-            vol.Optional(
-                CONF_SETTINGS_INTERVAL,
-                default=opts.get(
-                    CONF_SETTINGS_INTERVAL,
-                    data.get(CONF_SETTINGS_INTERVAL, DEFAULT_SETTINGS_INTERVAL),
-                ),
-            ): vol.All(int, vol.Range(min=60, max=86400)),
-            vol.Optional(
-                CONF_BACKUP_INTERVAL,
-                default=opts.get(
-                    CONF_BACKUP_INTERVAL,
-                    data.get(CONF_BACKUP_INTERVAL, DEFAULT_BACKUP_INTERVAL),
-                ),
-            ): vol.All(int, vol.Range(min=1, max=720)),
-            vol.Optional(
-                CONF_BACKUP_KEEP,
-                default=opts.get(
-                    CONF_BACKUP_KEEP,
-                    data.get(CONF_BACKUP_KEEP, DEFAULT_BACKUP_KEEP),
-                ),
-            ): vol.All(int, vol.Range(min=0, max=1000)),
+        def entity(key: str, **cfg: Any) -> tuple[vol.Optional, EntitySelector]:
+            # WICHTIG: description={"suggested_value": ...} statt default=.
+            # vol.Optional(key, default=X) setzt X ein, sobald der Schluessel
+            # fehlt - ein geleertes Feld kaeme im Handler also nie als leer an,
+            # und die Entity liesse sich nur ersetzen, nie entfernen (Fehler bis
+            # v2.4.0). suggested_value fuellt das Feld vor, ohne beim Weglassen
+            # etwas einzusetzen.
+            return (
+                vol.Optional(key, description={"suggested_value": w(key) or None}),
+                EntitySelector(EntitySelectorConfig(domain="sensor", **cfg)),
+            )
 
-            # ── Dashboard (v3.1.0) ───────────────────────────────────────
-            vol.Optional(
-                CONF_HYDRAULIC_CARD,
-                default=opts.get(
-                    CONF_HYDRAULIC_CARD,
-                    data.get(CONF_HYDRAULIC_CARD, DEFAULT_HYDRAULIC_CARD),
-                ),
-            ): bool,
-            vol.Optional(
-                CONF_DASHBOARD_DESIGN,
-                default=opts.get(
-                    CONF_DASHBOARD_DESIGN,
-                    data.get(CONF_DASHBOARD_DESIGN, DEFAULT_DASHBOARD_DESIGN),
-                ),
-            ): _design_selector(),
+        felder: dict[str, dict] = {
+            SEC_MESSUNG: dict([
+                (vol.Optional(CONF_MODEL, default=w(CONF_MODEL, MODEL_UNKNOWN)),
+                 _model_selector()),
+                (vol.Optional(CONF_FLOW_RATE, default=w(CONF_FLOW_RATE, DEFAULT_FLOW_RATE)),
+                 _flow_rate_selector()),
+                (vol.Optional(CONF_FLOW_RATE_DHW,
+                              default=w(CONF_FLOW_RATE_DHW, DEFAULT_FLOW_RATE_DHW)),
+                 _flow_rate_selector()),
+                entity(CONF_POWER_ENTITY, device_class="power"),
+                entity(CONF_FLOW_ENTITY),
+                (vol.Optional(CONF_DHW_MARGIN_K,
+                              default=w(CONF_DHW_MARGIN_K, DEFAULT_DHW_MARGIN_K)),
+                 _dhw_margin_selector()),
+                entity(CONF_MODE_SOURCE),
+            ]),
+            SEC_DASHBOARD: {
+                vol.Optional(CONF_HYDRAULIC_CARD,
+                             default=w(CONF_HYDRAULIC_CARD, DEFAULT_HYDRAULIC_CARD)): bool,
+                vol.Optional(CONF_DASHBOARD_DESIGN,
+                             default=w(CONF_DASHBOARD_DESIGN, DEFAULT_DASHBOARD_DESIGN)):
+                    _design_selector(),
+            },
+            # Schreiben ist standardmaessig AUS. Eine Cloud-Integration, die
+            # ungefragt in eine Heizung schreiben darf, ist eine andere Art von
+            # Software als eine, die nur liest.
+            SEC_ZUGRIFF: {
+                vol.Optional(CONF_ENABLE_WRITES,
+                             default=w(CONF_ENABLE_WRITES, DEFAULT_ENABLE_WRITES)): bool,
+                vol.Optional(CONF_SETTINGS_INTERVAL,
+                             default=w(CONF_SETTINGS_INTERVAL, DEFAULT_SETTINGS_INTERVAL)):
+                    vol.All(vol.Coerce(int), vol.Range(min=60, max=86400)),
+                vol.Optional(CONF_BACKUP_INTERVAL,
+                             default=w(CONF_BACKUP_INTERVAL, DEFAULT_BACKUP_INTERVAL)):
+                    vol.All(vol.Coerce(int), vol.Range(min=1, max=720)),
+                vol.Optional(CONF_BACKUP_KEEP,
+                             default=w(CONF_BACKUP_KEEP, DEFAULT_BACKUP_KEEP)):
+                    vol.All(vol.Coerce(int), vol.Range(min=0, max=1000)),
+            },
+            SEC_VERBINDUNG: {
+                vol.Optional(CONF_BASE_URL, default=w(CONF_BASE_URL, DEFAULT_BASE_URL)):
+                    _base_url_selector(),
+                vol.Optional(CONF_SCAN_INTERVAL,
+                             default=w(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)):
+                    vol.All(vol.Coerce(int), vol.Range(min=10, max=3600)),
+            },
         }
 
-        # Power-Entity is fully optional. If a value is already set, supply it
-        # as default; otherwise leave the field empty.
-        # WICHTIG: description={"suggested_value": ...} statt default=.
-        # vol.Optional(key, default=X) setzt X ein, sobald der Schluessel fehlt -
-        # ein geleertes Feld kaeme im Handler also nie als leer an, und die Entity
-        # liesse sich nur ersetzen, nie entfernen (Fehler bis v2.4.0; v2.3.1 hatte
-        # nur den Handler repariert, nicht das Schema). suggested_value fuellt das
-        # Feld in der Oberflaeche vor, ohne beim Weglassen etwas einzusetzen.
-        schema_dict[
-            vol.Optional(
-                CONF_POWER_ENTITY,
-                description={"suggested_value": opts.get(
-                    CONF_POWER_ENTITY, data.get(CONF_POWER_ENTITY)) or None},
-            )
-        ] = EntitySelector(EntitySelectorConfig(domain="sensor", device_class="power"))
+        if section is None:  # HA vor 2024.7: flach wie bisher
+            flach: dict = {}
+            for teil in felder.values():
+                flach.update(teil)
+            return vol.Schema(flach)
 
-        # Mode-source entity (any sensor, used to read the real operating mode)
-        schema_dict[
-            vol.Optional(
-                CONF_MODE_SOURCE,
-                description={"suggested_value": opts.get(
-                    CONF_MODE_SOURCE, data.get(CONF_MODE_SOURCE)) or None},
-            )
-        ] = EntitySelector(EntitySelectorConfig(domain="sensor"))
-
-        # Optionale Volumenstrom-Entity (beliebiger Sensor, m³/h, l/min, l/h, l/s)
-        schema_dict[
-            vol.Optional(
-                CONF_FLOW_ENTITY,
-                description={"suggested_value": opts.get(
-                    CONF_FLOW_ENTITY, data.get(CONF_FLOW_ENTITY)) or None},
-            )
-        ] = EntitySelector(EntitySelectorConfig(domain="sensor"))
-
-        return self.async_show_form(step_id="init", data_schema=vol.Schema(schema_dict))
+        return vol.Schema({
+            vol.Required(name): section(vol.Schema(felder[name]), {"collapsed": zu})
+            for name, zu in OPTION_SECTIONS
+        })

@@ -37,21 +37,68 @@
       "init": {
         "title": "ES Varmepumpe – Ret indstillinger",
         "data": {
+          "model": "Varmepumpemodel",
+          "flow_rate": "Flow varmekreds",
+          "flow_rate_dhw": "Flow brugsvandskreds",
+          "power_entity": "Effektsensor",
+          "flow_entity": "Flowsensor",
+          "dhw_margin_k": "Tærskel for brugsvand",
+          "mode_source_entity": "Kilde til driftstilstand",
+          "hydraulic_card": "Vis hydraulisk diagram",
+          "dashboard_design": "Design",
+          "enable_writes": "Tillad skrivning til enheden",
+          "settings_interval": "Hentning af indstillinger (sekunder)",
+          "backup_interval_h": "Automatisk sikkerhedskopi (timer)",
+          "backup_keep": "Antal sikkerhedskopier",
           "base_url": "Portal-URL",
-          "scan_interval": "Opdateringsinterval (sekunder)",
-          "power_entity": "Effektsensor (Shelly m.fl.)",
-          "flow_rate": "Flow varmekredsløb (m³/t)",
-          "flow_rate_dhw": "Flow varmtvandskredsløb (m³/t)",
-          "mode_source_entity": "Kilde til driftstilstand (unødvendig siden v2.4.0 – enheden melder tilstanden i par1)",
-          "dhw_margin_k": "Fremløbets margin over varmesætpunktet, der markerer varmt brugsvand (K)",
-          "flow_entity": "Flowsensor (valgfri – har forrang over konstanterne, anbefales ved modulerende cirkulationspumpe)",
-          "model": "Varmepumpemodel – valget udfylder det nominelle flow fra databladet",
-          "enable_writes": "Allow writing to the unit (off by default — required for settings entities, the restore service and parameter_setzen)",
-          "settings_interval": "Configuration poll interval (seconds) — settings change rarely, 900 is plenty",
-          "backup_interval_h": "Automatic backup interval (hours) — a change is always backed up immediately, this is the idle heartbeat",
-          "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted.",
-          "hydraulic_card": "Show the hydraulic schematic in the dashboard (Heat Pump Hydraulic Card, bundled)",
-          "dashboard_design": "Dashboard design — \"Origami\" needs the theme of the same name (Marketplace/HACS)"
+          "scan_interval": "Opdateringsinterval (sekunder)"
+        },
+        "data_description": {
+          "model": "Valget udfylder det nominelle flow fra databladet.",
+          "dashboard_design": "\"Origami\" kræver temaet af samme navn fra Marketplace/HACS."
+        },
+        "sections": {
+          "messung": {
+            "name": "Måling og beregning",
+            "data": {
+              "model": "Varmepumpemodel",
+              "flow_rate": "Flow varmekreds",
+              "flow_rate_dhw": "Flow brugsvandskreds",
+              "power_entity": "Effektsensor",
+              "flow_entity": "Flowsensor",
+              "dhw_margin_k": "Tærskel for brugsvand",
+              "mode_source_entity": "Kilde til driftstilstand"
+            },
+            "data_description": {
+              "model": "Valget udfylder det nominelle flow fra databladet."
+            }
+          },
+          "dashboard": {
+            "name": "Dashboard",
+            "data": {
+              "hydraulic_card": "Vis hydraulisk diagram",
+              "dashboard_design": "Design"
+            },
+            "data_description": {
+              "dashboard_design": "\"Origami\" kræver temaet af samme navn fra Marketplace/HACS."
+            }
+          },
+          "zugriff": {
+            "name": "Skriveadgang og sikkerhedskopier",
+            "data": {
+              "enable_writes": "Tillad skrivning til enheden",
+              "settings_interval": "Hentning af indstillinger (sekunder)",
+              "backup_interval_h": "Automatisk sikkerhedskopi (timer)",
+              "backup_keep": "Antal sikkerhedskopier"
+            }
+          },
+          "verbindung": {
+            "name": "Forbindelse til portalen",
+            "data": {
+              "base_url": "Portal-URL",
+              "scan_interval": "Opdateringsinterval (sekunder)"
+            }
+          }
         }
       }
     }
@@ -59,7 +106,7 @@
   "selector": {
     "dashboard_design": {
       "options": {
-        "standard": "Standard (current theme)",
+        "standard": "Standard (eget tema)",
         "origami": "Origami"
       }
     }

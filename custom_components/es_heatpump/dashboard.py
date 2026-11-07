@@ -96,6 +96,22 @@ async def async_install_dashboard(
         (i for i in items if i.get("url_path") == DASHBOARD_URL_PATH), None,
     )
 
+    # Lovelace keeps every storage dashboard IN MEMORY (LovelaceStorage._data).
+    # Writing only the store file is invisible until the next HA restart - that
+    # is why an option change (e.g. the Origami design) did not show up in
+    # v3.1.0.  If the dashboard is already live, its id wins: up to v3.1.0 an
+    # options reload deleted the index entry and recreated it under a NEW id,
+    # while the live object kept the old one.
+    live = _live_dashboard(hass)
+    live_id = (getattr(live, "config", None) or {}).get("id") if live else None
+    if existing is not None and live_id and existing.get("id") != live_id:
+        _LOGGER.info(
+            "ES Heatpump: index id %s differs from the live dashboard %s, "
+            "realigning", existing.get("id"), live_id,
+        )
+        existing["id"] = live_id
+        await index_store.async_save(index_data)
+
     if existing is None:
         # Brand-new install
         dashboard_id = str(uuid.uuid4())
@@ -140,17 +156,24 @@ async def async_install_dashboard(
     # raw YAML at the top level, which led to a ``KeyError: 'config'`` in
     # ``components/lovelace/dashboard.py`` when the frontend tried to load
     # the view (resulting in an "Unknown error" toast).  Fixed in v2.1.1.
-    config_store = ha_storage.Store(
-        hass, _DASH_STORE_VER, f"lovelace.{dashboard_id}"
-    )
-    await config_store.async_save({"config": config})
-    _LOGGER.debug(
-        "ES Heatpump: wrote dashboard config to lovelace.%s (%d views)",
-        dashboard_id, len(config.get("views", [])),
-    )
-
-    # 4. Trigger a reload so the UI updates immediately
-    await _async_reload_lovelace(hass)
+    if live is not None and live_id == dashboard_id:
+        # Updates memory + store and fires lovelace_updated itself.
+        await live.async_save(config)
+        _LOGGER.debug(
+            "ES Heatpump: updated live dashboard %s (%d views)",
+            dashboard_id, len(config.get("views", [])),
+        )
+    else:
+        config_store = ha_storage.Store(
+            hass, _DASH_STORE_VER, f"lovelace.{dashboard_id}"
+        )
+        await config_store.async_save({"config": config})
+        _LOGGER.debug(
+            "ES Heatpump: wrote dashboard config to lovelace.%s (%d views)",
+            dashboard_id, len(config.get("views", [])),
+        )
+        # 4. Trigger a reload so the UI updates immediately
+        await _async_reload_lovelace(hass)
 
     # 5. Best-effort cleanup of the legacy YAML file
     legacy_path = Path(hass.config.config_dir) / _LEGACY_YAML_REL
@@ -234,6 +257,22 @@ async def async_remove_dashboard(hass: HomeAssistant) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Internal helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _live_dashboard(hass: HomeAssistant) -> Any | None:
+    """The in-memory LovelaceStorage object of our dashboard, if loaded."""
+    lovelace = hass.data.get("lovelace")
+    dashboards = getattr(lovelace, "dashboards", None)
+    if dashboards is None and isinstance(lovelace, dict):
+        dashboards = lovelace.get("dashboards")
+    if not isinstance(dashboards, dict):
+        return None
+    dash = dashboards.get(DASHBOARD_URL_PATH)
+    if dash is None or getattr(dash, "mode", None) != "storage":
+        return None
+    if not hasattr(dash, "async_save"):
+        return None
+    return dash
+
 
 def _load_bundled_yaml() -> dict[str, Any] | None:
     """Read & parse the bundled dashboard YAML synchronously (executor)."""

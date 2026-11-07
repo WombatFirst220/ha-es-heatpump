@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-3.1.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-3.1.1-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 
@@ -525,6 +525,26 @@ verschwinden ohne Neustart.
 
 Wem die Historie dieser drei Werte egal ist, der kann im Dialog auch einfach
 löschen. Beim Hochdruck hingen hier 187 Tage daran.
+
+### 3.1.1 — 2026-11-08
+
+**Optionsänderungen am Dashboard wirken sofort.** In v3.1.0 blieb das Dashboard
+nach dem Umstellen auf Origami unverändert. Zwei Ursachen, beide seit v2.0.3:
+
+- Lovelace hält jedes Dashboard im Speicher. Die Integration schrieb nur die
+  Datei unter `.storage/`, die erst beim nächsten Neustart gelesen wird. Jetzt
+  speichert sie über das geladene Dashboard-Objekt, wie der Editor im UI.
+- Das Neuladen nach einer Optionsänderung hat das Dashboard gelöscht und unter
+  neuer ID neu angelegt. Gelöscht wird es jetzt nur noch, wenn die Integration
+  entfernt wird. Eine bereits abweichende ID wird beim Start angeglichen.
+
+**Einstellungsdialog aufgeräumt.** Vier Abschnitte: *Messung und Berechnung*,
+*Dashboard*, sowie eingeklappt *Schreibzugriff und Sicherungen* und *Verbindung
+zum Portal*. Die Beschriftungen sind kurz, die Erklärungen stehen als Hilfetext
+unter dem Feld. Vorher liefen lange Beschriftungen in die Eingabefelder.
+Modell und Design sind Optionsfelder statt Dropdowns, denn das Dropdown ließ den
+Dialog auf dem iPhone nach oben springen. Ab HA 2024.7, davor wie bisher
+ohne Abschnitte.
 
 ### 3.1.0 — 2026-11-08
 

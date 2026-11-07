@@ -37,21 +37,72 @@
       "init": {
         "title": "ES Warmtepomp – Instellingen aanpassen",
         "data": {
+          "model": "Warmtepompmodel",
+          "flow_rate": "Volumestroom verwarmingscircuit",
+          "flow_rate_dhw": "Volumestroom warmwatercircuit",
+          "power_entity": "Vermogenssensor",
+          "flow_entity": "Debietsensor",
+          "dhw_margin_k": "Drempel warmtapwater",
+          "mode_source_entity": "Bron voor bedrijfsmodus",
+          "hydraulic_card": "Hydraulisch schema tonen",
+          "dashboard_design": "Ontwerp",
+          "enable_writes": "Schrijven naar het toestel toestaan",
+          "settings_interval": "Ophalen instellingen (seconden)",
+          "backup_interval_h": "Automatische back-up (uren)",
+          "backup_keep": "Te bewaren back-ups",
           "base_url": "Portaal-URL",
-          "scan_interval": "Update-interval (seconden)",
-          "power_entity": "Vermogenssensor (Shelly enz.)",
-          "flow_rate": "Volumestroom verwarmingscircuit (m³/u)",
-          "flow_rate_dhw": "Volumestroom warmwatercircuit (m³/u)",
-          "mode_source_entity": "Bron voor bedrijfsmodus (sinds v2.4.0 overbodig – het toestel meldt de modus in par1)",
-          "dhw_margin_k": "Marge van de aanvoertemperatuur boven het setpoint die warmtapwater aanduidt (K)",
-          "flow_entity": "Debietsensor (optioneel – gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp)",
-          "model": "Warmtepompmodel – de keuze vult het nominale debiet uit het datablad in",
-          "enable_writes": "Allow writing to the unit (off by default — required for settings entities, the restore service and parameter_setzen)",
-          "settings_interval": "Configuration poll interval (seconds) — settings change rarely, 900 is plenty",
-          "backup_interval_h": "Automatic backup interval (hours) — a change is always backed up immediately, this is the idle heartbeat",
-          "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted.",
-          "hydraulic_card": "Show the hydraulic schematic in the dashboard (Heat Pump Hydraulic Card, bundled)",
-          "dashboard_design": "Dashboard design — \"Origami\" needs the theme of the same name (Marketplace/HACS)"
+          "scan_interval": "Update-interval (seconden)"
+        },
+        "data_description": {
+          "model": "De keuze vult het nominale debiet uit het datablad in.",
+          "flow_entity": "Optioneel. Gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp.",
+          "mode_source_entity": "Sinds v2.4.0 overbodig, het toestel meldt de modus zelf.",
+          "dashboard_design": "\"Origami\" vereist het gelijknamige thema uit Marketplace/HACS."
+        },
+        "sections": {
+          "messung": {
+            "name": "Meting en berekening",
+            "data": {
+              "model": "Warmtepompmodel",
+              "flow_rate": "Volumestroom verwarmingscircuit",
+              "flow_rate_dhw": "Volumestroom warmwatercircuit",
+              "power_entity": "Vermogenssensor",
+              "flow_entity": "Debietsensor",
+              "dhw_margin_k": "Drempel warmtapwater",
+              "mode_source_entity": "Bron voor bedrijfsmodus"
+            },
+            "data_description": {
+              "model": "De keuze vult het nominale debiet uit het datablad in.",
+              "flow_entity": "Optioneel. Gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp.",
+              "mode_source_entity": "Sinds v2.4.0 overbodig, het toestel meldt de modus zelf."
+            }
+          },
+          "dashboard": {
+            "name": "Dashboard",
+            "data": {
+              "hydraulic_card": "Hydraulisch schema tonen",
+              "dashboard_design": "Ontwerp"
+            },
+            "data_description": {
+              "dashboard_design": "\"Origami\" vereist het gelijknamige thema uit Marketplace/HACS."
+            }
+          },
+          "zugriff": {
+            "name": "Schrijftoegang en back-ups",
+            "data": {
+              "enable_writes": "Schrijven naar het toestel toestaan",
+              "settings_interval": "Ophalen instellingen (seconden)",
+              "backup_interval_h": "Automatische back-up (uren)",
+              "backup_keep": "Te bewaren back-ups"
+            }
+          },
+          "verbindung": {
+            "name": "Verbinding met het portaal",
+            "data": {
+              "base_url": "Portaal-URL",
+              "scan_interval": "Update-interval (seconden)"
+            }
+          }
         }
       }
     }
@@ -59,7 +110,7 @@
   "selector": {
     "dashboard_design": {
       "options": {
-        "standard": "Standard (current theme)",
+        "standard": "Standaard (eigen thema)",
         "origami": "Origami"
       }
     }

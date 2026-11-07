@@ -91,3 +91,21 @@ def test_uebersetzungen_vollstaendig():
         assert {"hydraulic_card", "dashboard_design"} <= set(felder), pfad.name
         assert set(d["selector"]["dashboard_design"]["options"]) == set(_const.DESIGN_OPTIONS)
         assert "{theme}" in d["issues"]["origami_theme_missing"]["description"]
+
+
+def test_einstellungsabschnitte_vollstaendig_und_eindeutig():
+    """Jedes Optionsfeld steht in jeder Sprache in genau einem Abschnitt (v3.1.1)."""
+    import re
+    quelle = (_ROOT / "config_flow.py").read_text(encoding="utf-8")
+    abschnitte = re.findall(r'^SEC_\w+\s*=\s*"(\w+)"', quelle, re.M)
+    assert abschnitte == ["messung", "dashboard", "zugriff", "verbindung"]
+    for pfad in [_ROOT / "strings.json", *sorted((_ROOT / "translations").glob("*.json"))]:
+        init = json.loads(pfad.read_text(encoding="utf-8"))["options"]["step"]["init"]
+        sek = init["sections"]
+        assert list(sek) == abschnitte, pfad.name
+        gesehen = [k for s in sek.values() for k in s["data"]]
+        assert len(gesehen) == len(set(gesehen)), pfad.name
+        assert set(gesehen) == set(init["data"]), pfad.name
+        for s in sek.values():
+            assert s["name"]
+            assert set(s.get("data_description", {})) <= set(s["data"])

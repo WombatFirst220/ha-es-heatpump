@@ -183,7 +183,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry and clean up the dashboard."""
+    """Unload a config entry (the dashboard stays, see async_remove_entry)."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
@@ -191,9 +191,24 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not hass.data.get(DOMAIN):
             async_entferne_dienste(hass)
             async_unregister_card(hass)
-            await async_remove_dashboard(hass)
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove the dashboard when the last entry is deleted.
+
+    Up to v3.1.0 this ran on every UNLOAD - including the reload after an
+    options change.  The dashboard then got a new id in the index while
+    Lovelace kept serving the old one from memory, so the change only showed
+    after a restart.
+    """
+    andere = [
+        e for e in hass.config_entries.async_entries(DOMAIN)
+        if e.entry_id != entry.entry_id
+    ]
+    if not andere:
+        await async_remove_dashboard(hass)
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:

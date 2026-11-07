@@ -37,21 +37,91 @@
       "init": {
         "title": "ES Heat Pump – Change Settings",
         "data": {
+          "model": "Heat-pump model",
+          "flow_rate": "Heating-loop flow rate",
+          "flow_rate_dhw": "DHW-loop flow rate",
+          "power_entity": "Power sensor",
+          "flow_entity": "Flow sensor",
+          "dhw_margin_k": "DHW detection threshold",
+          "mode_source_entity": "Operating-mode source",
+          "hydraulic_card": "Show hydraulic schematic",
+          "dashboard_design": "Design",
+          "enable_writes": "Allow writing to the unit",
+          "settings_interval": "Settings poll interval (seconds)",
+          "backup_interval_h": "Automatic backup (hours)",
+          "backup_keep": "Backups to keep",
           "base_url": "Portal URL",
-          "scan_interval": "Update interval (seconds)",
-          "power_entity": "Electrical-power sensor (Shelly etc.)",
-          "flow_rate": "Heating-loop flow rate (m³/h)",
-          "flow_rate_dhw": "DHW-loop flow rate (m³/h)",
-          "mode_source_entity": "Operating-mode source entity (no longer needed since v2.4.0 — the unit reports its mode in par1)",
-          "dhw_margin_k": "Flow-temperature margin above the heating setpoint that marks DHW mode (K). Flow above setpoint + margin ⇒ domestic hot water.",
-          "flow_entity": "Live volumetric-flow sensor (optional — overrides the constants, recommended if the circulation pump modulates)",
-          "model": "Heat-pump model — selecting it fills in the datasheet nominal flow rate",
-          "enable_writes": "Allow writing to the unit (off by default — required for settings entities, the restore service and parameter_setzen)",
-          "settings_interval": "Configuration poll interval (seconds) — settings change rarely, 900 is plenty",
-          "backup_interval_h": "Automatic backup interval (hours) — a change is always backed up immediately, this is the idle heartbeat",
-          "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted.",
-          "hydraulic_card": "Show the hydraulic schematic in the dashboard (Heat Pump Hydraulic Card, bundled)",
-          "dashboard_design": "Dashboard design — \"Origami\" needs the theme of the same name (Marketplace/HACS)"
+          "scan_interval": "Update interval (seconds)"
+        },
+        "data_description": {
+          "model": "Selecting it fills in the datasheet nominal flow rate.",
+          "flow_rate": "Thermal output and COP are calculated from it. A COP below 1 means the value is too low.",
+          "power_entity": "Electrical power of the heat pump, e.g. a Shelly. Required for the COP.",
+          "flow_entity": "Optional. Overrides the constants; recommended if the circulation pump modulates.",
+          "dhw_margin_k": "Kelvin above the heating setpoint from which the flow counts as domestic hot water.",
+          "mode_source_entity": "No longer needed since v2.4.0, the unit reports its mode itself.",
+          "hydraulic_card": "Animated schematic at the top of the overview. The card is bundled.",
+          "dashboard_design": "\"Origami\" needs the theme of the same name from Marketplace/HACS.",
+          "enable_writes": "Off by default. Required for the settings entities, the restore service and parameter_setzen.",
+          "settings_interval": "Settings change rarely, 900 is plenty.",
+          "backup_interval_h": "A change is always backed up immediately, this is only the idle heartbeat.",
+          "backup_keep": "0 = unlimited. Backups taken before a write or a restore are never deleted."
+        },
+        "sections": {
+          "messung": {
+            "name": "Measurement and calculation",
+            "data": {
+              "model": "Heat-pump model",
+              "flow_rate": "Heating-loop flow rate",
+              "flow_rate_dhw": "DHW-loop flow rate",
+              "power_entity": "Power sensor",
+              "flow_entity": "Flow sensor",
+              "dhw_margin_k": "DHW detection threshold",
+              "mode_source_entity": "Operating-mode source"
+            },
+            "data_description": {
+              "model": "Selecting it fills in the datasheet nominal flow rate.",
+              "flow_rate": "Thermal output and COP are calculated from it. A COP below 1 means the value is too low.",
+              "power_entity": "Electrical power of the heat pump, e.g. a Shelly. Required for the COP.",
+              "flow_entity": "Optional. Overrides the constants; recommended if the circulation pump modulates.",
+              "dhw_margin_k": "Kelvin above the heating setpoint from which the flow counts as domestic hot water.",
+              "mode_source_entity": "No longer needed since v2.4.0, the unit reports its mode itself."
+            },
+            "description": "Basis for thermal output and COP."
+          },
+          "dashboard": {
+            "name": "Dashboard",
+            "data": {
+              "hydraulic_card": "Show hydraulic schematic",
+              "dashboard_design": "Design"
+            },
+            "data_description": {
+              "hydraulic_card": "Animated schematic at the top of the overview. The card is bundled.",
+              "dashboard_design": "\"Origami\" needs the theme of the same name from Marketplace/HACS."
+            }
+          },
+          "zugriff": {
+            "name": "Write access and backups",
+            "data": {
+              "enable_writes": "Allow writing to the unit",
+              "settings_interval": "Settings poll interval (seconds)",
+              "backup_interval_h": "Automatic backup (hours)",
+              "backup_keep": "Backups to keep"
+            },
+            "data_description": {
+              "enable_writes": "Off by default. Required for the settings entities, the restore service and parameter_setzen.",
+              "settings_interval": "Settings change rarely, 900 is plenty.",
+              "backup_interval_h": "A change is always backed up immediately, this is only the idle heartbeat.",
+              "backup_keep": "0 = unlimited. Backups taken before a write or a restore are never deleted."
+            }
+          },
+          "verbindung": {
+            "name": "Portal connection",
+            "data": {
+              "base_url": "Portal URL",
+              "scan_interval": "Update interval (seconds)"
+            }
+          }
         }
       }
     }
@@ -59,7 +129,7 @@
   "selector": {
     "dashboard_design": {
       "options": {
-        "standard": "Standard (current theme)",
+        "standard": "Standard (your theme)",
         "origami": "Origami"
       }
     }
