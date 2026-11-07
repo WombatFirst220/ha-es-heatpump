@@ -56,8 +56,46 @@ def test_hydraulik_karte_steht_hinter_der_kopfzeile():
 def test_origami_setzt_theme_auf_jede_ansicht():
     cfg = _layout.gestalte(_bundled(), design="origami", hydraulik=False)
     assert all(v["theme"] == _const.ORIGAMI_THEME_NAME for v in cfg["views"])
-    zurueck = _layout.gestalte(cfg, design="standard", hydraulik=False)
+    zurueck = _layout.gestalte(_bundled(), design="standard", hydraulik=False)
     assert all("theme" not in v for v in zurueck["views"])
+
+
+def _origami_karten(cfg):
+    return [c for v in cfg["views"] for s in v["sections"] for c in s["cards"]]
+
+
+def test_origami_ist_abschnitts_ansicht_mit_gleichen_pfaden():
+    standard = _bundled()
+    cfg = _layout.gestalte(standard, design="origami", hydraulik=True)
+    assert [v["path"] for v in cfg["views"]] == [v["path"] for v in standard["views"]]
+    for v in cfg["views"]:
+        assert v["type"] == "sections"
+        for s in v["sections"]:
+            assert s["cards"][0]["type"] == "heading"
+
+
+def test_origami_hydraulik_nur_wenn_gewuenscht():
+    mit = _origami_karten(_layout.gestalte(_bundled(), design="origami", hydraulik=True))
+    ohne = _origami_karten(_layout.gestalte(_bundled(), design="origami", hydraulik=False))
+    assert sum(k["type"] == _layout.HYDRAULIC_CARD_TYPE for k in mit) == 1
+    assert not any(k["type"] == _layout.HYDRAULIC_CARD_TYPE for k in ohne)
+
+
+def test_origami_nutzt_nur_bekannte_entities():
+    bekannt = {f"sensor.es_hp_{p['slug']}" for p in _const.PARAMETER_SENSORS.values()}
+    bekannt |= {f"sensor.es_hp_{x}" for x in (
+        "betriebsart", "leistung_elektrisch", "thermische_leistung",
+        "aktueller_cop", "spreizung")}
+    bekannt.add("number.es_hp_cfg_par55")
+    ids = set()
+    for k in _origami_karten(_layout.gestalte(_bundled(), design="origami", hydraulik=True)):
+        if "entity" in k:
+            ids.add(k["entity"])
+        for b in k.get("badges", []):
+            ids.add(b["entity"])
+        for e in k.get("entities", []) if isinstance(k.get("entities"), list) else []:
+            ids.add(e if isinstance(e, str) else e["entity"])
+    assert ids and ids <= bekannt, ids - bekannt
 
 
 def test_mode_map_deckt_alle_betriebsarten_ab():

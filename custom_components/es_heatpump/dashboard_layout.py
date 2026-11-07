@@ -6,9 +6,10 @@ Passt die mitgelieferte Dashboard-Konfiguration an die Optionen an (v3.1.0):
   * **Hydraulik-Schema** – setzt die Heat Pump Hydraulic Card
     (Sturmi77/heatpump-hydraulic-card, MIT, mitgeliefert unter ``www/``) als
     erste Karte in die Übersicht.
-  * **Design** – ``origami`` setzt das Theme „Origami“ als View-Theme auf
-    jede Ansicht dieses Dashboards. Andere Dashboards und das Benutzer-Theme
-    bleiben unberührt.
+  * **Design** – ``origami`` ersetzt die Ansichten durch einen eigenen
+    Abschnitts-Aufbau (``origami_ansichten``) und setzt das Theme „Origami“
+    als View-Theme. Andere Dashboards und das Benutzer-Theme bleiben
+    unberührt.
 
 Ohne Home-Assistant-Abhängigkeit, damit es sich ohne HA testen lässt.
 """
@@ -92,11 +93,186 @@ def hydraulik_karte() -> dict[str, Any]:
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Origami-Ansichten (v3.2.0)
+# ─────────────────────────────────────────────────────────────────────────────
+# Origami ist ein Abschnitts-Dashboard fürs Handy: Überschriften, darunter
+# Kacheln mit Symbol im runden Feld.  Hier nur mit Bordmitteln nachgebaut
+# (heading, tile, history-graph, statistics-graph), damit außer dem Theme nichts
+# nachinstalliert werden muss.  Braucht HA 2024.10 (Überschrift mit Badges).
+
+HALB = {"columns": 6}
+VOLL = {"columns": "full"}
+
+
+def _kopf(titel: str, *badges: str, stil: str = "title") -> dict[str, Any]:
+    karte: dict[str, Any] = {"type": "heading", "heading": titel, "heading_style": stil}
+    if badges:
+        karte["badges"] = [
+            {"type": "entity", "entity": e, "show_state": True, "show_icon": True}
+            for e in badges
+        ]
+    return karte
+
+
+def _kachel(
+    entity: str, name: str, icon: str | None = None, farbe: str | None = None,
+) -> dict[str, Any]:
+    # Namen kurz halten: Eine halbe Kachel fasst am Handy etwa 10 Zeichen.
+    karte: dict[str, Any] = {
+        "type": "tile", "entity": entity, "name": name,
+        "vertical": False, "grid_options": HALB,
+    }
+    if icon:
+        karte["icon"] = icon
+    if farbe:
+        # Origami definiert die HA-Farbnamen gedämpft, so passt das Symbol zum Theme.
+        karte["color"] = farbe
+    return karte
+
+
+def _verlauf(titel: str, stunden: int, *reihen: tuple[str, str]) -> dict[str, Any]:
+    return {
+        "type": "history-graph", "title": titel, "hours_to_show": stunden,
+        "grid_options": VOLL,
+        "entities": [{"entity": e, "name": n} for e, n in reihen],
+    }
+
+
+def _abschnitt(*karten: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "grid", "cards": list(karten)}
+
+
+def origami_ansichten(hydraulik: bool) -> list[dict[str, Any]]:
+    """Die drei Ansichten im Origami-Aufbau (Pfade wie im Standard-Dashboard)."""
+    # Die Betriebsart zeigt das Schema selbst ("Heizen · läuft"); ohne Schema
+    # gehört sie in die Überschrift.
+    wp_badges = ["sensor.es_hp_aktueller_cop", "sensor.es_hp_aussentemp_ta"]
+    if not hydraulik:
+        wp_badges.insert(0, "sensor.es_hp_betriebsart")
+    wp = [_kopf("Wärmepumpe", *wp_badges)]
+    if hydraulik:
+        schema = hydraulik_karte()
+        schema["title"] = ""               # "" blendet den Kartentitel aus, die Überschrift steht darüber
+        schema["grid_options"] = VOLL
+        wp.append(schema)
+
+    uebersicht = [
+        _abschnitt(*wp),
+        _abschnitt(
+            _kopf("Jetzt"),
+            _kachel("sensor.es_hp_aktueller_cop", "COP", "mdi:gauge", "green"),
+            _kachel("sensor.es_hp_thermische_leistung", "Wärme", "mdi:fire", "deep-orange"),
+            _kachel("sensor.es_hp_leistung_elektrisch", "Strom", "mdi:lightning-bolt", "amber"),
+            _kachel("sensor.es_hp_frequenz_hz", "Verdichter", "mdi:sine-wave", "indigo"),
+            _kachel("sensor.es_hp_vorlauf_tuo", "Vorlauf", None, "red"),
+            _kachel("sensor.es_hp_ruecklauf_tui", "Rücklauf", None, "blue"),
+            _kachel("sensor.es_hp_spreizung", "Spreizung", "mdi:delta", "purple"),
+            _kachel("sensor.es_hp_aussentemp_ta", "Außen", None, "cyan"),
+        ),
+        _abschnitt(
+            _kopf("Speicher"),
+            _kachel("sensor.es_hp_warmwasser_tw", "Warmwasser", None, "deep-orange"),
+            _kachel("number.es_hp_cfg_par55", "WW Soll", "mdi:water-thermometer-outline", "orange"),
+            _kachel("sensor.es_hp_heizen", "Puffer", None, "teal"),
+            _kachel("sensor.es_hp_heizen_soll_manuell", "Heizen Soll", None, "orange"),
+            _kachel("sensor.es_hp_heizen_soll", "Tup", None, "teal"),
+            _kachel("sensor.es_hp_raumtemperatur", "WP-Fühler", None, "grey"),
+        ),
+        _abschnitt(
+            _kopf("Verlauf · 24 h"),
+            _verlauf("Vor- und Rücklauf", 24,
+                     ("sensor.es_hp_vorlauf_tuo", "Vorlauf"),
+                     ("sensor.es_hp_ruecklauf_tui", "Rücklauf")),
+            _verlauf("Verdichter", 24, ("sensor.es_hp_frequenz_hz", "Frequenz")),
+        ),
+    ]
+
+    energie = [
+        _abschnitt(
+            _kopf("Effizienz"),
+            {
+                "type": "statistics-graph", "title": "COP, Stundenmittel 7 Tage",
+                "entities": [{"entity": "sensor.es_hp_aktueller_cop", "name": "COP"}],
+                "chart_type": "line", "period": "hour", "days_to_show": 7,
+                "stat_types": ["mean"], "grid_options": VOLL,
+            },
+        ),
+        _abschnitt(
+            _kopf("Leistung · 24 h"),
+            _verlauf("Wärme und Strom", 24,
+                     ("sensor.es_hp_thermische_leistung", "Wärme"),
+                     ("sensor.es_hp_leistung_elektrisch", "Strom")),
+            _verlauf("Heißgas", 24, ("sensor.es_hp_heissgas_td", "Heißgas Td")),
+        ),
+        _abschnitt(
+            _kopf("Betriebsstunden"),
+            _kachel("sensor.es_hp_ah_betriebszeit", "AH gesamt", None, "blue-grey"),
+            _kachel("sensor.es_hp_hbh_betriebszeit", "HBH gesamt", None, "blue-grey"),
+        ),
+    ]
+
+    diagnose = [
+        _abschnitt(
+            _kopf("Kältekreis"),
+            _kachel("sensor.es_hp_heissgas_td", "Heißgas", None, "red"),
+            _kachel("sensor.es_hp_sauggas_ts", "Sauggas", None, "light-blue"),
+            _kachel("sensor.es_hp_hochdruck_pd", "Hochdruck", None, "red"),
+            _kachel("sensor.es_hp_saugdruck_ps", "Saugdruck", None, "light-blue"),
+            _kachel("sensor.es_hp_ventil_oeffnung", "EEV", None, "purple"),
+            _kachel("sensor.es_hp_lamellentauscher_tp", "Lamellen", None, "cyan"),
+        ),
+        _abschnitt(
+            _kopf("Elektrik und Lüfter"),
+            _kachel("sensor.es_hp_verdichter_strom", "Strom", "mdi:current-ac", "amber"),
+            _kachel("sensor.es_hp_spannung", "Spannung", None, "amber"),
+            _kachel("sensor.es_hp_luefter_drehzahl", "Ventilator", None, "indigo"),
+            _kachel("sensor.es_hp_mischventil_1", "Mischer 1", None, "teal"),
+        ),
+        _abschnitt(
+            _kopf("Diagnose-Parameter"),
+            {
+                "type": "markdown", "grid_options": VOLL,
+                "content": (
+                    "Nicht eindeutig zugeordnete Werte sind standardmäßig "
+                    "**deaktiviert**. Aktivieren unter *Einstellungen → Geräte & "
+                    "Dienste → ES Heatpump → Entitäten*."
+                ),
+            },
+            {
+                "type": "entities", "grid_options": VOLL,
+                "entities": [
+                    {"entity": "sensor.es_hp_diag_par39", "name": "par39"},
+                    {"entity": "sensor.es_hp_diag_par40", "name": "par40"},
+                    {"entity": "sensor.es_hp_software_version", "name": "Software Version"},
+                    {"entity": "sensor.es_hp_hwtbh_betriebszeit", "name": "HWTBH Betriebszeit"},
+                ],
+            },
+        ),
+    ]
+
+    def ansicht(titel: str, pfad: str, icon: str, abschnitte: list) -> dict[str, Any]:
+        return {
+            "title": titel, "path": pfad, "icon": icon, "type": "sections",
+            "max_columns": 3, "theme": ORIGAMI_THEME_NAME, "sections": abschnitte,
+        }
+
+    return [
+        ansicht("Übersicht", "overview", "mdi:heat-pump", uebersicht),
+        ansicht("Energie", "energy", "mdi:lightning-bolt", energie),
+        ansicht("Diagnose", "diagnose", "mdi:bug-outline", diagnose),
+    ]
+
+
 def gestalte(
     config: dict[str, Any], *, design: str, hydraulik: bool,
 ) -> dict[str, Any]:
     """Gibt eine angepasste Kopie der Dashboard-Konfiguration zurück."""
     cfg = copy.deepcopy(config)
+    if design == DESIGN_ORIGAMI:
+        cfg["views"] = origami_ansichten(hydraulik)
+        return cfg
+
     views: list[dict[str, Any]] = cfg.get("views") or []
 
     if hydraulik and views:
@@ -106,9 +282,6 @@ def gestalte(
         karten.insert(pos, hydraulik_karte())
 
     for view in views:
-        if design == DESIGN_ORIGAMI:
-            view["theme"] = ORIGAMI_THEME_NAME
-        else:
-            view.pop("theme", None)
+        view.pop("theme", None)
 
     return cfg

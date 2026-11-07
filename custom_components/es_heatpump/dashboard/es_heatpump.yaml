@@ -110,7 +110,7 @@ views:
           - entity: sensor.es_hp_warmwasser_tw
             name: Warmwasser
           - entity: sensor.es_hp_heizen_soll
-            name: Heizen Soll (aktiv)
+            name: Wassertemperatur Tup
           - entity: sensor.es_hp_heizen_soll_manuell
             name: Heizen Soll (manuell)
           - entity: sensor.es_hp_heizen

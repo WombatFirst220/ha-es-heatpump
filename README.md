@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-3.1.1-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-3.2.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 
@@ -275,9 +275,14 @@ Expansionsventil) im Detailbereich.
 #### 🎨 Design „Origami“ (seit v3.1.0)
 
 Option „Design des Dashboards“: **Standard** übernimmt das Theme des Benutzers.
-**Origami** setzt auf jeder Ansicht dieses Dashboards das Theme
-[Origami](https://github.com/hazymorning/origami) von hazymorning. Andere
-Dashboards bleiben unberührt.
+**Origami** baut das Dashboard im Stil von
+[Origami](https://github.com/hazymorning/origami) (hazymorning) um, seit v3.2.0
+mit eigenem Aufbau: Abschnitte mit Überschriften (*Wärmepumpe* mit Schema,
+*Jetzt*, *Speicher*, *Verlauf*; auf den anderen Seiten *Effizienz*, *Leistung*,
+*Kältekreis* …) und farbige Kacheln statt Messzeigern. Am Handy steht alles
+untereinander, am Desktop in drei Spalten. Verwendet werden nur Karten, die
+Home Assistant mitbringt. Nötig ist HA 2024.10 oder neuer. Dazu kommt das Theme
+Origami als View-Theme. Andere Dashboards bleiben unberührt.
 
 Das Theme selbst wird **nicht** mitgeliefert. Origami steht unter der AGPL-3.0,
 diese Integration unter MIT. Ein Mitliefern wäre zwar erlaubt, solange die Datei
@@ -525,6 +530,31 @@ verschwinden ohne Neustart.
 
 Wem die Historie dieser drei Werte egal ist, der kann im Dialog auch einfach
 löschen. Beim Hochdruck hingen hier 187 Tage daran.
+
+### 3.2.0 — 2026-11-08
+
+**Eigener Aufbau für das Design Origami.** Bisher setzte Origami nur das Theme
+auf die alten Ansichten mit Messzeigern. Jetzt sind alle drei Seiten
+Abschnitts-Ansichten wie in Origami selbst:
+
+- **Übersicht:** *Wärmepumpe* mit COP und Außentemperatur in der Überschrift
+  und dem Hydraulik-Schema darunter. Dazu *Jetzt* (COP, Wärme, Strom,
+  Verdichter, Vor-/Rücklauf, Spreizung, Außen), *Speicher* (Warmwasser Ist und
+  Soll, Puffer, Heizen Soll, Tup, WP-Fühler) und *Verlauf · 24 h*.
+- **Energie:** *Effizienz* (COP, Stundenmittel über 7 Tage), *Leistung · 24 h*
+  und *Betriebsstunden*.
+- **Diagnose:** *Kältekreis* (Heißgas, Sauggas, Hoch-/Saugdruck,
+  Expansionsventil, Lamellentauscher), *Elektrik und Lüfter* und
+  *Diagnose-Parameter*.
+
+Die Pfade der Seiten bleiben gleich, Lesezeichen funktionieren also weiter. Es
+werden nur Karten verwendet, die Home Assistant mitbringt (Überschrift, Kachel,
+Verlauf, Statistik). Nötig ist HA 2024.10. Das Design *Standard* ist
+unverändert.
+
+**Korrektur im Standard-Dashboard:** Die Zeile „Heizen Soll (aktiv)“ heißt
+jetzt „Wassertemperatur Tup“. par6 ist kein Sollwert, sondern eine gemessene
+Wassertemperatur (siehe 3.0.0).
 
 ### 3.1.1 — 2026-11-08
 
