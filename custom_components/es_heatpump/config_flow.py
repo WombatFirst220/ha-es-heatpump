@@ -24,7 +24,12 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from .const import (
     CONF_BACKUP_INTERVAL,
     CONF_BACKUP_KEEP,
+    CONF_DASHBOARD_DESIGN,
     CONF_ENABLE_WRITES,
+    CONF_HYDRAULIC_CARD,
+    DEFAULT_DASHBOARD_DESIGN,
+    DEFAULT_HYDRAULIC_CARD,
+    DESIGN_OPTIONS,
     CONF_SETTINGS_INTERVAL,
     DEFAULT_BACKUP_INTERVAL,
     DEFAULT_BACKUP_KEEP,
@@ -78,6 +83,17 @@ def _dhw_margin_selector() -> NumberSelector:
             min=2.0, max=25.0, step=0.5,
             mode=NumberSelectorMode.BOX,
             unit_of_measurement="K",
+        )
+    )
+
+
+def _design_selector() -> SelectSelector:
+    """Look of the bundled dashboard (v3.1.0)."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=DESIGN_OPTIONS,
+            mode=SelectSelectorMode.DROPDOWN,
+            translation_key=CONF_DASHBOARD_DESIGN,
         )
     )
 
@@ -290,6 +306,22 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
                     data.get(CONF_BACKUP_KEEP, DEFAULT_BACKUP_KEEP),
                 ),
             ): vol.All(int, vol.Range(min=0, max=1000)),
+
+            # ── Dashboard (v3.1.0) ───────────────────────────────────────
+            vol.Optional(
+                CONF_HYDRAULIC_CARD,
+                default=opts.get(
+                    CONF_HYDRAULIC_CARD,
+                    data.get(CONF_HYDRAULIC_CARD, DEFAULT_HYDRAULIC_CARD),
+                ),
+            ): bool,
+            vol.Optional(
+                CONF_DASHBOARD_DESIGN,
+                default=opts.get(
+                    CONF_DASHBOARD_DESIGN,
+                    data.get(CONF_DASHBOARD_DESIGN, DEFAULT_DASHBOARD_DESIGN),
+                ),
+            ): _design_selector(),
         }
 
         # Power-Entity is fully optional. If a value is already set, supply it

@@ -6,7 +6,7 @@ import re
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 
 from .backup_store import Sicherungsablage
@@ -25,15 +25,24 @@ from .const import (
     CALC_SPREIZUNG,
     CALC_THERM_LEISTUNG,
     CONF_BASE_URL,
+    CONF_DASHBOARD_DESIGN,
+    CONF_HYDRAULIC_CARD,
     CONF_SCAN_INTERVAL,
     DEFAULT_BASE_URL,
+    DEFAULT_DASHBOARD_DESIGN,
+    DEFAULT_HYDRAULIC_CARD,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     PARAMETER_SENSORS,
     PLATFORMS,
 )
 from .coordinator import ESHeatpumpCoordinator
-from .dashboard import async_install_dashboard, async_remove_dashboard
+from .dashboard import (
+    async_check_origami_theme,
+    async_install_dashboard,
+    async_remove_dashboard,
+)
+from .hydraulic_card import async_register_card, async_unregister_card
 from .services import async_entferne_dienste, async_registriere_dienste
 from .settings_coordinator import ESHeatpumpSettingsCoordinator
 
@@ -142,10 +151,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _async_migrate_entities(hass, entry)
 
     # ── Auto-install Lovelace dashboard ──────────────────────────────────
+    design = _option(CONF_DASHBOARD_DESIGN, DEFAULT_DASHBOARD_DESIGN)
+    hydraulik = bool(_option(CONF_HYDRAULIC_CARD, DEFAULT_HYDRAULIC_CARD))
+    if hydraulik:
+        # Ohne geladene Karte zeigte das Dashboard eine Fehlerkarte - dann
+        # lieber ohne Schema.
+        try:
+            hydraulik = await async_register_card(hass)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("ES Heatpump: Hydraulik-Karte nicht ladbar: %s", err)
+            hydraulik = False
     try:
-        await async_install_dashboard(hass)
+        await async_install_dashboard(hass, design=design, hydraulik=hydraulik)
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning("ES Heatpump: dashboard install failed: %s", err)
+
+    # Wird das Origami-Theme nachinstalliert und neu geladen, verschwindet der
+    # Reparaturhinweis ohne Neustart.
+    @callback
+    def _themes_aktualisiert(_event: Event) -> None:
+        async_check_origami_theme(hass, design)
+
+    entry.async_on_unload(
+        hass.bus.async_listen("themes_updated", _themes_aktualisiert)
+    )
 
     # Reload when options change (e.g. scan interval, flow rate, power entity)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -161,6 +190,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id)
         if not hass.data.get(DOMAIN):
             async_entferne_dienste(hass)
+            async_unregister_card(hass)
             await async_remove_dashboard(hass)
 
     return unload_ok

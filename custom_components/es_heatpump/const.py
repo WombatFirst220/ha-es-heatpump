@@ -23,6 +23,21 @@ CONF_SETTINGS_INTERVAL = "settings_interval"   # Sekunden zwischen Konfig-Abrufe
 CONF_BACKUP_INTERVAL  = "backup_interval_h"    # Stunden zwischen automatischen Sicherungen
 CONF_BACKUP_KEEP      = "backup_keep"          # Anzahl aufbewahrter Sicherungen
 
+# ── Dashboard (v3.1.0) ───────────────────────────────────────────────────────
+CONF_DASHBOARD_DESIGN = "dashboard_design"     # "standard" | "origami"
+CONF_HYDRAULIC_CARD   = "hydraulic_card"       # Hydraulik-Schema im Dashboard
+DESIGN_STANDARD       = "standard"
+DESIGN_ORIGAMI        = "origami"
+DESIGN_OPTIONS        = [DESIGN_STANDARD, DESIGN_ORIGAMI]
+# Name des Themes, wie ihn hazymorning/origami in themes/origami.yaml vergibt.
+# Das Theme wird NICHT mitgeliefert (AGPL-3.0, diese Integration ist MIT),
+# sondern nur per Name angesprochen. Der Betreiber installiert es selbst.
+ORIGAMI_THEME_NAME    = "Origami"
+ORIGAMI_HACS_URL      = (
+    "https://my.home-assistant.io/redirect/hacs_repository/"
+    "?owner=hazymorning&repository=origami&category=theme"
+)
+
 # ── Defaults ─────────────────────────────────────────────────────────────────
 DEFAULT_BASE_URL        = "https://www.myheatpump.com"
 DEFAULT_SCAN_INTERVAL   = 60        # seconds
@@ -33,6 +48,8 @@ DEFAULT_ENABLE_WRITES    = False    # Schreibzugriff bewusst abgeschaltet
 DEFAULT_SETTINGS_INTERVAL = 900     # s — Einstellungen aendern sich selten
 DEFAULT_BACKUP_INTERVAL  = 24       # h — eine automatische Sicherung am Tag
 DEFAULT_BACKUP_KEEP      = 60       # Staende; Eingriffs-Sicherungen zaehlen nicht mit
+DEFAULT_DASHBOARD_DESIGN = DESIGN_STANDARD
+DEFAULT_HYDRAULIC_CARD   = True
 
 # Nominal water flow per model, from the ES datasheet
 # "ES V8 Luft/Wasser Wärmepumpen AWC-R32-M, Monoblock Serie", row

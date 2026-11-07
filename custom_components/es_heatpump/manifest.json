@@ -1,14 +1,20 @@
 {
   "domain": "es_heatpump",
   "name": "ES Heatpump (myheatpump.com)",
-  "version": "3.0.2",
-  "documentation": "https://github.com/WombatFirst220/ha-es-heatpump",
-  "issue_tracker": "https://github.com/WombatFirst220/ha-es-heatpump/issues",
-  "dependencies": [],
+  "after_dependencies": [
+    "lovelace"
+  ],
   "codeowners": [
     "@WombatFirst220"
   ],
-  "requirements": [],
+  "config_flow": true,
+  "dependencies": [
+    "frontend",
+    "http"
+  ],
+  "documentation": "https://github.com/WombatFirst220/ha-es-heatpump",
   "iot_class": "cloud_polling",
-  "config_flow": true
+  "issue_tracker": "https://github.com/WombatFirst220/ha-es-heatpump/issues",
+  "requirements": [],
+  "version": "3.1.0"
 }

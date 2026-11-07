@@ -49,9 +49,25 @@
           "enable_writes": "Allow writing to the unit (off by default — required for settings entities, the restore service and parameter_setzen)",
           "settings_interval": "Configuration poll interval (seconds) — settings change rarely, 900 is plenty",
           "backup_interval_h": "Automatic backup interval (hours) — a change is always backed up immediately, this is the idle heartbeat",
-          "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted."
+          "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted.",
+          "hydraulic_card": "Show the hydraulic schematic in the dashboard (Heat Pump Hydraulic Card, bundled)",
+          "dashboard_design": "Dashboard design — \"Origami\" needs the theme of the same name (Marketplace/HACS)"
         }
       }
+    }
+  },
+  "selector": {
+    "dashboard_design": {
+      "options": {
+        "standard": "Standard (current theme)",
+        "origami": "Origami"
+      }
+    }
+  },
+  "issues": {
+    "origami_theme_missing": {
+      "title": "Origami theme not installed",
+      "description": "The ES Heatpump dashboard is set to the \"Origami\" design, but the theme \"{theme}\" is not installed. Until it is, Home Assistant shows the default theme.\n\nTo install: Marketplace/HACS → download the repository \"hazymorning/origami\" (category theme), then run the action \"frontend.reload_themes\" under Developer tools → Actions. The Montserrat font is optional, see the Origami README. This notice then disappears by itself."
     }
   }
 }

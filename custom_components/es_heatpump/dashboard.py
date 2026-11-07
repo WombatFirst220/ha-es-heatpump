@@ -26,7 +26,17 @@ from typing import Any
 import yaml
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers import storage as ha_storage
+
+from .const import (
+    DEFAULT_DASHBOARD_DESIGN,
+    DESIGN_ORIGAMI,
+    DOMAIN,
+    ORIGAMI_HACS_URL,
+    ORIGAMI_THEME_NAME,
+)
+from .dashboard_layout import gestalte
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,11 +61,19 @@ _LEGACY_YAML_REL = "dashboards/es_heatpump.yaml"
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def async_install_dashboard(hass: HomeAssistant) -> None:
+async def async_install_dashboard(
+    hass: HomeAssistant,
+    *,
+    design: str = DEFAULT_DASHBOARD_DESIGN,
+    hydraulik: bool = False,
+) -> None:
     """Install or update the ES Heatpump dashboard in storage mode.
 
     Idempotent — safe to call on every HA startup.  Re-parses the bundled
     YAML each time, so plugin updates are applied automatically.
+
+    ``design`` and ``hydraulik`` come from the options (v3.1.0), see
+    ``dashboard_layout.gestalte``.
     """
     # 1. Parse the bundled YAML
     config = await hass.async_add_executor_job(_load_bundled_yaml)
@@ -66,6 +84,8 @@ async def async_install_dashboard(hass: HomeAssistant) -> None:
             _YAML_SRC,
         )
         return
+    config = gestalte(config, design=design, hydraulik=hydraulik)
+    async_check_origami_theme(hass, design)
 
     # 2. Locate or create the dashboard index entry
     index_store = ha_storage.Store(hass, _INDEX_STORE_VER, _INDEX_STORE_KEY)
@@ -142,8 +162,39 @@ async def async_install_dashboard(hass: HomeAssistant) -> None:
     _LOGGER.info("ES Heatpump: dashboard '%s' ready", DASHBOARD_TITLE)
 
 
+ISSUE_ORIGAMI_MISSING = "origami_theme_missing"
+_DATA_THEMES = "frontend_themes"   # homeassistant.components.frontend.DATA_THEMES
+
+
+def async_check_origami_theme(hass: HomeAssistant, design: str) -> None:
+    """Meldet eine Reparatur, wenn Origami gewählt, aber nicht installiert ist.
+
+    Ohne das Theme fällt HA still auf das Standard-Theme zurück. Das Dashboard
+    funktioniert dann, sieht aber nicht so aus wie gewählt, und niemand sagt
+    warum. Die Reparatur sagt es und verlinkt die Installation.
+    """
+    themes = hass.data.get(_DATA_THEMES)
+    fehlt = (
+        design == DESIGN_ORIGAMI
+        and isinstance(themes, dict)
+        and ORIGAMI_THEME_NAME not in themes
+    )
+    if fehlt:
+        ir.async_create_issue(
+            hass, DOMAIN, ISSUE_ORIGAMI_MISSING,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=ISSUE_ORIGAMI_MISSING,
+            translation_placeholders={"theme": ORIGAMI_THEME_NAME},
+            learn_more_url=ORIGAMI_HACS_URL,
+        )
+    else:
+        ir.async_delete_issue(hass, DOMAIN, ISSUE_ORIGAMI_MISSING)
+
+
 async def async_remove_dashboard(hass: HomeAssistant) -> None:
     """Remove the dashboard index entry and its stored config."""
+    ir.async_delete_issue(hass, DOMAIN, ISSUE_ORIGAMI_MISSING)
     index_store = ha_storage.Store(hass, _INDEX_STORE_VER, _INDEX_STORE_KEY)
     index_data = await index_store.async_load()
     if not index_data:

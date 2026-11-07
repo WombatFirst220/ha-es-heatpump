@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-3.0.2-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-3.1.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 
@@ -26,7 +26,8 @@ Home Assistant Integration für **Energy Save Wärmepumpen** (Valtop AW12-R32 u.
 - 🔍 Automatische Geräteerkennung (`mn` + `devid` aus dem Portal)
 - 📊 **Verifizierte** Sensoren mit klaren Namen (siehe [Sensor-Tabelle](#-sensoren))
 - ⚡ Berechnete Werte: **Spreizung**, **Thermische Leistung**, **Aktueller COP**
-- 📋 Dashboard wird automatisch in der Seitenleiste installiert
+- 📋 Dashboard wird automatisch in der Seitenleiste installiert — mit
+  animiertem **Hydraulik-Schema** und wahlweise im **Origami-Design** (seit v3.1.0)
 - 🧹 Saubere Entity-IDs (`sensor.es_hp_*`) — keine kryptischen Parameter-Nummern
 - 🎛 **Einstellungen der Anlage direkt in Home Assistant** — 70 bedienbare Parameter
   aus dem Portal als `number`, `select` und `switch` (seit v3.0.0)
@@ -252,6 +253,50 @@ Drei Views:
 
 Das Dashboard-YAML wird beim Setup nach `<config>/dashboards/es_heatpump.yaml` kopiert und **bei jedem Plugin-Update überschrieben** — manuelle Änderungen an dieser Datei gehen daher verloren. Für eigene Anpassungen das Dashboard in HA duplizieren.
 
+#### 🔀 Hydraulik-Schema (seit v3.1.0)
+
+Ganz oben in der Übersicht steht das animierte Anlagenschema der
+[Heat Pump Hydraulic Card](https://github.com/Sturmi77/heatpump-hydraulic-card)
+von Sturmi77. Aufgebaut ist es wie das Anlagenschaubild im Portal:
+Wärmepumpe → Umschaltventil → Warmwasserspeicher (TW) bzw. Pufferspeicher (TC)
+→ Heizkreis, dazu der Kältekreis (Heißgas, Sauggas, Hoch-/Saugdruck,
+Expansionsventil) im Detailbereich.
+
+- **Nichts nachzuinstallieren:** Die Karte (v0.18.0, MIT-Lizenz) wird mit der
+  Integration ausgeliefert und von ihr geladen.
+- **Eigene Installation hat Vorrang:** Ist die Karte schon über HACS bzw. den
+  Marktplatz als Lovelace-Ressource eingebunden, lädt die Integration ihre Kopie
+  nicht. Es läuft dann die eigene, gegebenenfalls neuere Version.
+- **Nur lesend:** Das Schema hat keine Bedienelemente. Schreiben in die Anlage
+  bleibt eine bewusste Entscheidung über „Schreibzugriff erlauben“.
+- **Abschaltbar:** Option „Hydraulik-Schema im Dashboard anzeigen“. Dann wird
+  die Karte auch nicht mehr geladen (≈ 520 KB JavaScript weniger je Seitenaufruf).
+
+#### 🎨 Design „Origami“ (seit v3.1.0)
+
+Option „Design des Dashboards“: **Standard** übernimmt das Theme des Benutzers.
+**Origami** setzt auf jeder Ansicht dieses Dashboards das Theme
+[Origami](https://github.com/hazymorning/origami) von hazymorning. Andere
+Dashboards bleiben unberührt.
+
+Das Theme selbst wird **nicht** mitgeliefert. Origami steht unter der AGPL-3.0,
+diese Integration unter MIT. Ein Mitliefern wäre zwar erlaubt, solange die Datei
+unter ihrer eigenen Lizenz bleibt. Dann wäre das Paket aber gemischt lizenziert,
+und das Theme bekäme keine Updates aus seinem Repository. Die Integration spricht
+das Theme deshalb nur über seinen Namen an. Installieren lässt es sich so:
+
+1. Marktplatz/HACS → [Origami öffnen](https://my.home-assistant.io/redirect/hacs_repository/?owner=hazymorning&repository=origami&category=theme)
+   (Kategorie *Theme*) → herunterladen.
+2. In `configuration.yaml` muss `frontend: themes: !include_dir_merge_named themes` stehen.
+3. Entwicklerwerkzeuge → Aktionen → `frontend.reload_themes`.
+4. *Optional:* die Schrift Montserrat wie in der
+   [Origami-Anleitung](https://github.com/hazymorning/origami#theme) beschrieben
+   einbinden. Ohne sie greift die Systemschrift.
+
+Ist Origami gewählt, aber nicht installiert, erscheint unter *Einstellungen →
+Reparaturen* ein Hinweis. HA zeigt bis dahin das Standard-Theme. Nach
+`frontend.reload_themes` verschwindet der Hinweis ohne Neustart.
+
 ### 🔄 Migration von v1.x → v2.0.0
 
 **Beim ersten Start nach dem Update** läuft eine einmalige Migration:
@@ -286,7 +331,10 @@ Home Assistant integration for **Energy Save heat pumps** (Valtop AW12-R32 and s
 - 🔍 Automatic device discovery (`mn` + `devid` from the portal)
 - 📊 **Verified** sensors with clear names
 - ⚡ Calculated values: **Spread (Δ T)**, **Thermal Output**, **Current COP**
-- 📋 Sidebar dashboard installed automatically
+- 📋 Sidebar dashboard installed automatically, with an animated **hydraulic
+  schematic** (bundled [Heat Pump Hydraulic Card](https://github.com/Sturmi77/heatpump-hydraulic-card), MIT)
+  and an optional **Origami** design (theme by [hazymorning](https://github.com/hazymorning/origami),
+  AGPL-3.0, not bundled; install it via Marketplace/HACS) — both switchable in the options (since v3.1.0)
 - 🧹 Clean entity IDs (`sensor.es_hp_*`)
 - 🛠 Multilingual UI: German, English, Dutch, Swedish, Danish (falls back to English)
 
@@ -477,6 +525,27 @@ verschwinden ohne Neustart.
 
 Wem die Historie dieser drei Werte egal ist, der kann im Dialog auch einfach
 löschen. Beim Hochdruck hingen hier 187 Tage daran.
+
+### 3.1.0 — 2026-11-08
+
+**Hydraulik-Schema im Dashboard.** Die Übersicht zeigt oben das animierte
+Anlagenschema der Heat Pump Hydraulic Card (Sturmi77, v0.18.0, MIT). Die Karte
+wird mitgeliefert und über einen eigenen statischen Pfad geladen. Wer sie schon
+selbst über HACS bzw. den Marktplatz eingebunden hat, behält seine Version, die
+Integration lädt dann keine zweite. Zuordnung, Begründungen und was bewusst
+fehlt: `dashboard_layout.py`. Abschaltbar über die neue Option
+„Hydraulik-Schema im Dashboard anzeigen“ (standardmäßig an).
+
+**Design „Origami“.** Neue Option „Design des Dashboards“ mit *Standard* und
+*Origami*. Origami setzt das gleichnamige Theme von hazymorning als View-Theme
+auf alle Ansichten dieses Dashboards. Das Theme steht unter der AGPL-3.0 und wird
+deshalb nicht mitgeliefert, sondern nur per Name angesprochen. Fehlt es, meldet
+die Integration das unter *Reparaturen*. Details im Abschnitt
+[Dashboard](#-dashboard).
+
+`manifest.json` nennt jetzt `frontend` und `http` als Abhängigkeiten und
+`lovelace` als `after_dependencies`, weil die Integration die Karte selbst
+bereitstellt. Neue Tests: `tests/test_dashboard_layout.py`.
 
 ### 3.0.2 — 2026-09-22
 
@@ -931,3 +1000,8 @@ Vorlage, Rasterizer und Belege: [`brand/`](brand/).
 ## 📄 Lizenz / License
 
 MIT
+
+Mitgeliefert: [Heat Pump Hydraulic Card](https://github.com/Sturmi77/heatpump-hydraulic-card)
+© 2026 Sturmi77, MIT-Lizenz, unverändert unter
+[`custom_components/es_heatpump/www/`](custom_components/es_heatpump/www/)
+mit eigener Lizenzdatei. Das Theme Origami (AGPL-3.0) ist **nicht** enthalten.

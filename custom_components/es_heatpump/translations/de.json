@@ -49,9 +49,25 @@
           "enable_writes": "Schreibzugriff auf die Anlage erlauben (standardmäßig aus — nötig für die Einstellungs-Entities, das Wiederherstellen und „Parameter setzen“)",
           "settings_interval": "Abstand zwischen Konfigurationsabrufen (Sekunden) — Einstellungen ändern sich selten, 900 genügt",
           "backup_interval_h": "Abstand automatischer Sicherungen (Stunden) — eine Änderung wird immer sofort gesichert, dies ist nur der Leerlauftakt",
-          "backup_keep": "Anzahl aufbewahrter Sicherungen (0 = unbegrenzt). Sicherungen vor einem Schreibzugriff oder einer Wiederherstellung werden nie gelöscht."
+          "backup_keep": "Anzahl aufbewahrter Sicherungen (0 = unbegrenzt). Sicherungen vor einem Schreibzugriff oder einer Wiederherstellung werden nie gelöscht.",
+          "hydraulic_card": "Hydraulik-Schema im Dashboard anzeigen (Heat Pump Hydraulic Card, wird mitgeliefert)",
+          "dashboard_design": "Design des Dashboards — „Origami“ braucht das gleichnamige Theme (Marktplatz/HACS)"
         }
       }
+    }
+  },
+  "selector": {
+    "dashboard_design": {
+      "options": {
+        "standard": "Standard (aktuelles Theme)",
+        "origami": "Origami"
+      }
+    }
+  },
+  "issues": {
+    "origami_theme_missing": {
+      "title": "Origami-Theme nicht installiert",
+      "description": "Das ES-Heatpump-Dashboard soll im Design „Origami“ erscheinen, aber das Theme „{theme}“ ist nicht installiert. Bis dahin zeigt Home Assistant das Standard-Theme.\n\nInstallation: Marktplatz/HACS → Repository „hazymorning/origami“ (Kategorie Theme) herunterladen, danach unter Entwicklerwerkzeuge → Aktionen „frontend.reload_themes“ ausführen. Die Schrift Montserrat ist optional, siehe README von Origami. Der Hinweis verschwindet dann von selbst."
     }
   }
 }
