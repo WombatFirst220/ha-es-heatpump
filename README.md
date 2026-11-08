@@ -245,13 +245,33 @@ Mischventil 2 (`par10`), Software Version (`par37`), HWTBH Betriebszeit (`par43`
   <img src="docs/dashboard-mobile.png" alt="ES Heatpump Dashboard – Übersicht" width="280">
 </p>
 
-Drei Views:
+Drei Ansichten. Ihr Aufbau hängt vom gewählten Design ab (siehe unten):
 
-1. **Übersicht** — Gauges (COP, Wärmeabgabe, El. Leistung, Heizwasser, Brauchwasser, Spreizung), Temperaturen-Tabelle, 24h-Verlauf, System-Technik
-2. **Energie** — COP-Statistik (7 Tage), Wärmeabgabe + Kompressor-Frequenz, Heißgastemperatur-Verlauf, Betriebsstunden
-3. **Diagnose** — Mischventile, Diagnose-Parameter, Geräteinfo
+| Ansicht | Design *Standard* | Design *Origami* (seit v3.2.0) |
+|---|---|---|
+| **Übersicht** | Hydraulik-Schema, Messzeiger (COP, Wärmeabgabe, El. Leistung, Heizwasser, Brauchwasser, Spreizung), Temperaturen, 24-h-Verlauf, System-Technik | *Wärmepumpe* mit Schema, *Jetzt*, *Speicher*, *Verlauf · 24 h* als Kacheln |
+| **Energie** | COP-Statistik (7 Tage), Wärmeabgabe und Frequenz, Heißgas, Betriebsstunden | *Effizienz*, *Leistung · 24 h*, *Betriebsstunden* |
+| **Diagnose** | Mischventile, Diagnose-Parameter, Geräteinfo | *Kältekreis*, *Elektrik und Lüfter*, *Diagnose-Parameter* |
 
-Das Dashboard-YAML wird beim Setup nach `<config>/dashboards/es_heatpump.yaml` kopiert und **bei jedem Plugin-Update überschrieben** — manuelle Änderungen an dieser Datei gehen daher verloren. Für eigene Anpassungen das Dashboard in HA duplizieren.
+Die Integration schreibt das Dashboard bei **jedem Start und jeder
+Optionsänderung neu** (Storage-Modus, seit v3.1.1 auch ohne Neustart sichtbar).
+Änderungen im UI-Editor gehen dabei verloren. Für eigene Anpassungen das
+Dashboard in HA duplizieren. Gelöscht wird es nur, wenn die Integration entfernt
+wird.
+
+#### ⚙️ Einstellungen (seit v3.1.1 in Abschnitten)
+
+*Einstellungen → Geräte & Dienste → ES Heatpump → Konfigurieren*. Die
+Erklärung zu jedem Feld steht als Hilfetext darunter.
+
+| Abschnitt | Felder |
+|---|---|
+| **Messung und Berechnung** | Modell, Volumenstrom Heizkreis und Brauchwasserkreis, Stromsensor, Volumenstrom-Sensor, Schwelle Brauchwasser-Erkennung, Betriebsart-Quelle |
+| **Dashboard** | Hydraulik-Schema anzeigen, Design (Standard / Origami) |
+| **Schreibzugriff und Sicherungen** *(eingeklappt)* | Schreibzugriff erlauben, Abruf der Einstellungen, automatische Sicherung, aufbewahrte Sicherungen |
+| **Verbindung zum Portal** *(eingeklappt)* | Portal-URL, Aktualisierungsintervall |
+
+Vor HA 2024.7 erscheinen dieselben Felder ohne Abschnitte.
 
 #### 🔀 Hydraulik-Schema (seit v3.1.0)
 
@@ -464,6 +484,22 @@ precedence.
 ### 🌡️ Sensors
 
 The plugin creates around 18 visible entities under `sensor.es_hp_*` plus calculated sensors for **Spread**, **Thermal Output** and **COP**. Diagnostic sensors are registered but disabled by default — enable them under **Settings → Devices & Services → ES Heatpump → Entities**. Unidentified parameters that always return `0.0` are not exposed at all. See the German section above and [`PARAMETER_MAPPING.md`](PARAMETER_MAPPING.md) for the full table with verification details.
+
+### 📋 Dashboard and options (since v3.1)
+
+- The bundled dashboard has three views (Overview, Energy, Diagnostics). The
+  **Standard** design uses gauges and your own theme. The **Origami** design
+  (since v3.2.0) is built from sections with headings and tiles and uses the
+  Origami theme as view theme. It needs HA 2024.10 and the theme from
+  Marketplace/HACS.
+- The **hydraulic schematic** (Heat Pump Hydraulic Card, bundled) sits at the
+  top of the overview. If you already load the card as a Lovelace resource,
+  your copy wins.
+- The integration rewrites the dashboard on every start and options change.
+  Duplicate it in HA for your own edits.
+- The **options dialog** is split into sections: *Measurement and calculation*,
+  *Dashboard*, *Write access and backups* (collapsed) and *Portal connection*
+  (collapsed). On HA before 2024.7 the same fields appear without sections.
 
 ### 🔄 Migration from v1.x → v2.0.0
 
