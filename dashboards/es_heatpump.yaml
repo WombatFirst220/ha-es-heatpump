@@ -210,7 +210,47 @@ views:
             name: HBH Gesamt
 
   # ────────────────────────────────────────────────────────────────────────
-  # View 3: Diagnose
+  # View 3: Auswertung (v4.0.0)
+  # ────────────────────────────────────────────────────────────────────────
+  # Auswertungskarte der Integration (custom:es-heatpump-analysis-card) und
+  # darunter Statistik-Diagramme als Rueckfall, falls die Karte nicht laedt.
+  - title: Auswertung
+    path: auswertung
+    icon: mdi:chart-box-outline
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:es-heatpump-analysis-card
+
+          - type: statistics-graph
+            title: Energie je Tag (30 Tage)
+            entities:
+              - entity: sensor.es_hp_energie_elektrisch
+                name: Strom
+              - entity: sensor.es_hp_energie_thermisch
+                name: Wärme
+            chart_type: bar
+            period: day
+            days_to_show: 30
+            stat_types:
+              - change
+
+          - type: statistics-graph
+            title: Energie je Monat
+            entities:
+              - entity: sensor.es_hp_energie_elektrisch
+                name: Strom
+              - entity: sensor.es_hp_energie_thermisch
+                name: Wärme
+            chart_type: bar
+            period: month
+            days_to_show: 365
+            stat_types:
+              - change
+
+  # ────────────────────────────────────────────────────────────────────────
+  # View 4: Diagnose
   # ────────────────────────────────────────────────────────────────────────
   - title: Diagnose
     path: diagnose

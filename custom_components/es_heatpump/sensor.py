@@ -7,20 +7,43 @@ Creates:
       - Spreizung (Vorlauf − Rücklauf)
       - Thermische Leistung (kJ delivered to the heating circuit)
       - Aktueller COP   (thermal / electrical, requires Power-Entity in config)
+  • Zaehler fuer die Auswertungsseite: elektrische und thermische Energie
+    (kWh, gesamt/Heizen/Warmwasser), Verdichterstarts und -laufzeit. Logik in
+    ``energy.py``; Zaehlerstaende werden ueber RestoreSensor fortgesetzt.
 
-Entity-IDs are forced to the form ``sensor.es_hp_<slug>`` via
-``_attr_suggested_object_id`` so they are stable across name changes.
+Entity-IDs: Jede Entity setzt ``self.entity_id = "sensor.es_hp_<slug>"``
+ausdruecklich. Bis v3.2.0 stand hier ``_attr_suggested_object_id`` - dieses
+Attribut kennt Home Assistant nicht, es wurde stillschweigend ignoriert. Neue
+Installationen bekamen deshalb zuerst eine ID aus Geraetename + Name
+(``sensor.es_warmepumpe_vorlauftemperatur``), die erst die Migration in
+``__init__.py`` auf ``sensor.es_hp_<slug>`` umschrieb. Seit GitHub-Issue #6 steht die
+richtige ID von Anfang an da. Ein vorhandener Registereintrag hat immer Vorrang,
+bestehende Installationen behalten ihre IDs also unveraendert.
+
+Namen und Zustaende (GitHub-Issue #6): ``_attr_has_entity_name = True`` plus
+``_attr_translation_key``; die Texte stehen in ``strings.json`` bzw.
+``translations/<sprache>.json`` unter ``entity.sensor.<key>``.
 """
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.sensor import (
+    RestoreSensor,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_USERNAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_time_interval,
+)
+from homeassistant.util import dt as dt_util
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -29,7 +52,8 @@ from .device import baue_device_info
 
 from .const import (
     BETRIEBSART_ALIASES,
-    BETRIEBSART_OPTIONS,
+    BETRIEBSART_STATE_KEYS,
+    BETRIEBSART_STATE_OPTIONS,
     CALC_BETRIEBSART,
     CALC_COP,
     CALC_ELEC_POWER,
@@ -50,7 +74,6 @@ from .const import (
     DOMAIN,
     PARAMETER_SENSORS,
     TEMP_SENTINEL,
-    WATER_VOL_HEAT_CAPACITY_WH,
 )
 from .mode import (
     betriebsart_aus_par1 as _betriebsart_aus_par1,
@@ -58,6 +81,21 @@ from .mode import (
     ist_abtauen as _ist_abtauen,
 )
 from .flow import active_flow_rate as _active_flow_rate, flow_from_entity
+from .energy import (
+    ART_ELEKTRISCH,
+    ART_THERMISCH,
+    ENERGIE_ZAEHLER,
+    MAX_LUECKE_ELEKTRISCH_S,
+    MAX_LUECKE_THERMISCH_S,
+    MAX_LUECKE_VERDICHTER_S,
+    METHODE_LINKS,
+    METHODE_TRAPEZ,
+    EnergieZaehler,
+    VerdichterZaehler,
+    kategorie_von,
+    leistung_in_w,
+    thermische_leistung_w,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -259,11 +297,26 @@ async def async_setup_entry(
     if _settings is not None:
         entities.append(SicherungenSensor(_settings, device_info, username))
 
+    # ── Energiezaehler fuer die Auswertungsseite ─────────────────────────
+    bilanz = EnergieBilanz(
+        hass, coordinator, power_entity, mode_source, dhw_margin_k,
+        flow_rate, flow_rate_dhw, flow_entity,
+    )
+    zaehler_entities = [
+        EnergieZaehlerSensor(bilanz, device_info, username, slug, art, teil)
+        for slug, art, teil in ENERGIE_ZAEHLER
+    ] + [
+        VerdichterStartsSensor(bilanz, device_info, username),
+        VerdichterLaufzeitSensor(bilanz, device_info, username),
+    ]
+    entities.extend(zaehler_entities)
+
     _LOGGER.info(
         "ES Heatpump: creating %d entities (%d raw, calculated + diagnostics)",
         len(entities), len(PARAMETER_SENSORS),
     )
     async_add_entities(entities)
+    entry.async_on_unload(bilanz.async_starte())
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -286,10 +339,13 @@ class ESHeatpumpSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self._par_id = par_id
+        # value_map wird derzeit von keinem Parameter genutzt. Falls doch
+        # wieder: Die Werte muessen Zustands-Schluessel ([a-z0-9_]) sein, die
+        # unter entity.sensor.<slug>.state uebersetzt sind.
         self._value_map: dict[float, str] | None = meta.get("value_map")
-        self._attr_name = meta["name"]
+        self._attr_translation_key = meta["slug"]
         self._attr_unique_id = f"{DOMAIN}_{username}_{par_id}"
-        self._attr_suggested_object_id = f"es_hp_{meta['slug']}"
+        self.entity_id = f"sensor.es_hp_{meta['slug']}"
         self._attr_native_unit_of_measurement = meta.get("unit")
         self._attr_device_class = meta.get("device_class")
         self._attr_state_class = meta.get("state_class")
@@ -312,9 +368,9 @@ class ESHeatpumpSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
             and self._attr_device_class == "temperature"
         ):
             return None
-        # Apply value mapping (e.g. par15: 2.0 → "Heizen") if configured
+        # Apply value mapping (state keys, translated via translation_key)
         if self._value_map is not None and value is not None:
-            return self._value_map.get(value, "Unbekannt")
+            return self._value_map.get(value, "unknown")
         return value
 
     @property
@@ -337,7 +393,7 @@ class SpreizungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    _attr_name = "Spreizung"
+    _attr_translation_key = "spreizung"
     _attr_native_unit_of_measurement = "K"
     _attr_device_class = "temperature"
     _attr_state_class = "measurement"
@@ -346,7 +402,7 @@ class SpreizungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
     def __init__(self, coordinator, device_info: DeviceInfo, username: str) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_SPREIZUNG}"
-        self._attr_suggested_object_id = "es_hp_spreizung"
+        self.entity_id = "sensor.es_hp_spreizung"
         self._attr_device_info = device_info
 
     @property
@@ -379,7 +435,7 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    _attr_name = "Thermische Leistung"
+    _attr_translation_key = "thermische_leistung"
     _attr_native_unit_of_measurement = "W"
     _attr_device_class = "power"
     _attr_state_class = "measurement"
@@ -399,7 +455,7 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_THERM_LEISTUNG}"
-        self._attr_suggested_object_id = "es_hp_thermische_leistung"
+        self.entity_id = "sensor.es_hp_thermische_leistung"
         self._attr_device_info = device_info
         self._flow_heating = flow_rate_heating
         self._flow_dhw = flow_rate_dhw
@@ -411,24 +467,14 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
     @property
     def native_value(self) -> float | None:
         data = self.coordinator.data or {}
-        vor, rue, freq = data.get("par4"), data.get("par5"), data.get("par20")
-        if vor is None or rue is None:
-            return None
-        if not freq or freq <= 0:
-            return 0.0
         mode, _ = _resolve_betriebsart(
             self._hass, self._mode_source, data, self._dhw_margin_k
         )
         live, _ = _live_flow(self._hass, self._flow_entity)
-        active_flow = _active_flow_rate(
-            mode, self._flow_heating, self._flow_dhw, live
+        leistung = thermische_leistung_w(
+            data, mode, self._flow_heating, self._flow_dhw, live
         )
-        if active_flow <= 0:
-            return 0.0
-        delta_t = vor - rue
-        if delta_t <= 0:
-            return 0.0
-        return round(active_flow * delta_t * WATER_VOL_HEAT_CAPACITY_WH, 1)
+        return None if leistung is None else round(leistung, 1)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -461,7 +507,7 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    _attr_name = "Aktueller COP"
+    _attr_translation_key = "aktueller_cop"
     _attr_native_unit_of_measurement = None
     _attr_state_class = "measurement"
     _attr_icon = "mdi:chart-bell-curve"
@@ -482,7 +528,7 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_COP}"
-        self._attr_suggested_object_id = "es_hp_aktueller_cop"
+        self.entity_id = "sensor.es_hp_aktueller_cop"
         self._attr_device_info = device_info
         self._flow_heating = flow_rate_heating
         self._flow_dhw = flow_rate_dhw
@@ -524,8 +570,10 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         if elec_w < 50:    # below this we treat the heatpump as effectively idle
             return 0.0
 
-        therm_w = active_flow * (vor - rue) * WATER_VOL_HEAT_CAPACITY_WH
-        if therm_w <= 0:
+        therm_w = thermische_leistung_w(
+            data, mode, self._flow_heating, self._flow_dhw, live
+        )
+        if therm_w is None or therm_w <= 0:
             return 0.0
         cop = therm_w / elec_w
 
@@ -593,9 +641,11 @@ class BetriebsartCalcSensor(
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    _attr_name = "Betriebsart"
+    _attr_translation_key = "betriebsart"
     _attr_device_class = "enum"
-    _attr_options = BETRIEBSART_OPTIONS
+    # Zustands-Schluessel statt deutscher Texte; Anzeige ueber
+    # entity.sensor.betriebsart.state.<schluessel>
+    _attr_options = BETRIEBSART_STATE_OPTIONS
     _attr_icon = "mdi:heat-pump"
 
     def __init__(
@@ -609,17 +659,20 @@ class BetriebsartCalcSensor(
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_BETRIEBSART}"
-        self._attr_suggested_object_id = "es_hp_betriebsart"
+        self.entity_id = "sensor.es_hp_betriebsart"
         self._attr_device_info = device_info
         self._mode_source = mode_source
         self._hass = hass
         self._dhw_margin_k = dhw_margin_k
 
     @property
-    def native_value(self) -> str:
-        return _resolve_betriebsart(
+    def native_value(self) -> str | None:
+        # Intern bleibt die Betriebsart der deutsche kanonische Wert (mode.py,
+        # flow.py, Tests). Erst hier wird er zum uebersetzbaren Schluessel.
+        modus = _resolve_betriebsart(
             self._hass, self._mode_source, self.coordinator.data, self._dhw_margin_k
         )[0]
+        return BETRIEBSART_STATE_KEYS.get(modus)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -680,7 +733,7 @@ class ElectricalPowerMirrorSensor(
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    _attr_name = "Elektrische Leistung"
+    _attr_translation_key = "leistung_elektrisch"
     _attr_native_unit_of_measurement = "W"
     _attr_device_class = "power"
     _attr_state_class = "measurement"
@@ -697,7 +750,7 @@ class ElectricalPowerMirrorSensor(
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_ELEC_POWER}"
-        self._attr_suggested_object_id = "es_hp_leistung_elektrisch"
+        self.entity_id = "sensor.es_hp_leistung_elektrisch"
         self._attr_device_info = device_info
         self._power_entity = power_entity
         self._hass = hass
@@ -741,13 +794,14 @@ class StammdatenSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
     Heizungskeller kommt.
     """
 
+    _attr_has_entity_name = True
+    _attr_translation_key = "anlagendaten"
     _attr_icon = "mdi:identifier"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coordinator, device_info: DeviceInfo, username: str) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_stammdaten"
-        self._attr_name = "WP Anlagendaten"
         self.entity_id = "sensor.es_hp_anlagendaten"
         self._attr_device_info = device_info
 
@@ -787,6 +841,8 @@ class StammdatenSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
 class SicherungenSensor(CoordinatorEntity, SensorEntity):
     """Wie viele Konfigurationssicherungen vorliegen und wie alt die juengste ist."""
 
+    _attr_has_entity_name = True
+    _attr_translation_key = "konfigurationssicherungen"
     _attr_icon = "mdi:content-save-cog-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -794,7 +850,6 @@ class SicherungenSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, settings_coordinator, device_info: DeviceInfo, username: str) -> None:
         super().__init__(settings_coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_sicherungen"
-        self._attr_name = "WP Konfigurationssicherungen"
         self.entity_id = "sensor.es_hp_konfigurationssicherungen"
         self._attr_device_info = device_info
 
@@ -833,3 +888,270 @@ class SicherungenSensor(CoordinatorEntity, SensorEntity):
         # Attributtabelle zu sprengen.
         attribute["sicherungen"] = [s.kurzfassung() for s in ablage.alle[:10]]
         return {k: v for k, v in attribute.items() if v is not None}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Energiezaehler fuer die Auswertungsseite
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Die Rechnung steht HA-frei in energy.py. Hier stehen nur die Anbindung an
+# Zustandsaenderungen und Portalabrufe sowie die Entities, deren Zaehlerstaende
+# die Langzeitstatistik von Home Assistant zu Tag/Woche/Monat/Jahr verdichtet.
+
+# Takt, in dem die elektrische Leistung auch ohne Zustandsaenderung
+# fortgeschrieben wird. Ein Shelly meldet bei gleichbleibender Last mitunter
+# minutenlang nichts - ohne Takt fiele so ein Intervall unter die Lueckenregel.
+_TAKT_ELEKTRISCH = timedelta(minutes=1)
+
+# Mindestabstand zwischen zwei Zustandsschreibungen der elektrischen Zaehler.
+# Ein Shelly meldet mitunter jede Sekunde; jede Meldung als drei neue Zustaende
+# in den Recorder zu schreiben, blaehte die Datenbank auf. Gerechnet wird
+# trotzdem bei jeder Meldung - nur das Schreiben wird gebuendelt, der Takt oben
+# holt Liegengebliebenes spaetestens nach einer Minute nach.
+_MIN_SCHREIBABSTAND_ELEKTRISCH_S = 55.0
+
+
+class EnergieBilanz:
+    """Haelt die Zaehler einer Anlage und versorgt sie mit Messpunkten."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        coordinator: ESHeatpumpCoordinator,
+        power_entity: str | None,
+        mode_source: str | None,
+        dhw_margin_k: float,
+        flow_heating: float,
+        flow_dhw: float,
+        flow_entity: str | None,
+    ) -> None:
+        self.hass = hass
+        self.coordinator = coordinator
+        self.power_entity = power_entity
+        self._mode_source = mode_source
+        self._dhw_margin_k = dhw_margin_k
+        self._flow_heating = flow_heating
+        self._flow_dhw = flow_dhw
+        self._flow_entity = flow_entity
+        self.zaehler: dict[str, EnergieZaehler] = {
+            # Der Zustand der Strommess-Entity gilt, bis er sich aendert
+            ART_ELEKTRISCH: EnergieZaehler(MAX_LUECKE_ELEKTRISCH_S, METHODE_LINKS),
+            # Portalwerte sind Stichproben eines stetigen Verlaufs
+            ART_THERMISCH: EnergieZaehler(MAX_LUECKE_THERMISCH_S, METHODE_TRAPEZ),
+        }
+        self.verdichter = VerdichterZaehler(MAX_LUECKE_VERDICHTER_S)
+        self._entities: list[SensorEntity] = []
+        self._zuletzt_geschrieben: dict[str, float] = {}
+
+    # -- Entities ------------------------------------------------------
+    def anmelden(self, entity: SensorEntity) -> None:
+        self._entities.append(entity)
+
+    def abmelden(self, entity: SensorEntity) -> None:
+        if entity in self._entities:
+            self._entities.remove(entity)
+
+    @callback
+    def _schreibe(self, nur_art: str | None = None) -> None:
+        for entity in self._entities:
+            if nur_art is not None and getattr(entity, "art", None) != nur_art:
+                continue
+            if entity.hass is not None:
+                entity.async_write_ha_state()
+
+    # -- Messpunkte ----------------------------------------------------
+    def _betriebsart(self) -> str:
+        return _resolve_betriebsart(
+            self.hass, self._mode_source, self.coordinator.data, self._dhw_margin_k
+        )[0]
+
+    @staticmethod
+    def _jetzt() -> float:
+        return dt_util.utcnow().timestamp()
+
+    @callback
+    def _elektrisch_messen(self) -> None:
+        state = self.hass.states.get(self.power_entity) if self.power_entity else None
+        leistung = None
+        if state is not None:
+            leistung = leistung_in_w(
+                state.state, state.attributes.get("unit_of_measurement")
+            )
+        jetzt = self._jetzt()
+        kwh = self.zaehler[ART_ELEKTRISCH].messpunkt(
+            jetzt, leistung, kategorie_von(self._betriebsart())
+        )
+        if kwh <= 0:
+            return
+        zuletzt = self._zuletzt_geschrieben.get(ART_ELEKTRISCH)
+        if zuletzt is not None and 0 <= jetzt - zuletzt < _MIN_SCHREIBABSTAND_ELEKTRISCH_S:
+            return
+        self._zuletzt_geschrieben[ART_ELEKTRISCH] = jetzt
+        self._schreibe(ART_ELEKTRISCH)
+
+    @callback
+    def _bei_leistungsaenderung(self, _event: Event) -> None:
+        self._elektrisch_messen()
+
+    @callback
+    def _bei_takt(self, _now) -> None:
+        self._elektrisch_messen()
+
+    @callback
+    def _bei_abruf(self) -> None:
+        """Nach jedem Portalabruf: thermische Energie und Verdichter."""
+        if not self.coordinator.last_update_success or not self.coordinator.data:
+            return
+        data = self.coordinator.data
+        t = self._jetzt()
+        modus = self._betriebsart()
+        live, _ = _live_flow(self.hass, self._flow_entity)
+        leistung = thermische_leistung_w(
+            data, modus, self._flow_heating, self._flow_dhw, live
+        )
+        kwh = self.zaehler[ART_THERMISCH].messpunkt(t, leistung, kategorie_von(modus))
+        verdichter = self.verdichter.messpunkt(t, data.get("par20"))
+        if kwh > 0:
+            self._schreibe(ART_THERMISCH)
+        if verdichter:
+            self._schreibe("verdichter")
+
+    @callback
+    def async_starte(self):
+        """Startet die Beobachtung; liefert die Abmeldefunktion."""
+        abmelden = [self.coordinator.async_add_listener(self._bei_abruf)]
+        if self.power_entity:
+            abmelden.append(
+                async_track_state_change_event(
+                    self.hass, [self.power_entity], self._bei_leistungsaenderung
+                )
+            )
+            abmelden.append(
+                async_track_time_interval(self.hass, self._bei_takt, _TAKT_ELEKTRISCH)
+            )
+            self._elektrisch_messen()
+
+        @callback
+        def _stopp() -> None:
+            for fn in abmelden:
+                fn()
+
+        return _stopp
+
+
+class _BilanzSensor(RestoreSensor):
+    """Gemeinsame Grundlage der Zaehler-Entities."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    art = ""
+
+    def __init__(
+        self, bilanz: EnergieBilanz, device_info: DeviceInfo, username: str, slug: str
+    ) -> None:
+        self._bilanz = bilanz
+        self._attr_translation_key = slug
+        self._attr_unique_id = f"{DOMAIN}_{username}_calc_{slug}"
+        self.entity_id = f"sensor.es_hp_{slug}"
+        self._attr_device_info = device_info
+
+    def _uebernehme(self, wert: Any) -> None:
+        raise NotImplementedError
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        letzte = await self.async_get_last_sensor_data()
+        if letzte is not None and letzte.native_value is not None:
+            # Zaehlerstand fortsetzen - nie zuruecksetzen, sonst entstuende in
+            # der Statistik ein Sprung, den HA als Zaehlertausch werten muesste.
+            self._uebernehme(letzte.native_value)
+        self._bilanz.anmelden(self)
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._bilanz.abmelden(self)
+        await super().async_will_remove_from_hass()
+
+
+class EnergieZaehlerSensor(_BilanzSensor):
+    """Elektrische oder thermische Energie (kWh), gesamt oder je Betriebsart."""
+
+    _attr_native_unit_of_measurement = "kWh"
+    _attr_device_class = "energy"
+    _attr_suggested_display_precision = 2
+
+    def __init__(
+        self,
+        bilanz: EnergieBilanz,
+        device_info: DeviceInfo,
+        username: str,
+        slug: str,
+        art: str,
+        teil: str,
+    ) -> None:
+        super().__init__(bilanz, device_info, username, slug)
+        self.art = art
+        self._teil = teil
+        self._attr_icon = (
+            "mdi:lightning-bolt" if art == ART_ELEKTRISCH else "mdi:fire"
+        )
+
+    def _uebernehme(self, wert: Any) -> None:
+        self._bilanz.zaehler[self.art].uebernehme(self._teil, wert)
+
+    @property
+    def available(self) -> bool:
+        # Ohne Strommessung gibt es keinen elektrischen Zaehler
+        if self.art == ART_ELEKTRISCH:
+            return self._bilanz.power_entity is not None
+        return True
+
+    @property
+    def native_value(self) -> float:
+        return round(self._bilanz.zaehler[self.art].summen[self._teil], 4)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        attrs: dict[str, Any] = {"teil": self._teil}
+        if self.art == ART_ELEKTRISCH:
+            attrs["power_entity"] = self._bilanz.power_entity
+        return attrs
+
+
+class VerdichterStartsSensor(_BilanzSensor):
+    """Anzahl der Verdichterstarts (Taktung)."""
+
+    _attr_translation_key = "verdichter_starts"
+    _attr_icon = "mdi:counter"
+    art = "verdichter"
+
+    def __init__(self, bilanz: EnergieBilanz, device_info: DeviceInfo, username: str) -> None:
+        super().__init__(bilanz, device_info, username, self._attr_translation_key)
+
+    def _uebernehme(self, wert: Any) -> None:
+        self._bilanz.verdichter.uebernehme(starts=wert)
+
+    @property
+    def native_value(self) -> int:
+        return self._bilanz.verdichter.starts
+
+
+class VerdichterLaufzeitSensor(_BilanzSensor):
+    """Laufzeit des Verdichters (h)."""
+
+    _attr_native_unit_of_measurement = "h"
+    _attr_device_class = "duration"
+    _attr_translation_key = "verdichter_laufzeit"
+    _attr_icon = "mdi:timer-outline"
+    _attr_suggested_display_precision = 1
+    art = "verdichter"
+
+    def __init__(self, bilanz: EnergieBilanz, device_info: DeviceInfo, username: str) -> None:
+        super().__init__(bilanz, device_info, username, self._attr_translation_key)
+
+    def _uebernehme(self, wert: Any) -> None:
+        self._bilanz.verdichter.uebernehme(laufzeit_h=wert)
+
+    @property
+    def native_value(self) -> float:
+        return round(self._bilanz.verdichter.laufzeit_h, 4)

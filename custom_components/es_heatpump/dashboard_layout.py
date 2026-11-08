@@ -21,19 +21,23 @@ from typing import Any
 from .const import DESIGN_ORIGAMI, ORIGAMI_THEME_NAME
 
 HYDRAULIC_CARD_TYPE = "custom:heatpump-hydraulic-card"
+# Auswertungskarte der Integration (www/es-heatpump-analysis-card.js, v4.0.0)
+ANALYSIS_CARD_TYPE = "custom:es-heatpump-analysis-card"
 
 # Betriebsart der Integration → Modus der Karte.  Die Karte kennt off, heating,
 # dhw, cooling, defrost, idle.  Kombinierte Zustände zeigen Warmwasser, weil das
-# Umschaltventil dann zum Speicher steht.
+# Umschaltventil dann zum Speicher steht.  Schlüssel sind seit GitHub-Issue #6
+# die Zustands-Schlüssel der Entity (const.BETRIEBSART_STATE_KEYS), nicht mehr
+# die deutschen Texte.
 MODE_MAP: dict[str, str] = {
-    "Aus": "off",
-    "Heizen": "heating",
-    "Brauchwasser": "dhw",
-    "Brauchwasser + Heizen": "dhw",
-    "Kuehlen": "cooling",
-    "Brauchwasser + Kuehlen": "dhw",
-    "Entfrosten": "defrost",
-    "Unbekannt": "idle",
+    "off": "off",
+    "heating": "heating",
+    "dhw": "dhw",
+    "dhw_heating": "dhw",
+    "cooling": "cooling",
+    "dhw_cooling": "dhw",
+    "defrost": "defrost",
+    "unknown": "idle",
 }
 
 
@@ -144,7 +148,7 @@ def _abschnitt(*karten: dict[str, Any]) -> dict[str, Any]:
 
 
 def origami_ansichten(hydraulik: bool) -> list[dict[str, Any]]:
-    """Die drei Ansichten im Origami-Aufbau (Pfade wie im Standard-Dashboard)."""
+    """Die Ansichten im Origami-Aufbau (Pfade wie im Standard-Dashboard)."""
     # Die Betriebsart zeigt das Schema selbst ("Heizen · läuft"); ohne Schema
     # gehört sie in die Überschrift.
     wp_badges = ["sensor.es_hp_aktueller_cop", "sensor.es_hp_aussentemp_ta"]
@@ -251,6 +255,38 @@ def origami_ansichten(hydraulik: bool) -> list[dict[str, Any]]:
         ),
     ]
 
+    # Auswertung: Die Karte braucht die volle Breite, deshalb spannt ihr
+    # Abschnitt alle Spalten.  Darunter Statistik-Diagramme als Rueckfall.
+    energie_reihen = [
+        {"entity": "sensor.es_hp_energie_elektrisch", "name": "Strom"},
+        {"entity": "sensor.es_hp_energie_thermisch", "name": "Wärme"},
+    ]
+    auswertung = [
+        {
+            **_abschnitt(
+                _kopf("Auswertung"),
+                {"type": ANALYSIS_CARD_TYPE, "title": "", "grid_options": VOLL},
+            ),
+            "column_span": 3,
+        },
+        _abschnitt(
+            _kopf("Energie je Tag"),
+            {
+                "type": "statistics-graph", "title": "Letzte 30 Tage",
+                "entities": energie_reihen, "chart_type": "bar", "period": "day",
+                "days_to_show": 30, "stat_types": ["change"], "grid_options": VOLL,
+            },
+        ),
+        _abschnitt(
+            _kopf("Energie je Monat"),
+            {
+                "type": "statistics-graph", "title": "Letzte 12 Monate",
+                "entities": energie_reihen, "chart_type": "bar", "period": "month",
+                "days_to_show": 365, "stat_types": ["change"], "grid_options": VOLL,
+            },
+        ),
+    ]
+
     def ansicht(titel: str, pfad: str, icon: str, abschnitte: list) -> dict[str, Any]:
         return {
             "title": titel, "path": pfad, "icon": icon, "type": "sections",
@@ -260,6 +296,7 @@ def origami_ansichten(hydraulik: bool) -> list[dict[str, Any]]:
     return [
         ansicht("Übersicht", "overview", "mdi:heat-pump", uebersicht),
         ansicht("Energie", "energy", "mdi:lightning-bolt", energie),
+        ansicht("Auswertung", "auswertung", "mdi:chart-box-outline", auswertung),
         ansicht("Diagnose", "diagnose", "mdi:bug-outline", diagnose),
     ]
 

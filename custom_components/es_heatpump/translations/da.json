@@ -16,10 +16,10 @@
           "dhw_margin_k": "Fremløbets margin over varmesætpunktet, der markerer varmt brugsvand (K)",
           "flow_entity": "Flowsensor (valgfri – har forrang over konstanterne, anbefales ved modulerende cirkulationspumpe)",
           "model": "Varmepumpemodel – valget udfylder det nominelle flow fra databladet",
-          "enable_writes": "Allow writing to the unit (off by default — required for settings entities, the restore service and parameter_setzen)",
-          "settings_interval": "Configuration poll interval (seconds) — settings change rarely, 900 is plenty",
-          "backup_interval_h": "Automatic backup interval (hours) — a change is always backed up immediately, this is the idle heartbeat",
-          "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted."
+          "enable_writes": "Tillad skrivning til enheden (slået fra som standard – kræves til indstillingsentiteter, gendannelsestjenesten og parameter_setzen)",
+          "settings_interval": "Interval for hentning af konfigurationen (sekunder) – indstillinger ændres sjældent, 900 er rigeligt",
+          "backup_interval_h": "Interval for automatisk sikkerhedskopi (timer) – en ændring sikkerhedskopieres altid med det samme, dette er kun hvilepulsen",
+          "backup_keep": "Antal sikkerhedskopier, der gemmes (0 = ubegrænset). Sikkerhedskopier fra før en skrivning eller gendannelse slettes aldrig."
         }
       }
     },
@@ -55,7 +55,17 @@
         },
         "data_description": {
           "model": "Valget udfylder det nominelle flow fra databladet.",
-          "dashboard_design": "\"Origami\" kræver temaet af samme navn fra Marketplace/HACS."
+          "flow_rate": "Termisk effekt og COP beregnes ud fra den. En COP under 1 betyder, at værdien er for lav.",
+          "power_entity": "Varmepumpens elektriske effekt, f.eks. fra en Shelly. Kræves til COP.",
+          "flow_entity": "Valgfri. Har forrang over konstanterne; anbefales ved modulerende cirkulationspumpe.",
+          "dhw_margin_k": "Kelvin over varmesætpunktet, hvorfra fremløbet regnes som varmt brugsvand.",
+          "mode_source_entity": "Ikke længere nødvendig siden v2.4.0, enheden melder selv sin tilstand.",
+          "hydraulic_card": "Animeret diagram øverst i oversigten. Kortet følger med integrationen.",
+          "dashboard_design": "\"Origami\" kræver temaet af samme navn fra Marketplace/HACS.",
+          "enable_writes": "Slået fra som standard. Kræves til indstillingsentiteterne, gendannelsestjenesten og parameter_setzen.",
+          "settings_interval": "Indstillinger ændres sjældent, 900 er rigeligt.",
+          "backup_interval_h": "En ændring sikkerhedskopieres altid med det samme, dette er kun hvilepulsen.",
+          "backup_keep": "0 = ubegrænset. Sikkerhedskopier fra før en skrivning eller gendannelse slettes aldrig."
         },
         "sections": {
           "messung": {
@@ -70,8 +80,14 @@
               "mode_source_entity": "Kilde til driftstilstand"
             },
             "data_description": {
-              "model": "Valget udfylder det nominelle flow fra databladet."
-            }
+              "model": "Valget udfylder det nominelle flow fra databladet.",
+              "flow_rate": "Termisk effekt og COP beregnes ud fra den. En COP under 1 betyder, at værdien er for lav.",
+              "power_entity": "Varmepumpens elektriske effekt, f.eks. fra en Shelly. Kræves til COP.",
+              "flow_entity": "Valgfri. Har forrang over konstanterne; anbefales ved modulerende cirkulationspumpe.",
+              "dhw_margin_k": "Kelvin over varmesætpunktet, hvorfra fremløbet regnes som varmt brugsvand.",
+              "mode_source_entity": "Ikke længere nødvendig siden v2.4.0, enheden melder selv sin tilstand."
+            },
+            "description": "Grundlag for termisk effekt og COP."
           },
           "dashboard": {
             "name": "Dashboard",
@@ -80,6 +96,7 @@
               "dashboard_design": "Design"
             },
             "data_description": {
+              "hydraulic_card": "Animeret diagram øverst i oversigten. Kortet følger med integrationen.",
               "dashboard_design": "\"Origami\" kræver temaet af samme navn fra Marketplace/HACS."
             }
           },
@@ -90,6 +107,12 @@
               "settings_interval": "Hentning af indstillinger (sekunder)",
               "backup_interval_h": "Automatisk sikkerhedskopi (timer)",
               "backup_keep": "Antal sikkerhedskopier"
+            },
+            "data_description": {
+              "enable_writes": "Slået fra som standard. Kræves til indstillingsentiteterne, gendannelsestjenesten og parameter_setzen.",
+              "settings_interval": "Indstillinger ændres sjældent, 900 er rigeligt.",
+              "backup_interval_h": "En ændring sikkerhedskopieres altid med det samme, dette er kun hvilepulsen.",
+              "backup_keep": "0 = ubegrænset. Sikkerhedskopier fra før en skrivning eller gendannelse slettes aldrig."
             }
           },
           "verbindung": {
@@ -113,8 +136,566 @@
   },
   "issues": {
     "origami_theme_missing": {
-      "title": "Origami theme not installed",
-      "description": "The ES Heatpump dashboard is set to the \"Origami\" design, but the theme \"{theme}\" is not installed. Until it is, Home Assistant shows the default theme.\n\nTo install: Marketplace/HACS → download the repository \"hazymorning/origami\" (category theme), then run the action \"frontend.reload_themes\" under Developer tools → Actions. The Montserrat font is optional, see the Origami README. This notice then disappears by itself."
+      "title": "Origami-tema ikke installeret",
+      "description": "ES Heatpump-dashboardet er sat til designet \"Origami\", men temaet \"{theme}\" er ikke installeret. Indtil det er, viser Home Assistant standardtemaet.\n\nInstallation: Marketplace/HACS → download repositoriet \"hazymorning/origami\" (kategori tema), og kør derefter handlingen \"frontend.reload_themes\" under Udviklerværktøjer → Handlinger. Skrifttypen Montserrat er valgfri, se Origami-README. Denne meddelelse forsvinder derefter af sig selv."
+    }
+  },
+  "entity": {
+    "button": {
+      "konfiguration_sichern": {
+        "name": "Sikkerhedskopiér konfiguration nu"
+      }
+    },
+    "number": {
+      "cfg_par36": {
+        "name": "Hurtige indstillinger: Ønsket rumtemperatur opvarmning"
+      },
+      "cfg_par37": {
+        "name": "Hurtige indstillinger: Ønsket rumtemperatur køling"
+      },
+      "cfg_par55": {
+        "name": "Hurtige indstillinger: Sætpunkt varmt brugsvand"
+      },
+      "cfg_par121": {
+        "name": "Hurtige indstillinger: Varmekurve 1 parallelforskydning"
+      },
+      "cfg_par122": {
+        "name": "Hurtige indstillinger: Varmekurve 2 parallelforskydning"
+      },
+      "cfg_par68": {
+        "name": "Varme-/kølekreds 2: Kølesætpunkt (kreds 2)"
+      },
+      "cfg_par75": {
+        "name": "Varme-/kølekreds 2: Varmesætpunkt kreds 2 (uden varmekurve)"
+      },
+      "cfg_par70": {
+        "name": "Varme-/kølekreds 2: Varmekurve 2 punkt 1 – vandtemperatur"
+      },
+      "cfg_par71": {
+        "name": "Varme-/kølekreds 2: Varmekurve 2 punkt 2 – vandtemperatur"
+      },
+      "cfg_par72": {
+        "name": "Varme-/kølekreds 2: Varmekurve 2 punkt 3 – vandtemperatur"
+      },
+      "cfg_par73": {
+        "name": "Varme-/kølekreds 2: Varmekurve 2 punkt 4 – vandtemperatur"
+      },
+      "cfg_par74": {
+        "name": "Varme-/kølekreds 2: Varmekurve 2 punkt 5 – vandtemperatur"
+      },
+      "cfg_par65": {
+        "name": "Brugsvandsbeholder: Sætpunkt for genopvarmning"
+      },
+      "cfg_par66": {
+        "name": "Brugsvandsbeholder: Genstart-∆T for genopvarmning"
+      },
+      "cfg_par42": {
+        "name": "Anti-legionella: Anti-legionella-sætpunkt"
+      },
+      "cfg_par43": {
+        "name": "Anti-legionella: Anti-legionella-varighed"
+      },
+      "cfg_par44": {
+        "name": "Anti-legionella: Anti-legionella-sluttidspunkt"
+      },
+      "cfg_par52": {
+        "name": "Backup-varme: Starttærskel for backup-varmelegeme (HBH)"
+      },
+      "cfg_par53": {
+        "name": "Backup-varme: Måleinterval for stigning i vandtemperatur (HWTBH)"
+      },
+      "cfg_par20": {
+        "name": "Varme-/kølekreds 1: Stop ved vand-∆T"
+      },
+      "cfg_par21": {
+        "name": "Varme-/kølekreds 1: Genstart ved vand-∆T"
+      },
+      "cfg_par22": {
+        "name": "Varme-/kølekreds 1: ∆T for reduktion af kompressorhastighed"
+      },
+      "cfg_par23": {
+        "name": "Varme-/kølekreds 1: Kølesætpunkt (kreds 1)"
+      },
+      "cfg_par25": {
+        "name": "Varme-/kølekreds 1: Varmekurve punkt 1 – udetemperatur"
+      },
+      "cfg_par26": {
+        "name": "Varme-/kølekreds 1: Varmekurve punkt 2 – udetemperatur"
+      },
+      "cfg_par27": {
+        "name": "Varme-/kølekreds 1: Varmekurve punkt 3 – udetemperatur"
+      },
+      "cfg_par28": {
+        "name": "Varme-/kølekreds 1: Varmekurve punkt 4 – udetemperatur"
+      },
+      "cfg_par29": {
+        "name": "Varme-/kølekreds 1: Varmekurve punkt 5 – udetemperatur"
+      },
+      "cfg_par30": {
+        "name": "Varme-/kølekreds 1: Varmekurve punkt 1 – vandtemperatur"
+      },
+      "cfg_par31": {
+        "name": "Varme-/kølekreds 1: Varmekurve punkt 2 – vandtemperatur"
+      },
+      "cfg_par32": {
+        "name": "Varme-/kølekreds 1: Varmekurve punkt 3 – vandtemperatur"
+      },
+      "cfg_par33": {
+        "name": "Varme-/kølekreds 1: Varmekurve punkt 4 – vandtemperatur"
+      },
+      "cfg_par34": {
+        "name": "Varme-/kølekreds 1: Varmekurve punkt 5 – vandtemperatur"
+      },
+      "cfg_par38": {
+        "name": "Varme-/kølekreds 1: Varmesætpunkt (uden varmekurve)"
+      },
+      "cfg_par56": {
+        "name": "Varmt brugsvand: Genstart-∆T varmt brugsvand"
+      },
+      "cfg_par58": {
+        "name": "Varmt brugsvand: Prioritetsskift fra udetemperatur"
+      },
+      "cfg_par59": {
+        "name": "Varmt brugsvand: Minimal driftstid varmt brugsvand"
+      },
+      "cfg_par60": {
+        "name": "Varmt brugsvand: Maksimal driftstid opvarmning"
+      },
+      "cfg_par61": {
+        "name": "Varmt brugsvand: Tilladt temperaturafvigelse opvarmning"
+      },
+      "cfg_par79": {
+        "name": "Natsænkning: Sænkning/hævning"
+      },
+      "cfg_par81": {
+        "name": "Natsænkning: Tilladt temperaturafvigelse i sænkningstilstand"
+      },
+      "cfg_par46": {
+        "name": "Ferietilstand: Sænkning af varmt brugsvand under ferie"
+      },
+      "cfg_par47": {
+        "name": "Ferietilstand: Sænkning af varmtvandstemperatur under ferie"
+      },
+      "cfg_par11": {
+        "name": "Tilstandsskift: Opvarmning fra udetemperatur"
+      },
+      "cfg_par12": {
+        "name": "Tilstandsskift: Køling fra udetemperatur"
+      }
+    },
+    "select": {
+      "cfg_par4": {
+        "name": "Hurtige indstillinger: Driftstilstand",
+        "state": {
+          "standby": "Standby",
+          "heating": "Opvarmning",
+          "cooling": "Køling",
+          "dhw": "Varmt brugsvand",
+          "auto": "Auto"
+        }
+      },
+      "cfg_par5": {
+        "name": "Hurtige indstillinger: Sprog i betjeningspanelet",
+        "state": {
+          "lang_0": "English",
+          "lang_1": "Slovenščina",
+          "lang_2": "Deutsch",
+          "lang_3": "Polski",
+          "lang_4": "Italiano",
+          "lang_5": "Русский",
+          "lang_6": "Українська",
+          "lang_7": "Polski",
+          "lang_8": "English",
+          "lang_9": "English",
+          "lang_10": "English",
+          "lang_11": "English",
+          "lang_12": "English",
+          "lang_13": "English",
+          "lang_14": "English",
+          "lang_15": "中文"
+        }
+      },
+      "cfg_par49": {
+        "name": "Backup-varme: Prioritet for backup-varmelegeme ved opvarmning (HBH)",
+        "state": {
+          "lower_than_heatpump": "Lavere end varmepumpen",
+          "higher_than_heatpump": "Højere end varmepumpen"
+        }
+      },
+      "cfg_par51": {
+        "name": "Backup-varme: Prioritet for backup-varmelegeme ved varmt brugsvand (HWTBH)",
+        "state": {
+          "lower_than_heatpump": "Lavere end varmepumpen",
+          "higher_than_heatpump": "Højere end varmepumpen"
+        }
+      },
+      "cfg_par86": {
+        "name": "Andre indstillinger: Displaybelysning",
+        "state": {
+          "always_on": "Altid tændt",
+          "min_3": "3 minutter",
+          "min_5": "5 minutter",
+          "min_10": "10 minutter"
+        }
+      },
+      "cfg_par9": {
+        "name": "Tilstandsskift: Skift mellem opvarmning og køling",
+        "state": {
+          "disabled": "Deaktiveret",
+          "ambient": "Udetemperatur",
+          "external": "Eksternt signal",
+          "external_ambient": "Eksternt signal + udetemperatur"
+        }
+      }
+    },
+    "sensor": {
+      "vorlauf_tuo": {
+        "name": "Fremløbstemperatur"
+      },
+      "ruecklauf_tui": {
+        "name": "Returløbstemperatur"
+      },
+      "heizen_soll": {
+        "name": "Vandtemperatur Tup"
+      },
+      "warmwasser_tw": {
+        "name": "Varmt brugsvand"
+      },
+      "heizen": {
+        "name": "Varmtvandstemperatur (opvarmning)"
+      },
+      "mischventil_1": {
+        "name": "Temperatur blandeventil 1"
+      },
+      "mischventil_2": {
+        "name": "Temperatur blandeventil 2"
+      },
+      "raumtemperatur": {
+        "name": "Rumtemperatur"
+      },
+      "aussentemp_ta": {
+        "name": "Udetemperatur"
+      },
+      "heissgas_td": {
+        "name": "Trykgastemperatur"
+      },
+      "heizen_soll_manuell": {
+        "name": "Varmesætpunkt (manuelt)"
+      },
+      "diag_par15_heartbeat": {
+        "name": "Diagnose par15 (heartbeat / uklar)"
+      },
+      "luefter_drehzahl": {
+        "name": "Hastighed ventilator 1"
+      },
+      "luefter_2_drehzahl": {
+        "name": "Hastighed ventilator 2"
+      },
+      "verdichter_strom": {
+        "name": "Kompressorstrøm"
+      },
+      "pumpe_p0": {
+        "name": "Pumpe P0"
+      },
+      "pumpe_p1": {
+        "name": "Pumpe P1"
+      },
+      "pumpe_p2": {
+        "name": "Pumpe P2"
+      },
+      "comp_speed_berechnet": {
+        "name": "Beregnet kompressorhastighed (trin)"
+      },
+      "frequenz_hz": {
+        "name": "Kompressorfrekvens"
+      },
+      "spannung": {
+        "name": "Spænding"
+      },
+      "software_version": {
+        "name": "Softwareversion"
+      },
+      "ah_betriebszeit": {
+        "name": "Driftstid AH"
+      },
+      "hbh_betriebszeit": {
+        "name": "Driftstid HBH"
+      },
+      "hwtbh_betriebszeit": {
+        "name": "Driftstid HWTBH"
+      },
+      "ventil_oeffnung": {
+        "name": "Åbning af ekspansionsventil"
+      },
+      "hochdruck_pd": {
+        "name": "Højtryk Pd"
+      },
+      "saugdruck_ps": {
+        "name": "Sugetryk Ps"
+      },
+      "sauggas_ts": {
+        "name": "Sugegastemperatur Ts"
+      },
+      "lamellentauscher_tp": {
+        "name": "Lamelvarmeveksler Tp"
+      },
+      "diag_par39": {
+        "name": "Diagnose par39 (ubekræftet, ikke strømmen)"
+      },
+      "diag_par40": {
+        "name": "Diagnose par40 (ubekræftet)"
+      },
+      "spreizung": {
+        "name": "Temperaturdifferens"
+      },
+      "thermische_leistung": {
+        "name": "Termisk effekt"
+      },
+      "aktueller_cop": {
+        "name": "Aktuel COP"
+      },
+      "leistung_elektrisch": {
+        "name": "Elektrisk effekt"
+      },
+      "betriebsart": {
+        "name": "Driftstilstand",
+        "state": {
+          "off": "Slukket",
+          "dhw": "Varmt brugsvand",
+          "heating": "Opvarmning",
+          "cooling": "Køling",
+          "dhw_heating": "Varmt brugsvand + opvarmning",
+          "dhw_cooling": "Varmt brugsvand + køling",
+          "defrost": "Afrimning"
+        }
+      },
+      "anlagendaten": {
+        "name": "Anlægsdata"
+      },
+      "konfigurationssicherungen": {
+        "name": "Sikkerhedskopier af konfigurationen"
+      },
+      "energie_elektrisch": {
+        "name": "Elektrisk energi"
+      },
+      "energie_elektrisch_heizen": {
+        "name": "Elektrisk energi opvarmning"
+      },
+      "energie_elektrisch_warmwasser": {
+        "name": "Elektrisk energi varmt brugsvand"
+      },
+      "energie_thermisch": {
+        "name": "Varmeenergi"
+      },
+      "energie_thermisch_heizen": {
+        "name": "Varmeenergi opvarmning"
+      },
+      "energie_thermisch_warmwasser": {
+        "name": "Varmeenergi varmt brugsvand"
+      },
+      "verdichter_starts": {
+        "name": "Kompressorstarter"
+      },
+      "verdichter_laufzeit": {
+        "name": "Kompressordriftstid"
+      }
+    },
+    "switch": {
+      "cfg_par1": {
+        "name": "Hurtige indstillinger: Enhed til/fra"
+      },
+      "cfg_par67": {
+        "name": "Varme-/kølekreds 2: Varme-/kølekreds 2"
+      },
+      "cfg_par69": {
+        "name": "Varme-/kølekreds 2: Varmekurve kreds 2"
+      },
+      "cfg_par63": {
+        "name": "Brugsvandsbeholder: Brugsvandsbeholderfunktion"
+      },
+      "cfg_par64": {
+        "name": "Brugsvandsbeholder: Genopvarmningsfunktion"
+      },
+      "cfg_par41": {
+        "name": "Anti-legionella: Anti-legionella"
+      },
+      "cfg_par19": {
+        "name": "Brugerindstillinger: Timer for opvarmning/køling"
+      },
+      "cfg_par48": {
+        "name": "Backup-varme: Backup-varmelegeme til opvarmning"
+      },
+      "cfg_par50": {
+        "name": "Backup-varme: Backup-varmelegeme til varmt brugsvand"
+      },
+      "cfg_par24": {
+        "name": "Varme-/kølekreds 1: Varmekurve kreds 1"
+      },
+      "cfg_par35": {
+        "name": "Varme-/kølekreds 1: Rumtemperatur påvirker varmekurven"
+      },
+      "cfg_par57": {
+        "name": "Varmt brugsvand: Prioritetsskift"
+      },
+      "cfg_par62": {
+        "name": "Varmt brugsvand: Backup-varmelegeme til varmt brugsvand ved prioritetsskift"
+      },
+      "cfg_par78": {
+        "name": "Natsænkning: Sænkningstilstand"
+      },
+      "cfg_par80": {
+        "name": "Natsænkning: Stille tilstand"
+      },
+      "cfg_par45": {
+        "name": "Ferietilstand: Ferietilstand"
+      },
+      "cfg_par83": {
+        "name": "Forsyningsspærring: Forsyningsspærring"
+      },
+      "cfg_par84": {
+        "name": "Forsyningsspærring: Backup-varmelegeme under forsyningsspærring"
+      },
+      "cfg_par85": {
+        "name": "Forsyningsspærring: Cirkulationspumpe P0 under forsyningsspærring"
+      }
+    }
+  },
+  "exceptions": {
+    "schreibzugriff_aus": {
+      "message": "Skriveadgang er slået fra. {name} blev ikke ændret. Slå den til i integrationens indstillinger under \"Tillad skrivning til enheden\"."
+    },
+    "konfiguration_unbekannt": {
+      "message": "Den aktuelle konfiguration kendes ikke i øjeblikket, intet blev sikkerhedskopieret. Prøv igen efter næste vellykkede hentning."
+    }
+  },
+  "services": {
+    "sicherung_erstellen": {
+      "name": "Sikkerhedskopiér konfiguration",
+      "description": "Opretter en sikkerhedskopi af hele konfigurationen (ca. 300 værdier). Anbefales før enhver ændring på enheden – og før hvert besøg af VVS-installatøren.",
+      "fields": {
+        "bezeichnung": {
+          "name": "Betegnelse",
+          "description": "Kort navn, som sikkerhedskopien senere kan findes under."
+        },
+        "grund": {
+          "name": "Årsag",
+          "description": "Hvorfor sikkerhedskopien blev taget – vises senere i oversigten."
+        },
+        "eintrag": {
+          "name": "Enhed",
+          "description": "Kun nødvendig, hvis der er sat flere enheder op."
+        }
+      }
+    },
+    "sicherungen_auflisten": {
+      "name": "Vis liste over sikkerhedskopier",
+      "description": "Returnerer alle eksisterende sikkerhedskopier med tidspunkt, anledning og kontrolsum. Giver et svar – hent det i et script via \"response_variable\".",
+      "fields": {
+        "eintrag": {
+          "name": "Enhed",
+          "description": "Kun nødvendig, hvis der er sat flere enheder op."
+        }
+      }
+    },
+    "sicherung_anzeigen": {
+      "name": "Vis sikkerhedskopi",
+      "description": "Viser en sikkerhedskopi fuldt ud – anlægsdata, alle navngivne indstillinger i klartekst og råværdierne. Ændrer intet på enheden.",
+      "fields": {
+        "sicherung": {
+          "name": "Sikkerhedskopi",
+          "description": "ID for sikkerhedskopien eller \"neueste\" (nyeste) eller \"aelteste\" (ældste)."
+        },
+        "eintrag": {
+          "name": "Enhed",
+          "description": "Kun nødvendig, hvis der er sat flere enheder op."
+        }
+      }
+    },
+    "sicherungen_vergleichen": {
+      "name": "Sammenlign sikkerhedskopier",
+      "description": "Viser alle forskelle mellem to tilstande – som standard mellem en sikkerhedskopi og enhedens aktuelle tilstand. Svaret oplister hver ændret værdi med navn, gruppe og værdi i klartekst.",
+      "fields": {
+        "sicherung": {
+          "name": "Sikkerhedskopi",
+          "description": "ID for sikkerhedskopien eller \"neueste\" (nyeste) eller \"aelteste\" (ældste)."
+        },
+        "vergleich_mit": {
+          "name": "Sammenlignet med",
+          "description": "ID for en anden sikkerhedskopi eller \"jetzt\" (nu) for enhedens aktuelle tilstand."
+        },
+        "eintrag": {
+          "name": "Enhed",
+          "description": "Kun nødvendig, hvis der er sat flere enheder op."
+        }
+      }
+    },
+    "sicherung_wiederherstellen": {
+      "name": "Gendan sikkerhedskopi",
+      "description": "Skriver en sikkerhedskopieret tilstand tilbage til varmepumpen. Som standard som prøvekørsel, der kun viser, hvad der ville ske. En rigtig kørsel kræver desuden, at skriveadgang er slået til i indstillingerne, og sikkerhedskopierer automatisk den aktuelle tilstand først.",
+      "fields": {
+        "sicherung": {
+          "name": "Sikkerhedskopi",
+          "description": "ID for sikkerhedskopien eller \"neueste\" (nyeste) eller \"aelteste\" (ældste)."
+        },
+        "probelauf": {
+          "name": "Prøvekørsel",
+          "description": "Til: intet skrives, svaret viser kun planen. Fra: værdierne sættes faktisk."
+        },
+        "eintrag": {
+          "name": "Enhed",
+          "description": "Kun nødvendig, hvis der er sat flere enheder op."
+        }
+      }
+    },
+    "sicherung_loeschen": {
+      "name": "Slet sikkerhedskopi",
+      "description": "Fjerner en sikkerhedskopi permanent. Sikkerhedskopier, der dokumenterer en ændring, kan fjernes på denne måde – den automatiske oprydning rører dem aldrig.",
+      "fields": {
+        "sicherung": {
+          "name": "Sikkerhedskopi",
+          "description": "ID for sikkerhedskopien."
+        },
+        "eintrag": {
+          "name": "Enhed",
+          "description": "Kun nødvendig, hvis der er sat flere enheder op."
+        }
+      }
+    },
+    "sicherung_exportieren": {
+      "name": "Eksportér sikkerhedskopi til fil",
+      "description": "Skriver en sikkerhedskopi som JSON-fil – til opbevaring uden for Home Assistant eller til at give videre til VVS-installatøren.",
+      "fields": {
+        "sicherung": {
+          "name": "Sikkerhedskopi",
+          "description": "ID for sikkerhedskopien."
+        },
+        "pfad": {
+          "name": "Sti",
+          "description": "Destinationsfil. Uden værdi skrives den til Home Assistants konfigurationsmappe. Andre mapper skal være angivet i \"allowlist_external_dirs\"."
+        },
+        "eintrag": {
+          "name": "Enhed",
+          "description": "Kun nødvendig, hvis der er sat flere enheder op."
+        }
+      }
+    },
+    "parameter_setzen": {
+      "name": "Sæt enkelt parameter",
+      "description": "Sætter en konfigurationsværdi direkte via dens portal-ID. Beregnet til felter uden egen entitet, eller hvis entitet er deaktiveret. Værdien kontrolleres først mod område og valgliste.",
+      "fields": {
+        "parameter": {
+          "name": "Parameter",
+          "description": "Portal-ID i setdata-navnerummet, f.eks. par55."
+        },
+        "wert": {
+          "name": "Værdi",
+          "description": "Værdi, der skal skrives (heltal)."
+        },
+        "eintrag": {
+          "name": "Enhed",
+          "description": "Kun nødvendig, hvis der er sat flere enheder op."
+        }
+      }
     }
   }
 }

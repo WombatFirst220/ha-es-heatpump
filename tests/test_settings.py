@@ -67,6 +67,20 @@ def test_auswahlen_haben_optionen():
             assert all(isinstance(k, int) for k in s.options)
 
 
+def test_auswahlen_haben_gueltige_option_keys():
+    """Jede Auswahl hat fuer jeden Wert einen HA-tauglichen Zustands-Schluessel."""
+    import re
+    muster = re.compile(r"^[a-z0-9_]+$")
+    for s in S.SETTINGS.values():
+        if s.kind == S.KIND_SELECT:
+            assert set(s.option_keys) == set(s.options), s.par
+            werte = list(s.option_keys.values())
+            assert len(set(werte)) == len(werte), s.par
+            assert all(muster.match(w) for w in werte), s.par
+        else:
+            assert not s.option_keys, s.par
+
+
 def test_grenzen_werden_durchgesetzt():
     """Der Kern: Ein Wert außerhalb des Bereichs darf das Gerät nie erreichen."""
     warmwasser = S.SETTINGS["par55"]            # Setpoint DHW, 25..75 °C

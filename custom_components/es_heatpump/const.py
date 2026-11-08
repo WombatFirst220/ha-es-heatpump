@@ -166,6 +166,28 @@ BETRIEBSART_OPTIONS = [
     "Entfrosten", "Unbekannt",
 ]
 
+# Zustands-Schluessel der Betriebsart-Entity (GitHub-Issue #6).
+# Intern rechnen mode.py, flow.py und sensor.py weiter mit den deutschen
+# kanonischen Werten oben. Erst an der Entity-Grenze wird auf diese Schluessel
+# abgebildet, deren Anzeigetext dann aus translations/<sprache>.json kommt
+# (entity.sensor.betriebsart.state.<schluessel>). Home Assistant verlangt fuer
+# Zustands-Schluessel [a-z0-9_].
+BETRIEBSART_STATE_KEYS = {
+    "Aus":                    "off",
+    "Brauchwasser":           "dhw",
+    "Heizen":                 "heating",
+    "Kuehlen":                "cooling",
+    "Brauchwasser + Heizen":  "dhw_heating",
+    "Brauchwasser + Kuehlen": "dhw_cooling",
+    "Entfrosten":             "defrost",
+    # Kein eigener Schluessel: "unknown" waere von HAs eigenem Zustand
+    # "unbekannt" nicht zu unterscheiden. Der Sensor liefert dann None.
+    "Unbekannt":              None,
+}
+BETRIEBSART_STATE_OPTIONS = [
+    BETRIEBSART_STATE_KEYS[o] for o in BETRIEBSART_OPTIONS if BETRIEBSART_STATE_KEYS[o]
+]
+
 # Normalisation of typical state strings coming from external mode sources.
 # Lower-case key → canonical option from BETRIEBSART_OPTIONS.
 BETRIEBSART_ALIASES = {
@@ -207,8 +229,11 @@ TEMP_SENTINEL = -99.0
 # multiscrape sensors (es_wp_*) during a live heating cycle 18:00-18:30.
 #
 # Fields:
-#   slug             : suffix for entity_id → sensor.es_hp_<slug>
-#   name             : friendly display name
+#   slug             : suffix for entity_id → sensor.es_hp_<slug>, zugleich
+#                      translation_key (Name aus translations/<sprache>.json)
+#   name             : deutscher Anzeigename - nur noch Referenz; massgeblich
+#                      ist entity.sensor.<slug>.name in translations/de.json
+#                      (tests/test_translations.py haelt beide gleich)
 #   unit             : native_unit_of_measurement
 #   device_class     : SensorDeviceClass string
 #   state_class      : SensorStateClass string

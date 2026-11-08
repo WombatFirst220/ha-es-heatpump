@@ -42,9 +42,14 @@ from .dashboard import (
     async_install_dashboard,
     async_remove_dashboard,
 )
+from .analysis_card import (
+    async_register_analysis_card,
+    async_unregister_analysis_card,
+)
 from .hydraulic_card import async_register_card, async_unregister_card
 from .services import async_entferne_dienste, async_registriere_dienste
 from .settings_coordinator import ESHeatpumpSettingsCoordinator
+from .websocket_api import async_registriere_websocket
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -137,6 +142,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     await async_registriere_dienste(hass)
+    # Aenderungsverlauf fuer die Auswertungsseite (einmal je HA-Lauf)
+    async_registriere_websocket(hass)
 
     # Forward to sensor platform first.  All entities (raw `parXX` from the
     # config registry + the three freshly-created calculated sensors) are
@@ -161,6 +168,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("ES Heatpump: Hydraulik-Karte nicht ladbar: %s", err)
             hydraulik = False
+    # Auswertungsseite: Karte unabhaengig von den Dashboard-Optionen laden,
+    # damit sie auch in selbst gebauten Dashboards verfuegbar ist.
+    try:
+        await async_register_analysis_card(hass)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("ES Heatpump: Auswertungskarte nicht ladbar: %s", err)
     try:
         await async_install_dashboard(hass, design=design, hydraulik=hydraulik)
     except Exception as err:  # noqa: BLE001
@@ -191,6 +204,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not hass.data.get(DOMAIN):
             async_entferne_dienste(hass)
             async_unregister_card(hass)
+            async_unregister_analysis_card(hass)
 
     return unload_ok
 

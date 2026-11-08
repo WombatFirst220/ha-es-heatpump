@@ -16,10 +16,10 @@
           "dhw_margin_k": "Marge van de aanvoertemperatuur boven het setpoint die warmtapwater aanduidt (K)",
           "flow_entity": "Debietsensor (optioneel – gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp)",
           "model": "Warmtepompmodel – de keuze vult het nominale debiet uit het datablad in",
-          "enable_writes": "Allow writing to the unit (off by default — required for settings entities, the restore service and parameter_setzen)",
-          "settings_interval": "Configuration poll interval (seconds) — settings change rarely, 900 is plenty",
-          "backup_interval_h": "Automatic backup interval (hours) — a change is always backed up immediately, this is the idle heartbeat",
-          "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted."
+          "enable_writes": "Schrijven naar het apparaat toestaan (standaard uit – vereist voor de instellingsentiteiten, de herstelservice en parameter_setzen)",
+          "settings_interval": "Pollinginterval configuratie (seconden) – instellingen veranderen zelden, 900 is ruim voldoende",
+          "backup_interval_h": "Interval automatische back-up (uren) – een wijziging wordt altijd direct geback-upt, dit is alleen de hartslag in rust",
+          "backup_keep": "Aantal te bewaren back-ups (0 = onbeperkt). Back-ups van vóór een schrijfactie of herstel worden nooit verwijderd."
         }
       }
     },
@@ -55,9 +55,17 @@
         },
         "data_description": {
           "model": "De keuze vult het nominale debiet uit het datablad in.",
+          "flow_rate": "Thermisch vermogen en COP worden hiermee berekend. Een COP onder 1 betekent dat de waarde te laag is.",
+          "power_entity": "Elektrisch vermogen van de warmtepomp, bijv. een Shelly. Vereist voor de COP.",
           "flow_entity": "Optioneel. Gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp.",
+          "dhw_margin_k": "Kelvin boven het verwarmingssetpoint vanaf waar de aanvoer als warm tapwater telt.",
           "mode_source_entity": "Sinds v2.4.0 overbodig, het toestel meldt de modus zelf.",
-          "dashboard_design": "\"Origami\" vereist het gelijknamige thema uit Marketplace/HACS."
+          "hydraulic_card": "Geanimeerd schema bovenaan het overzicht. De kaart wordt meegeleverd.",
+          "dashboard_design": "\"Origami\" vereist het gelijknamige thema uit Marketplace/HACS.",
+          "enable_writes": "Standaard uit. Vereist voor de instellingsentiteiten, de herstelservice en parameter_setzen.",
+          "settings_interval": "Instellingen veranderen zelden, 900 is ruim voldoende.",
+          "backup_interval_h": "Een wijziging wordt altijd direct geback-upt, dit is alleen de hartslag in rust.",
+          "backup_keep": "0 = onbeperkt. Back-ups van vóór een schrijfactie of herstel worden nooit verwijderd."
         },
         "sections": {
           "messung": {
@@ -73,9 +81,13 @@
             },
             "data_description": {
               "model": "De keuze vult het nominale debiet uit het datablad in.",
+              "flow_rate": "Thermisch vermogen en COP worden hiermee berekend. Een COP onder 1 betekent dat de waarde te laag is.",
+              "power_entity": "Elektrisch vermogen van de warmtepomp, bijv. een Shelly. Vereist voor de COP.",
               "flow_entity": "Optioneel. Gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp.",
+              "dhw_margin_k": "Kelvin boven het verwarmingssetpoint vanaf waar de aanvoer als warm tapwater telt.",
               "mode_source_entity": "Sinds v2.4.0 overbodig, het toestel meldt de modus zelf."
-            }
+            },
+            "description": "Basis voor thermisch vermogen en COP."
           },
           "dashboard": {
             "name": "Dashboard",
@@ -84,6 +96,7 @@
               "dashboard_design": "Ontwerp"
             },
             "data_description": {
+              "hydraulic_card": "Geanimeerd schema bovenaan het overzicht. De kaart wordt meegeleverd.",
               "dashboard_design": "\"Origami\" vereist het gelijknamige thema uit Marketplace/HACS."
             }
           },
@@ -94,6 +107,12 @@
               "settings_interval": "Ophalen instellingen (seconden)",
               "backup_interval_h": "Automatische back-up (uren)",
               "backup_keep": "Te bewaren back-ups"
+            },
+            "data_description": {
+              "enable_writes": "Standaard uit. Vereist voor de instellingsentiteiten, de herstelservice en parameter_setzen.",
+              "settings_interval": "Instellingen veranderen zelden, 900 is ruim voldoende.",
+              "backup_interval_h": "Een wijziging wordt altijd direct geback-upt, dit is alleen de hartslag in rust.",
+              "backup_keep": "0 = onbeperkt. Back-ups van vóór een schrijfactie of herstel worden nooit verwijderd."
             }
           },
           "verbindung": {
@@ -117,8 +136,566 @@
   },
   "issues": {
     "origami_theme_missing": {
-      "title": "Origami theme not installed",
-      "description": "The ES Heatpump dashboard is set to the \"Origami\" design, but the theme \"{theme}\" is not installed. Until it is, Home Assistant shows the default theme.\n\nTo install: Marketplace/HACS → download the repository \"hazymorning/origami\" (category theme), then run the action \"frontend.reload_themes\" under Developer tools → Actions. The Montserrat font is optional, see the Origami README. This notice then disappears by itself."
+      "title": "Origami-thema niet geïnstalleerd",
+      "description": "Het ES Heatpump-dashboard staat op het ontwerp \"Origami\", maar het thema \"{theme}\" is niet geïnstalleerd. Zolang dat zo is, toont Home Assistant het standaardthema.\n\nInstalleren: Marketplace/HACS → download de repository \"hazymorning/origami\" (categorie thema) en voer daarna de actie \"frontend.reload_themes\" uit onder Ontwikkelhulpmiddelen → Acties. Het lettertype Montserrat is optioneel, zie de Origami-README. Deze melding verdwijnt daarna vanzelf."
+    }
+  },
+  "entity": {
+    "button": {
+      "konfiguration_sichern": {
+        "name": "Configuratie nu back-uppen"
+      }
+    },
+    "number": {
+      "cfg_par36": {
+        "name": "Snelle instellingen: Gewenste kamertemperatuur verwarmen"
+      },
+      "cfg_par37": {
+        "name": "Snelle instellingen: Gewenste kamertemperatuur koelen"
+      },
+      "cfg_par55": {
+        "name": "Snelle instellingen: Setpoint warm tapwater"
+      },
+      "cfg_par121": {
+        "name": "Snelle instellingen: Stooklijn 1 parallelverschuiving"
+      },
+      "cfg_par122": {
+        "name": "Snelle instellingen: Stooklijn 2 parallelverschuiving"
+      },
+      "cfg_par68": {
+        "name": "Verwarmings-/koelcircuit 2: Koelsetpoint (circuit 2)"
+      },
+      "cfg_par75": {
+        "name": "Verwarmings-/koelcircuit 2: Verwarmingssetpoint circuit 2 (zonder stooklijn)"
+      },
+      "cfg_par70": {
+        "name": "Verwarmings-/koelcircuit 2: Stooklijn 2 punt 1 – watertemperatuur"
+      },
+      "cfg_par71": {
+        "name": "Verwarmings-/koelcircuit 2: Stooklijn 2 punt 2 – watertemperatuur"
+      },
+      "cfg_par72": {
+        "name": "Verwarmings-/koelcircuit 2: Stooklijn 2 punt 3 – watertemperatuur"
+      },
+      "cfg_par73": {
+        "name": "Verwarmings-/koelcircuit 2: Stooklijn 2 punt 4 – watertemperatuur"
+      },
+      "cfg_par74": {
+        "name": "Verwarmings-/koelcircuit 2: Stooklijn 2 punt 5 – watertemperatuur"
+      },
+      "cfg_par65": {
+        "name": "Warmwaterboiler: Setpoint naverwarming"
+      },
+      "cfg_par66": {
+        "name": "Warmwaterboiler: Herstart-∆T naverwarming"
+      },
+      "cfg_par42": {
+        "name": "Legionellapreventie: Setpoint legionellapreventie"
+      },
+      "cfg_par43": {
+        "name": "Legionellapreventie: Duur legionellapreventie"
+      },
+      "cfg_par44": {
+        "name": "Legionellapreventie: Eindtijd legionellapreventie"
+      },
+      "cfg_par52": {
+        "name": "Bijverwarming: Startdrempel bijverwarming (HBH)"
+      },
+      "cfg_par53": {
+        "name": "Bijverwarming: Meetinterval stijging watertemperatuur (HWTBH)"
+      },
+      "cfg_par20": {
+        "name": "Verwarmings-/koelcircuit 1: Stop bij water-∆T"
+      },
+      "cfg_par21": {
+        "name": "Verwarmings-/koelcircuit 1: Herstart bij water-∆T"
+      },
+      "cfg_par22": {
+        "name": "Verwarmings-/koelcircuit 1: ∆T voor verlaging compressortoerental"
+      },
+      "cfg_par23": {
+        "name": "Verwarmings-/koelcircuit 1: Koelsetpoint (circuit 1)"
+      },
+      "cfg_par25": {
+        "name": "Verwarmings-/koelcircuit 1: Stooklijn punt 1 – buitentemperatuur"
+      },
+      "cfg_par26": {
+        "name": "Verwarmings-/koelcircuit 1: Stooklijn punt 2 – buitentemperatuur"
+      },
+      "cfg_par27": {
+        "name": "Verwarmings-/koelcircuit 1: Stooklijn punt 3 – buitentemperatuur"
+      },
+      "cfg_par28": {
+        "name": "Verwarmings-/koelcircuit 1: Stooklijn punt 4 – buitentemperatuur"
+      },
+      "cfg_par29": {
+        "name": "Verwarmings-/koelcircuit 1: Stooklijn punt 5 – buitentemperatuur"
+      },
+      "cfg_par30": {
+        "name": "Verwarmings-/koelcircuit 1: Stooklijn punt 1 – watertemperatuur"
+      },
+      "cfg_par31": {
+        "name": "Verwarmings-/koelcircuit 1: Stooklijn punt 2 – watertemperatuur"
+      },
+      "cfg_par32": {
+        "name": "Verwarmings-/koelcircuit 1: Stooklijn punt 3 – watertemperatuur"
+      },
+      "cfg_par33": {
+        "name": "Verwarmings-/koelcircuit 1: Stooklijn punt 4 – watertemperatuur"
+      },
+      "cfg_par34": {
+        "name": "Verwarmings-/koelcircuit 1: Stooklijn punt 5 – watertemperatuur"
+      },
+      "cfg_par38": {
+        "name": "Verwarmings-/koelcircuit 1: Verwarmingssetpoint (zonder stooklijn)"
+      },
+      "cfg_par56": {
+        "name": "Warm tapwater: Herstart-∆T warm tapwater"
+      },
+      "cfg_par58": {
+        "name": "Warm tapwater: Prioriteitsverschuiving vanaf buitentemperatuur"
+      },
+      "cfg_par59": {
+        "name": "Warm tapwater: Minimale looptijd warm tapwater"
+      },
+      "cfg_par60": {
+        "name": "Warm tapwater: Maximale looptijd verwarming"
+      },
+      "cfg_par61": {
+        "name": "Warm tapwater: Toegestane temperatuurafwijking verwarming"
+      },
+      "cfg_par79": {
+        "name": "Temperatuurverlaging: Verlaging/verhoging"
+      },
+      "cfg_par81": {
+        "name": "Temperatuurverlaging: Toegestane temperatuurafwijking in verlagingsmodus"
+      },
+      "cfg_par46": {
+        "name": "Vakantiemodus: Verlaging warm tapwater tijdens vakantie"
+      },
+      "cfg_par47": {
+        "name": "Vakantiemodus: Verlaging verwarmingswater tijdens vakantie"
+      },
+      "cfg_par11": {
+        "name": "Modusomschakeling: Verwarmen vanaf buitentemperatuur"
+      },
+      "cfg_par12": {
+        "name": "Modusomschakeling: Koelen vanaf buitentemperatuur"
+      }
+    },
+    "select": {
+      "cfg_par4": {
+        "name": "Snelle instellingen: Bedrijfsmodus",
+        "state": {
+          "standby": "Stand-by",
+          "heating": "Verwarmen",
+          "cooling": "Koelen",
+          "dhw": "Warm tapwater",
+          "auto": "Auto"
+        }
+      },
+      "cfg_par5": {
+        "name": "Snelle instellingen: Taal bedieningspaneel",
+        "state": {
+          "lang_0": "English",
+          "lang_1": "Slovenščina",
+          "lang_2": "Deutsch",
+          "lang_3": "Polski",
+          "lang_4": "Italiano",
+          "lang_5": "Русский",
+          "lang_6": "Українська",
+          "lang_7": "Polski",
+          "lang_8": "English",
+          "lang_9": "English",
+          "lang_10": "English",
+          "lang_11": "English",
+          "lang_12": "English",
+          "lang_13": "English",
+          "lang_14": "English",
+          "lang_15": "中文"
+        }
+      },
+      "cfg_par49": {
+        "name": "Bijverwarming: Prioriteit bijverwarming bij verwarmen (HBH)",
+        "state": {
+          "lower_than_heatpump": "Lager dan warmtepomp",
+          "higher_than_heatpump": "Hoger dan warmtepomp"
+        }
+      },
+      "cfg_par51": {
+        "name": "Bijverwarming: Prioriteit bijverwarming bij warm tapwater (HWTBH)",
+        "state": {
+          "lower_than_heatpump": "Lager dan warmtepomp",
+          "higher_than_heatpump": "Hoger dan warmtepomp"
+        }
+      },
+      "cfg_par86": {
+        "name": "Overige opties: Displayverlichting",
+        "state": {
+          "always_on": "Altijd aan",
+          "min_3": "3 minuten",
+          "min_5": "5 minuten",
+          "min_10": "10 minuten"
+        }
+      },
+      "cfg_par9": {
+        "name": "Modusomschakeling: Omschakeling verwarmen/koelen",
+        "state": {
+          "disabled": "Uitgeschakeld",
+          "ambient": "Buitentemperatuur",
+          "external": "Extern signaal",
+          "external_ambient": "Extern signaal + buitentemperatuur"
+        }
+      }
+    },
+    "sensor": {
+      "vorlauf_tuo": {
+        "name": "Aanvoertemperatuur"
+      },
+      "ruecklauf_tui": {
+        "name": "Retourtemperatuur"
+      },
+      "heizen_soll": {
+        "name": "Watertemperatuur Tup"
+      },
+      "warmwasser_tw": {
+        "name": "Warm tapwater"
+      },
+      "heizen": {
+        "name": "Temperatuur verwarmingswater"
+      },
+      "mischventil_1": {
+        "name": "Temperatuur mengklep 1"
+      },
+      "mischventil_2": {
+        "name": "Temperatuur mengklep 2"
+      },
+      "raumtemperatur": {
+        "name": "Kamertemperatuur"
+      },
+      "aussentemp_ta": {
+        "name": "Buitentemperatuur"
+      },
+      "heissgas_td": {
+        "name": "Heetgastemperatuur"
+      },
+      "heizen_soll_manuell": {
+        "name": "Verwarmingssetpoint (handmatig)"
+      },
+      "diag_par15_heartbeat": {
+        "name": "Diagnose par15 (heartbeat / onduidelijk)"
+      },
+      "luefter_drehzahl": {
+        "name": "Toerental ventilator 1"
+      },
+      "luefter_2_drehzahl": {
+        "name": "Toerental ventilator 2"
+      },
+      "verdichter_strom": {
+        "name": "Compressorstroom"
+      },
+      "pumpe_p0": {
+        "name": "Pomp P0"
+      },
+      "pumpe_p1": {
+        "name": "Pomp P1"
+      },
+      "pumpe_p2": {
+        "name": "Pomp P2"
+      },
+      "comp_speed_berechnet": {
+        "name": "Berekend compressortoerental (niveau)"
+      },
+      "frequenz_hz": {
+        "name": "Compressorfrequentie"
+      },
+      "spannung": {
+        "name": "Spanning"
+      },
+      "software_version": {
+        "name": "Softwareversie"
+      },
+      "ah_betriebszeit": {
+        "name": "Bedrijfstijd AH"
+      },
+      "hbh_betriebszeit": {
+        "name": "Bedrijfstijd HBH"
+      },
+      "hwtbh_betriebszeit": {
+        "name": "Bedrijfstijd HWTBH"
+      },
+      "ventil_oeffnung": {
+        "name": "Opening expansieventiel"
+      },
+      "hochdruck_pd": {
+        "name": "Hoge druk Pd"
+      },
+      "saugdruck_ps": {
+        "name": "Zuigdruk Ps"
+      },
+      "sauggas_ts": {
+        "name": "Zuiggastemperatuur Ts"
+      },
+      "lamellentauscher_tp": {
+        "name": "Lamellenwarmtewisselaar Tp"
+      },
+      "diag_par39": {
+        "name": "Diagnose par39 (onbevestigd, niet de stroom)"
+      },
+      "diag_par40": {
+        "name": "Diagnose par40 (onbevestigd)"
+      },
+      "spreizung": {
+        "name": "Temperatuurverschil"
+      },
+      "thermische_leistung": {
+        "name": "Thermisch vermogen"
+      },
+      "aktueller_cop": {
+        "name": "Actuele COP"
+      },
+      "leistung_elektrisch": {
+        "name": "Elektrisch vermogen"
+      },
+      "betriebsart": {
+        "name": "Bedrijfsmodus",
+        "state": {
+          "off": "Uit",
+          "dhw": "Warm tapwater",
+          "heating": "Verwarmen",
+          "cooling": "Koelen",
+          "dhw_heating": "Warm tapwater + verwarmen",
+          "dhw_cooling": "Warm tapwater + koelen",
+          "defrost": "Ontdooien"
+        }
+      },
+      "anlagendaten": {
+        "name": "Installatiegegevens"
+      },
+      "konfigurationssicherungen": {
+        "name": "Configuratieback-ups"
+      },
+      "energie_elektrisch": {
+        "name": "Elektrische energie"
+      },
+      "energie_elektrisch_heizen": {
+        "name": "Elektrische energie verwarming"
+      },
+      "energie_elektrisch_warmwasser": {
+        "name": "Elektrische energie warm tapwater"
+      },
+      "energie_thermisch": {
+        "name": "Warmte-energie"
+      },
+      "energie_thermisch_heizen": {
+        "name": "Warmte-energie verwarming"
+      },
+      "energie_thermisch_warmwasser": {
+        "name": "Warmte-energie warm tapwater"
+      },
+      "verdichter_starts": {
+        "name": "Compressorstarts"
+      },
+      "verdichter_laufzeit": {
+        "name": "Looptijd compressor"
+      }
+    },
+    "switch": {
+      "cfg_par1": {
+        "name": "Snelle instellingen: Apparaat aan/uit"
+      },
+      "cfg_par67": {
+        "name": "Verwarmings-/koelcircuit 2: Verwarmings-/koelcircuit 2"
+      },
+      "cfg_par69": {
+        "name": "Verwarmings-/koelcircuit 2: Stooklijn circuit 2"
+      },
+      "cfg_par63": {
+        "name": "Warmwaterboiler: Boilerfunctie"
+      },
+      "cfg_par64": {
+        "name": "Warmwaterboiler: Naverwarmingsfunctie"
+      },
+      "cfg_par41": {
+        "name": "Legionellapreventie: Legionellapreventie"
+      },
+      "cfg_par19": {
+        "name": "Gebruikersinstellingen: Timer verwarmen/koelen"
+      },
+      "cfg_par48": {
+        "name": "Bijverwarming: Bijverwarming voor verwarming"
+      },
+      "cfg_par50": {
+        "name": "Bijverwarming: Bijverwarming voor warm tapwater"
+      },
+      "cfg_par24": {
+        "name": "Verwarmings-/koelcircuit 1: Stooklijn circuit 1"
+      },
+      "cfg_par35": {
+        "name": "Verwarmings-/koelcircuit 1: Kamertemperatuur beïnvloedt stooklijn"
+      },
+      "cfg_par57": {
+        "name": "Warm tapwater: Prioriteitsverschuiving"
+      },
+      "cfg_par62": {
+        "name": "Warm tapwater: Bijverwarming warm tapwater bij prioriteitsverschuiving"
+      },
+      "cfg_par78": {
+        "name": "Temperatuurverlaging: Verlagingsmodus"
+      },
+      "cfg_par80": {
+        "name": "Temperatuurverlaging: Stille modus"
+      },
+      "cfg_par45": {
+        "name": "Vakantiemodus: Vakantiemodus"
+      },
+      "cfg_par83": {
+        "name": "Netbeheerdersblokkering: Netbeheerdersblokkering"
+      },
+      "cfg_par84": {
+        "name": "Netbeheerdersblokkering: Bijverwarming tijdens netbeheerdersblokkering"
+      },
+      "cfg_par85": {
+        "name": "Netbeheerdersblokkering: Circulatiepomp P0 tijdens netbeheerdersblokkering"
+      }
+    }
+  },
+  "exceptions": {
+    "schreibzugriff_aus": {
+      "message": "Schrijftoegang is uitgeschakeld. {name} is niet gewijzigd. Schakel het in bij de integratieopties onder \"Schrijven naar het apparaat toestaan\"."
+    },
+    "konfiguration_unbekannt": {
+      "message": "De huidige configuratie is op dit moment niet bekend, er is niets geback-upt. Probeer het opnieuw na de volgende geslaagde polling."
+    }
+  },
+  "services": {
+    "sicherung_erstellen": {
+      "name": "Configuratie back-uppen",
+      "description": "Maakt een back-up van de volledige configuratie (ca. 300 waarden). Aanbevolen vóór elke wijziging aan het apparaat – en vóór elk bezoek van de installateur.",
+      "fields": {
+        "bezeichnung": {
+          "name": "Label",
+          "description": "Korte naam waaronder de back-up later terug te vinden is."
+        },
+        "grund": {
+          "name": "Reden",
+          "description": "Waarom de back-up is gemaakt – wordt later in het overzicht getoond."
+        },
+        "eintrag": {
+          "name": "Apparaat",
+          "description": "Alleen nodig als er meerdere apparaten zijn ingesteld."
+        }
+      }
+    },
+    "sicherungen_auflisten": {
+      "name": "Back-ups weergeven",
+      "description": "Geeft alle bestaande back-ups met tijdstip, aanleiding en controlesom. Geeft een antwoord terug – haal het in een script op via \"response_variable\".",
+      "fields": {
+        "eintrag": {
+          "name": "Apparaat",
+          "description": "Alleen nodig als er meerdere apparaten zijn ingesteld."
+        }
+      }
+    },
+    "sicherung_anzeigen": {
+      "name": "Back-up tonen",
+      "description": "Toont een back-up volledig – installatiegegevens, alle benoemde instellingen in leesbare tekst en de ruwe waarden. Wijzigt niets aan het apparaat.",
+      "fields": {
+        "sicherung": {
+          "name": "Back-up",
+          "description": "ID van de back-up, of \"neueste\" (nieuwste) of \"aelteste\" (oudste)."
+        },
+        "eintrag": {
+          "name": "Apparaat",
+          "description": "Alleen nodig als er meerdere apparaten zijn ingesteld."
+        }
+      }
+    },
+    "sicherungen_vergleichen": {
+      "name": "Back-ups vergelijken",
+      "description": "Toont alle verschillen tussen twee toestanden – standaard tussen een back-up en de huidige toestand van het apparaat. Het antwoord vermeldt elke gewijzigde waarde met naam, groep en waarde in leesbare tekst.",
+      "fields": {
+        "sicherung": {
+          "name": "Back-up",
+          "description": "ID van de back-up, of \"neueste\" (nieuwste) of \"aelteste\" (oudste)."
+        },
+        "vergleich_mit": {
+          "name": "Vergeleken met",
+          "description": "ID van een tweede back-up, of \"jetzt\" (nu) voor de huidige toestand van het apparaat."
+        },
+        "eintrag": {
+          "name": "Apparaat",
+          "description": "Alleen nodig als er meerdere apparaten zijn ingesteld."
+        }
+      }
+    },
+    "sicherung_wiederherstellen": {
+      "name": "Back-up herstellen",
+      "description": "Schrijft een opgeslagen toestand terug naar de warmtepomp. Standaard als proefrun die alleen toont wat er zou gebeuren. Een echte run vereist bovendien dat schrijftoegang in de opties is ingeschakeld, en maakt eerst automatisch een back-up van de huidige toestand.",
+      "fields": {
+        "sicherung": {
+          "name": "Back-up",
+          "description": "ID van de back-up, of \"neueste\" (nieuwste) of \"aelteste\" (oudste)."
+        },
+        "probelauf": {
+          "name": "Proefrun",
+          "description": "Aan: er wordt niets geschreven, het antwoord toont alleen het plan. Uit: de waarden worden echt ingesteld."
+        },
+        "eintrag": {
+          "name": "Apparaat",
+          "description": "Alleen nodig als er meerdere apparaten zijn ingesteld."
+        }
+      }
+    },
+    "sicherung_loeschen": {
+      "name": "Back-up verwijderen",
+      "description": "Verwijdert een back-up definitief. Back-ups die een wijziging documenteren kunnen zo worden verwijderd – de automatische opschoning raakt ze nooit aan.",
+      "fields": {
+        "sicherung": {
+          "name": "Back-up",
+          "description": "ID van de back-up."
+        },
+        "eintrag": {
+          "name": "Apparaat",
+          "description": "Alleen nodig als er meerdere apparaten zijn ingesteld."
+        }
+      }
+    },
+    "sicherung_exportieren": {
+      "name": "Back-up exporteren naar bestand",
+      "description": "Schrijft een back-up als JSON-bestand – om buiten Home Assistant te bewaren of door te geven aan de installateur.",
+      "fields": {
+        "sicherung": {
+          "name": "Back-up",
+          "description": "ID van de back-up."
+        },
+        "pfad": {
+          "name": "Pad",
+          "description": "Doelbestand. Zonder waarde wordt het in de configuratiemap van Home Assistant geschreven. Andere mappen moeten in \"allowlist_external_dirs\" staan."
+        },
+        "eintrag": {
+          "name": "Apparaat",
+          "description": "Alleen nodig als er meerdere apparaten zijn ingesteld."
+        }
+      }
+    },
+    "parameter_setzen": {
+      "name": "Enkele parameter instellen",
+      "description": "Stelt een configuratiewaarde direct in via de portal-ID. Bedoeld voor velden zonder eigen entiteit of waarvan de entiteit is uitgeschakeld. De waarde wordt eerst gecontroleerd op bereik en optielijst.",
+      "fields": {
+        "parameter": {
+          "name": "Parameter",
+          "description": "Portal-ID in de setdata-namespace, bijv. par55."
+        },
+        "wert": {
+          "name": "Waarde",
+          "description": "Te schrijven waarde (geheel getal)."
+        },
+        "eintrag": {
+          "name": "Apparaat",
+          "description": "Alleen nodig als er meerdere apparaten zijn ingesteld."
+        }
+      }
     }
   }
 }

@@ -139,5 +139,563 @@
       "title": "Origami-Theme nicht installiert",
       "description": "Das ES-Heatpump-Dashboard soll im Design „Origami“ erscheinen, aber das Theme „{theme}“ ist nicht installiert. Bis dahin zeigt Home Assistant das Standard-Theme.\n\nInstallation: Marktplatz/HACS → Repository „hazymorning/origami“ (Kategorie Theme) herunterladen, danach unter Entwicklerwerkzeuge → Aktionen „frontend.reload_themes“ ausführen. Die Schrift Montserrat ist optional, siehe README von Origami. Der Hinweis verschwindet dann von selbst."
     }
+  },
+  "entity": {
+    "button": {
+      "konfiguration_sichern": {
+        "name": "Konfiguration jetzt sichern"
+      }
+    },
+    "number": {
+      "cfg_par36": {
+        "name": "Schnelleinstellung: Wunsch-Raumtemperatur Heizen"
+      },
+      "cfg_par37": {
+        "name": "Schnelleinstellung: Wunsch-Raumtemperatur Kühlen"
+      },
+      "cfg_par55": {
+        "name": "Schnelleinstellung: Warmwasser Solltemperatur"
+      },
+      "cfg_par121": {
+        "name": "Schnelleinstellung: Parallelverschiebung Heizkurve 1"
+      },
+      "cfg_par122": {
+        "name": "Schnelleinstellung: Parallelverschiebung Heizkurve 2"
+      },
+      "cfg_par68": {
+        "name": "Heiz-/Kühlkreis 2: Solltemperatur Kühlen (Kreis 2)"
+      },
+      "cfg_par75": {
+        "name": "Heiz-/Kühlkreis 2: Solltemperatur Heizen Kreis 2 (ohne Heizkurve)"
+      },
+      "cfg_par70": {
+        "name": "Heiz-/Kühlkreis 2: Heizkurve 2 Stützstelle 1 – Wassertemperatur"
+      },
+      "cfg_par71": {
+        "name": "Heiz-/Kühlkreis 2: Heizkurve 2 Stützstelle 2 – Wassertemperatur"
+      },
+      "cfg_par72": {
+        "name": "Heiz-/Kühlkreis 2: Heizkurve 2 Stützstelle 3 – Wassertemperatur"
+      },
+      "cfg_par73": {
+        "name": "Heiz-/Kühlkreis 2: Heizkurve 2 Stützstelle 4 – Wassertemperatur"
+      },
+      "cfg_par74": {
+        "name": "Heiz-/Kühlkreis 2: Heizkurve 2 Stützstelle 5 – Wassertemperatur"
+      },
+      "cfg_par65": {
+        "name": "Warmwasserspeicher: Nachheizen Solltemperatur"
+      },
+      "cfg_par66": {
+        "name": "Warmwasserspeicher: Nachheizen Wiedereinschalt-Spreizung"
+      },
+      "cfg_par42": {
+        "name": "Legionellenschutz: Legionellenschutz Solltemperatur"
+      },
+      "cfg_par43": {
+        "name": "Legionellenschutz: Legionellenschutz Dauer"
+      },
+      "cfg_par44": {
+        "name": "Legionellenschutz: Legionellenschutz Abschlusszeit"
+      },
+      "cfg_par52": {
+        "name": "Zusatzheizung: Startschwelle Zusatzheizung (HBH)"
+      },
+      "cfg_par53": {
+        "name": "Zusatzheizung: Leseintervall Wassertemperaturanstieg (HWTBH)"
+      },
+      "cfg_par20": {
+        "name": "Heiz-/Kühlkreis 1: Abschaltung bei Wasser-Spreizung"
+      },
+      "cfg_par21": {
+        "name": "Heiz-/Kühlkreis 1: Wiedereinschaltung bei Wasser-Spreizung"
+      },
+      "cfg_par22": {
+        "name": "Heiz-/Kühlkreis 1: Spreizung für Verdichterdrosselung"
+      },
+      "cfg_par23": {
+        "name": "Heiz-/Kühlkreis 1: Solltemperatur Kühlen (Kreis 1)"
+      },
+      "cfg_par25": {
+        "name": "Heiz-/Kühlkreis 1: Heizkurve Stützstelle 1 – Außentemperatur"
+      },
+      "cfg_par26": {
+        "name": "Heiz-/Kühlkreis 1: Heizkurve Stützstelle 2 – Außentemperatur"
+      },
+      "cfg_par27": {
+        "name": "Heiz-/Kühlkreis 1: Heizkurve Stützstelle 3 – Außentemperatur"
+      },
+      "cfg_par28": {
+        "name": "Heiz-/Kühlkreis 1: Heizkurve Stützstelle 4 – Außentemperatur"
+      },
+      "cfg_par29": {
+        "name": "Heiz-/Kühlkreis 1: Heizkurve Stützstelle 5 – Außentemperatur"
+      },
+      "cfg_par30": {
+        "name": "Heiz-/Kühlkreis 1: Heizkurve Stützstelle 1 – Wassertemperatur"
+      },
+      "cfg_par31": {
+        "name": "Heiz-/Kühlkreis 1: Heizkurve Stützstelle 2 – Wassertemperatur"
+      },
+      "cfg_par32": {
+        "name": "Heiz-/Kühlkreis 1: Heizkurve Stützstelle 3 – Wassertemperatur"
+      },
+      "cfg_par33": {
+        "name": "Heiz-/Kühlkreis 1: Heizkurve Stützstelle 4 – Wassertemperatur"
+      },
+      "cfg_par34": {
+        "name": "Heiz-/Kühlkreis 1: Heizkurve Stützstelle 5 – Wassertemperatur"
+      },
+      "cfg_par38": {
+        "name": "Heiz-/Kühlkreis 1: Solltemperatur Heizen (ohne Heizkurve)"
+      },
+      "cfg_par56": {
+        "name": "Warmwasser: Warmwasser Wiedereinschalt-Spreizung"
+      },
+      "cfg_par58": {
+        "name": "Warmwasser: Vorrangumschaltung ab Außentemperatur"
+      },
+      "cfg_par59": {
+        "name": "Warmwasser: Warmwasser Mindestlaufzeit"
+      },
+      "cfg_par60": {
+        "name": "Warmwasser: Heizen Maximallaufzeit"
+      },
+      "cfg_par61": {
+        "name": "Warmwasser: Zulässige Temperaturabweichung Heizen"
+      },
+      "cfg_par79": {
+        "name": "Absenkbetrieb Heizen: Absenkung/Anhebung"
+      },
+      "cfg_par81": {
+        "name": "Absenkbetrieb Heizen: Zulässige Temperaturabweichung im Absenkbetrieb"
+      },
+      "cfg_par46": {
+        "name": "Urlaubsmodus: Warmwasser-Absenkung im Urlaub"
+      },
+      "cfg_par47": {
+        "name": "Urlaubsmodus: Heizwasser-Absenkung im Urlaub"
+      },
+      "cfg_par11": {
+        "name": "Betriebsart-Umschaltung: Außentemperatur Heizen ab"
+      },
+      "cfg_par12": {
+        "name": "Betriebsart-Umschaltung: Außentemperatur Kühlen ab"
+      }
+    },
+    "select": {
+      "cfg_par4": {
+        "name": "Schnelleinstellung: Betriebsart",
+        "state": {
+          "standby": "Bereitschaft",
+          "heating": "Heizen",
+          "cooling": "Kühlen",
+          "dhw": "Warmwasser",
+          "auto": "Automatik"
+        }
+      },
+      "cfg_par5": {
+        "name": "Schnelleinstellung: Sprache der Bedieneinheit",
+        "state": {
+          "lang_0": "English",
+          "lang_1": "Slovenščina",
+          "lang_2": "Deutsch",
+          "lang_3": "Polski",
+          "lang_4": "Italiano",
+          "lang_5": "Русский",
+          "lang_6": "Українська",
+          "lang_7": "Polski",
+          "lang_8": "English",
+          "lang_9": "English",
+          "lang_10": "English",
+          "lang_11": "English",
+          "lang_12": "English",
+          "lang_13": "English",
+          "lang_14": "English",
+          "lang_15": "中文"
+        }
+      },
+      "cfg_par49": {
+        "name": "Zusatzheizung: Vorrang Zusatzheizung Heizen (HBH)",
+        "state": {
+          "lower_than_heatpump": "Niedriger als Wärmepumpe",
+          "higher_than_heatpump": "Höher als Wärmepumpe"
+        }
+      },
+      "cfg_par51": {
+        "name": "Zusatzheizung: Vorrang Zusatzheizung Warmwasser (HWTBH)",
+        "state": {
+          "lower_than_heatpump": "Niedriger als Wärmepumpe",
+          "higher_than_heatpump": "Höher als Wärmepumpe"
+        }
+      },
+      "cfg_par86": {
+        "name": "Weitere Optionen: Displaybeleuchtung",
+        "state": {
+          "always_on": "Dauernd an",
+          "min_3": "3 Minuten",
+          "min_5": "5 Minuten",
+          "min_10": "10 Minuten"
+        }
+      },
+      "cfg_par9": {
+        "name": "Betriebsart-Umschaltung: Umschaltung Heizen/Kühlen",
+        "state": {
+          "disabled": "Deaktiviert",
+          "ambient": "Außentemperatur",
+          "external": "Externes Signal",
+          "external_ambient": "Externes Signal + Außentemperatur"
+        }
+      }
+    },
+    "sensor": {
+      "vorlauf_tuo": {
+        "name": "Vorlauftemperatur"
+      },
+      "ruecklauf_tui": {
+        "name": "Rücklauftemperatur"
+      },
+      "heizen_soll": {
+        "name": "Wassertemperatur Tup"
+      },
+      "warmwasser_tw": {
+        "name": "Warmwasser"
+      },
+      "heizen": {
+        "name": "Heizwasser Temperatur"
+      },
+      "mischventil_1": {
+        "name": "Mischventil 1 Temperatur"
+      },
+      "mischventil_2": {
+        "name": "Mischventil 2 Temperatur"
+      },
+      "raumtemperatur": {
+        "name": "Raumtemperatur"
+      },
+      "aussentemp_ta": {
+        "name": "Außentemperatur"
+      },
+      "heissgas_td": {
+        "name": "Heißgastemperatur"
+      },
+      "heizen_soll_manuell": {
+        "name": "Heizen Solltemperatur (manuell)"
+      },
+      "diag_par15_heartbeat": {
+        "name": "Diagnose par15 (Heartbeat / unklar)"
+      },
+      "luefter_drehzahl": {
+        "name": "Ventilator 1 Drehzahl"
+      },
+      "luefter_2_drehzahl": {
+        "name": "Ventilator 2 Drehzahl"
+      },
+      "verdichter_strom": {
+        "name": "Stromaufnahme Verdichter"
+      },
+      "pumpe_p0": {
+        "name": "Pumpe P0"
+      },
+      "pumpe_p1": {
+        "name": "Pumpe P1"
+      },
+      "pumpe_p2": {
+        "name": "Pumpe P2"
+      },
+      "comp_speed_berechnet": {
+        "name": "Berechnete Kompressorleistung (Stufe)"
+      },
+      "frequenz_hz": {
+        "name": "Kompressor Frequenz"
+      },
+      "spannung": {
+        "name": "Spannung"
+      },
+      "software_version": {
+        "name": "Software Version"
+      },
+      "ah_betriebszeit": {
+        "name": "AH Betriebszeit"
+      },
+      "hbh_betriebszeit": {
+        "name": "HBH Betriebszeit"
+      },
+      "hwtbh_betriebszeit": {
+        "name": "HWTBH Betriebszeit"
+      },
+      "ventil_oeffnung": {
+        "name": "Expansionsventil Öffnung"
+      },
+      "hochdruck_pd": {
+        "name": "Hochdruck Pd"
+      },
+      "saugdruck_ps": {
+        "name": "Saugdruck Ps"
+      },
+      "sauggas_ts": {
+        "name": "Sauggastemperatur Ts"
+      },
+      "lamellentauscher_tp": {
+        "name": "Lamellentauscher Tp"
+      },
+      "diag_par39": {
+        "name": "Diagnose par39 (unbestätigt, nicht der Strom)"
+      },
+      "diag_par40": {
+        "name": "Diagnose par40 (unbestätigt)"
+      },
+      "spreizung": {
+        "name": "Spreizung"
+      },
+      "thermische_leistung": {
+        "name": "Thermische Leistung"
+      },
+      "aktueller_cop": {
+        "name": "Aktueller COP"
+      },
+      "leistung_elektrisch": {
+        "name": "Elektrische Leistung"
+      },
+      "betriebsart": {
+        "name": "Betriebsart",
+        "state": {
+          "off": "Aus",
+          "dhw": "Brauchwasser",
+          "heating": "Heizen",
+          "cooling": "Kühlen",
+          "dhw_heating": "Brauchwasser + Heizen",
+          "dhw_cooling": "Brauchwasser + Kühlen",
+          "defrost": "Entfrosten"
+        }
+      },
+      "anlagendaten": {
+        "name": "Anlagendaten"
+      },
+      "konfigurationssicherungen": {
+        "name": "Konfigurationssicherungen"
+      },
+      "energie_elektrisch": {
+        "name": "Energie elektrisch"
+      },
+      "energie_elektrisch_heizen": {
+        "name": "Energie elektrisch Heizen"
+      },
+      "energie_elektrisch_warmwasser": {
+        "name": "Energie elektrisch Warmwasser"
+      },
+      "energie_thermisch": {
+        "name": "Wärmemenge"
+      },
+      "energie_thermisch_heizen": {
+        "name": "Wärmemenge Heizen"
+      },
+      "energie_thermisch_warmwasser": {
+        "name": "Wärmemenge Warmwasser"
+      },
+      "verdichter_starts": {
+        "name": "Verdichterstarts"
+      },
+      "verdichter_laufzeit": {
+        "name": "Verdichterlaufzeit"
+      }
+    },
+    "switch": {
+      "cfg_par1": {
+        "name": "Schnelleinstellung: Anlage ein/aus"
+      },
+      "cfg_par67": {
+        "name": "Heiz-/Kühlkreis 2: Heiz-/Kühlkreis 2"
+      },
+      "cfg_par69": {
+        "name": "Heiz-/Kühlkreis 2: Heizkurve Kreis 2"
+      },
+      "cfg_par63": {
+        "name": "Warmwasserspeicher: Warmwasserspeicher-Funktion"
+      },
+      "cfg_par64": {
+        "name": "Warmwasserspeicher: Nachheizfunktion"
+      },
+      "cfg_par41": {
+        "name": "Legionellenschutz: Legionellenschutz"
+      },
+      "cfg_par19": {
+        "name": "Benutzerverwaltung: Zeitprogramm Heizen/Kühlen"
+      },
+      "cfg_par48": {
+        "name": "Zusatzheizung: Zusatzheizung für Heizbetrieb"
+      },
+      "cfg_par50": {
+        "name": "Zusatzheizung: Zusatzheizung für Warmwasser"
+      },
+      "cfg_par24": {
+        "name": "Heiz-/Kühlkreis 1: Heizkurve Kreis 1"
+      },
+      "cfg_par35": {
+        "name": "Heiz-/Kühlkreis 1: Raumtemperatur wirkt auf Heizkurve"
+      },
+      "cfg_par57": {
+        "name": "Warmwasser: Vorrangumschaltung"
+      },
+      "cfg_par62": {
+        "name": "Warmwasser: Warmwasser-Zusatzheizung bei Vorrangumschaltung"
+      },
+      "cfg_par78": {
+        "name": "Absenkbetrieb Heizen: Absenkbetrieb"
+      },
+      "cfg_par80": {
+        "name": "Absenkbetrieb Heizen: Flüsterbetrieb"
+      },
+      "cfg_par45": {
+        "name": "Urlaubsmodus: Urlaubsmodus"
+      },
+      "cfg_par83": {
+        "name": "EVU-Sperre: EVU-Sperre"
+      },
+      "cfg_par84": {
+        "name": "EVU-Sperre: Zusatzheizung während EVU-Sperre"
+      },
+      "cfg_par85": {
+        "name": "EVU-Sperre: Umwälzpumpe P0 während EVU-Sperre"
+      }
+    }
+  },
+  "exceptions": {
+    "schreibzugriff_aus": {
+      "message": "Der Schreibzugriff ist abgeschaltet. {name} wurde nicht geändert. Einschalten in den Einstellungen der Integration unter „Schreibzugriff auf die Anlage erlauben“."
+    },
+    "konfiguration_unbekannt": {
+      "message": "Der Konfigurationsstand ist gerade nicht bekannt – es wurde nichts gesichert. Nach dem nächsten erfolgreichen Abruf erneut versuchen."
+    }
+  },
+  "services": {
+    "sicherung_erstellen": {
+      "name": "Konfiguration sichern",
+      "description": "Legt eine Sicherung des vollständigen Konfigurationsstandes an (rund 300 Werte). Vor jedem Eingriff an der Anlage empfehlenswert – und vor jedem Besuch des Heizungsbauers.",
+      "fields": {
+        "bezeichnung": {
+          "name": "Bezeichnung",
+          "description": "Kurzer Name, unter dem die Sicherung später wiederzufinden ist."
+        },
+        "grund": {
+          "name": "Grund",
+          "description": "Warum gesichert wurde – steht später in der Übersicht."
+        },
+        "eintrag": {
+          "name": "Anlage",
+          "description": "Nur nötig, wenn mehrere Anlagen eingerichtet sind."
+        }
+      }
+    },
+    "sicherungen_auflisten": {
+      "name": "Sicherungen auflisten",
+      "description": "Liefert alle vorhandenen Sicherungen mit Zeitpunkt, Anlass und Prüfsumme. Liefert eine Antwort – in einem Skript über „response_variable“ abholen.",
+      "fields": {
+        "eintrag": {
+          "name": "Anlage",
+          "description": "Nur nötig, wenn mehrere Anlagen eingerichtet sind."
+        }
+      }
+    },
+    "sicherung_anzeigen": {
+      "name": "Sicherung ansehen",
+      "description": "Zeigt eine Sicherung vollständig – Stammdaten, alle benannten Einstellungen im Klartext und die Rohwerte. Verändert nichts an der Anlage.",
+      "fields": {
+        "sicherung": {
+          "name": "Sicherung",
+          "description": "Kennung der Sicherung, oder „neueste“ bzw. „aelteste“."
+        },
+        "eintrag": {
+          "name": "Anlage",
+          "description": "Nur nötig, wenn mehrere Anlagen eingerichtet sind."
+        }
+      }
+    },
+    "sicherungen_vergleichen": {
+      "name": "Sicherungen vergleichen",
+      "description": "Zeigt alle Unterschiede zwischen zwei Ständen – standardmäßig zwischen einer Sicherung und dem jetzigen Zustand der Anlage. Die Antwort nennt jeden geänderten Wert mit Name, Gruppe und Klartext-Fassung.",
+      "fields": {
+        "sicherung": {
+          "name": "Sicherung",
+          "description": "Kennung der Sicherung, oder „neueste“ bzw. „aelteste“."
+        },
+        "vergleich_mit": {
+          "name": "Verglichen mit",
+          "description": "Kennung einer zweiten Sicherung, oder „jetzt“ für den aktuellen Stand der Anlage."
+        },
+        "eintrag": {
+          "name": "Anlage",
+          "description": "Nur nötig, wenn mehrere Anlagen eingerichtet sind."
+        }
+      }
+    },
+    "sicherung_wiederherstellen": {
+      "name": "Sicherung wiederherstellen",
+      "description": "Schreibt einen gesicherten Stand zurück in die Wärmepumpe. Standardmäßig als Probelauf, der nur zeigt, was geschehen würde. Ein echter Lauf verlangt zusätzlich, dass der Schreibzugriff in den Optionen freigegeben ist, und legt vorher automatisch eine Sicherung des jetzigen Standes an.",
+      "fields": {
+        "sicherung": {
+          "name": "Sicherung",
+          "description": "Kennung der Sicherung, oder „neueste“ bzw. „aelteste“."
+        },
+        "probelauf": {
+          "name": "Probelauf",
+          "description": "An: es wird nichts geschrieben, die Antwort zeigt nur den Plan. Aus: die Werte werden tatsächlich gesetzt."
+        },
+        "eintrag": {
+          "name": "Anlage",
+          "description": "Nur nötig, wenn mehrere Anlagen eingerichtet sind."
+        }
+      }
+    },
+    "sicherung_loeschen": {
+      "name": "Sicherung löschen",
+      "description": "Entfernt eine Sicherung endgültig. Sicherungen, die einen Eingriff dokumentieren, lassen sich so entfernen – das automatische Aufräumen rührt sie nicht an.",
+      "fields": {
+        "sicherung": {
+          "name": "Sicherung",
+          "description": "Kennung der Sicherung."
+        },
+        "eintrag": {
+          "name": "Anlage",
+          "description": "Nur nötig, wenn mehrere Anlagen eingerichtet sind."
+        }
+      }
+    },
+    "sicherung_exportieren": {
+      "name": "Sicherung als Datei exportieren",
+      "description": "Schreibt eine Sicherung als JSON-Datei – zum Aufbewahren außerhalb von Home Assistant oder zum Weitergeben an den Heizungsbauer.",
+      "fields": {
+        "sicherung": {
+          "name": "Sicherung",
+          "description": "Kennung der Sicherung."
+        },
+        "pfad": {
+          "name": "Pfad",
+          "description": "Zieldatei. Ohne Angabe landet sie im Konfigurationsverzeichnis von Home Assistant. Andere Verzeichnisse müssen in „allowlist_external_dirs“ stehen."
+        },
+        "eintrag": {
+          "name": "Anlage",
+          "description": "Nur nötig, wenn mehrere Anlagen eingerichtet sind."
+        }
+      }
+    },
+    "parameter_setzen": {
+      "name": "Einzelnen Parameter setzen",
+      "description": "Setzt einen Konfigurationswert direkt über seine Portal-Kennung. Gedacht für Felder, die keine eigene Entity haben oder deren Entity abgeschaltet ist. Der Wert wird vorher gegen Wertebereich und Auswahlliste geprüft.",
+      "fields": {
+        "parameter": {
+          "name": "Parameter",
+          "description": "Portal-Kennung im setdata-Namensraum, z. B. par55."
+        },
+        "wert": {
+          "name": "Wert",
+          "description": "Zu schreibender Wert (ganze Zahl)."
+        },
+        "eintrag": {
+          "name": "Anlage",
+          "description": "Nur nötig, wenn mehrere Anlagen eingerichtet sind."
+        }
+      }
+    }
   }
 }

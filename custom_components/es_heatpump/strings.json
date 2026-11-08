@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "ES Heatpump – Credentials",
+        "title": "ES Heat Pump – Credentials",
         "description": "Enter your myheatpump.com portal credentials. The integration logs in automatically and fetches all sensor data. For EU portal accounts, pick https://eu.myheatpump.com from the dropdown.",
         "data": {
           "username": "Username (e-mail address)",
@@ -13,7 +13,7 @@
           "flow_rate": "Heating-loop flow rate (m³/h)",
           "flow_rate_dhw": "DHW-loop flow rate (m³/h)",
           "mode_source_entity": "Operating-mode source entity (no longer needed since v2.4.0 — the unit reports its mode in par1)",
-          "dhw_margin_k": "Volumetric-flow margin above the heating setpoint that marks DHW mode (K). Flow temperature above setpoint + margin ⇒ domestic hot water.",
+          "dhw_margin_k": "Flow-temperature margin above the heating setpoint that marks DHW mode (K). Flow above setpoint + margin ⇒ domestic hot water.",
           "flow_entity": "Live volumetric-flow sensor (optional — overrides the constants, recommended if the circulation pump modulates)",
           "model": "Heat-pump model — selecting it fills in the datasheet nominal flow rate",
           "enable_writes": "Allow writing to the unit (off by default — required for settings entities, the restore service and parameter_setzen)",
@@ -35,7 +35,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "ES Heatpump – Change Settings",
+        "title": "ES Heat Pump – Change Settings",
         "data": {
           "model": "Heat-pump model",
           "flow_rate": "Heating-loop flow rate",
@@ -138,6 +138,564 @@
     "origami_theme_missing": {
       "title": "Origami theme not installed",
       "description": "The ES Heatpump dashboard is set to the \"Origami\" design, but the theme \"{theme}\" is not installed. Until it is, Home Assistant shows the default theme.\n\nTo install: Marketplace/HACS → download the repository \"hazymorning/origami\" (category theme), then run the action \"frontend.reload_themes\" under Developer tools → Actions. The Montserrat font is optional, see the Origami README. This notice then disappears by itself."
+    }
+  },
+  "entity": {
+    "button": {
+      "konfiguration_sichern": {
+        "name": "Back up configuration now"
+      }
+    },
+    "number": {
+      "cfg_par36": {
+        "name": "Quick settings: Desired room temperature heating"
+      },
+      "cfg_par37": {
+        "name": "Quick settings: Desired room temperature cooling"
+      },
+      "cfg_par55": {
+        "name": "Quick settings: DHW setpoint"
+      },
+      "cfg_par121": {
+        "name": "Quick settings: Heating curve 1 parallel shift"
+      },
+      "cfg_par122": {
+        "name": "Quick settings: Heating curve 2 parallel shift"
+      },
+      "cfg_par68": {
+        "name": "Heating/cooling circuit 2: Cooling setpoint (circuit 2)"
+      },
+      "cfg_par75": {
+        "name": "Heating/cooling circuit 2: Heating setpoint circuit 2 (without heating curve)"
+      },
+      "cfg_par70": {
+        "name": "Heating/cooling circuit 2: Heating curve 2 point 1 – water temperature"
+      },
+      "cfg_par71": {
+        "name": "Heating/cooling circuit 2: Heating curve 2 point 2 – water temperature"
+      },
+      "cfg_par72": {
+        "name": "Heating/cooling circuit 2: Heating curve 2 point 3 – water temperature"
+      },
+      "cfg_par73": {
+        "name": "Heating/cooling circuit 2: Heating curve 2 point 4 – water temperature"
+      },
+      "cfg_par74": {
+        "name": "Heating/cooling circuit 2: Heating curve 2 point 5 – water temperature"
+      },
+      "cfg_par65": {
+        "name": "DHW storage: Reheating setpoint"
+      },
+      "cfg_par66": {
+        "name": "DHW storage: Reheating restart ∆T"
+      },
+      "cfg_par42": {
+        "name": "Anti-legionella: Anti-legionella setpoint"
+      },
+      "cfg_par43": {
+        "name": "Anti-legionella: Anti-legionella duration"
+      },
+      "cfg_par44": {
+        "name": "Anti-legionella: Anti-legionella finish time"
+      },
+      "cfg_par52": {
+        "name": "Backup heating: Backup heater start threshold (HBH)"
+      },
+      "cfg_par53": {
+        "name": "Backup heating: Water temperature rise reading interval (HWTBH)"
+      },
+      "cfg_par20": {
+        "name": "Heating/cooling circuit 1: Stop at water ∆T"
+      },
+      "cfg_par21": {
+        "name": "Heating/cooling circuit 1: Restart at water ∆T"
+      },
+      "cfg_par22": {
+        "name": "Heating/cooling circuit 1: ∆T for compressor speed reduction"
+      },
+      "cfg_par23": {
+        "name": "Heating/cooling circuit 1: Cooling setpoint (circuit 1)"
+      },
+      "cfg_par25": {
+        "name": "Heating/cooling circuit 1: Heating curve point 1 – outdoor temperature"
+      },
+      "cfg_par26": {
+        "name": "Heating/cooling circuit 1: Heating curve point 2 – outdoor temperature"
+      },
+      "cfg_par27": {
+        "name": "Heating/cooling circuit 1: Heating curve point 3 – outdoor temperature"
+      },
+      "cfg_par28": {
+        "name": "Heating/cooling circuit 1: Heating curve point 4 – outdoor temperature"
+      },
+      "cfg_par29": {
+        "name": "Heating/cooling circuit 1: Heating curve point 5 – outdoor temperature"
+      },
+      "cfg_par30": {
+        "name": "Heating/cooling circuit 1: Heating curve point 1 – water temperature"
+      },
+      "cfg_par31": {
+        "name": "Heating/cooling circuit 1: Heating curve point 2 – water temperature"
+      },
+      "cfg_par32": {
+        "name": "Heating/cooling circuit 1: Heating curve point 3 – water temperature"
+      },
+      "cfg_par33": {
+        "name": "Heating/cooling circuit 1: Heating curve point 4 – water temperature"
+      },
+      "cfg_par34": {
+        "name": "Heating/cooling circuit 1: Heating curve point 5 – water temperature"
+      },
+      "cfg_par38": {
+        "name": "Heating/cooling circuit 1: Heating setpoint (without heating curve)"
+      },
+      "cfg_par56": {
+        "name": "Domestic hot water: DHW restart ∆T"
+      },
+      "cfg_par58": {
+        "name": "Domestic hot water: Priority shifting from outdoor temperature"
+      },
+      "cfg_par59": {
+        "name": "Domestic hot water: DHW minimum run time"
+      },
+      "cfg_par60": {
+        "name": "Domestic hot water: Heating maximum run time"
+      },
+      "cfg_par61": {
+        "name": "Domestic hot water: Allowed temperature drift heating"
+      },
+      "cfg_par79": {
+        "name": "Heating setback: Setback/raise"
+      },
+      "cfg_par81": {
+        "name": "Heating setback: Allowed temperature drift in setback mode"
+      },
+      "cfg_par46": {
+        "name": "Vacation mode: DHW reduction during vacation"
+      },
+      "cfg_par47": {
+        "name": "Vacation mode: Heating water reduction during vacation"
+      },
+      "cfg_par11": {
+        "name": "Mode switchover: Heating from outdoor temperature"
+      },
+      "cfg_par12": {
+        "name": "Mode switchover: Cooling from outdoor temperature"
+      }
+    },
+    "select": {
+      "cfg_par4": {
+        "name": "Quick settings: Operating mode",
+        "state": {
+          "standby": "Standby",
+          "heating": "Heating",
+          "cooling": "Cooling",
+          "dhw": "Domestic hot water",
+          "auto": "Auto"
+        }
+      },
+      "cfg_par5": {
+        "name": "Quick settings: Control panel language",
+        "state": {
+          "lang_0": "English",
+          "lang_1": "Slovenščina",
+          "lang_2": "Deutsch",
+          "lang_3": "Polski",
+          "lang_4": "Italiano",
+          "lang_5": "Русский",
+          "lang_6": "Українська",
+          "lang_7": "Polski",
+          "lang_8": "English",
+          "lang_9": "English",
+          "lang_10": "English",
+          "lang_11": "English",
+          "lang_12": "English",
+          "lang_13": "English",
+          "lang_14": "English",
+          "lang_15": "中文"
+        }
+      },
+      "cfg_par49": {
+        "name": "Backup heating: Backup heater priority heating (HBH)",
+        "state": {
+          "lower_than_heatpump": "Lower than heat pump",
+          "higher_than_heatpump": "Higher than heat pump"
+        }
+      },
+      "cfg_par51": {
+        "name": "Backup heating: Backup heater priority DHW (HWTBH)",
+        "state": {
+          "lower_than_heatpump": "Lower than heat pump",
+          "higher_than_heatpump": "Higher than heat pump"
+        }
+      },
+      "cfg_par86": {
+        "name": "Other options: Display backlight",
+        "state": {
+          "always_on": "Always on",
+          "min_3": "3 minutes",
+          "min_5": "5 minutes",
+          "min_10": "10 minutes"
+        }
+      },
+      "cfg_par9": {
+        "name": "Mode switchover: Heating/cooling switchover",
+        "state": {
+          "disabled": "Disabled",
+          "ambient": "Outdoor temperature",
+          "external": "External signal",
+          "external_ambient": "External signal + outdoor temperature"
+        }
+      }
+    },
+    "sensor": {
+      "vorlauf_tuo": {
+        "name": "Flow temperature"
+      },
+      "ruecklauf_tui": {
+        "name": "Return temperature"
+      },
+      "heizen_soll": {
+        "name": "Water temperature Tup"
+      },
+      "warmwasser_tw": {
+        "name": "Domestic hot water"
+      },
+      "heizen": {
+        "name": "Heating water temperature"
+      },
+      "mischventil_1": {
+        "name": "Mixing valve 1 temperature"
+      },
+      "mischventil_2": {
+        "name": "Mixing valve 2 temperature"
+      },
+      "raumtemperatur": {
+        "name": "Room temperature"
+      },
+      "aussentemp_ta": {
+        "name": "Outdoor temperature"
+      },
+      "heissgas_td": {
+        "name": "Hot gas temperature"
+      },
+      "heizen_soll_manuell": {
+        "name": "Heating setpoint (manual)"
+      },
+      "diag_par15_heartbeat": {
+        "name": "Diagnostic par15 (heartbeat / unclear)"
+      },
+      "luefter_drehzahl": {
+        "name": "Fan 1 speed"
+      },
+      "luefter_2_drehzahl": {
+        "name": "Fan 2 speed"
+      },
+      "verdichter_strom": {
+        "name": "Compressor current"
+      },
+      "pumpe_p0": {
+        "name": "Pump P0"
+      },
+      "pumpe_p1": {
+        "name": "Pump P1"
+      },
+      "pumpe_p2": {
+        "name": "Pump P2"
+      },
+      "comp_speed_berechnet": {
+        "name": "Calculated compressor speed (level)"
+      },
+      "frequenz_hz": {
+        "name": "Compressor frequency"
+      },
+      "spannung": {
+        "name": "Voltage"
+      },
+      "software_version": {
+        "name": "Software version"
+      },
+      "ah_betriebszeit": {
+        "name": "AH operating time"
+      },
+      "hbh_betriebszeit": {
+        "name": "HBH operating time"
+      },
+      "hwtbh_betriebszeit": {
+        "name": "HWTBH operating time"
+      },
+      "ventil_oeffnung": {
+        "name": "Expansion valve opening"
+      },
+      "hochdruck_pd": {
+        "name": "High pressure Pd"
+      },
+      "saugdruck_ps": {
+        "name": "Suction pressure Ps"
+      },
+      "sauggas_ts": {
+        "name": "Suction gas temperature Ts"
+      },
+      "lamellentauscher_tp": {
+        "name": "Fin heat exchanger Tp"
+      },
+      "diag_par39": {
+        "name": "Diagnostic par39 (unconfirmed, not the current)"
+      },
+      "diag_par40": {
+        "name": "Diagnostic par40 (unconfirmed)"
+      },
+      "spreizung": {
+        "name": "Spread"
+      },
+      "thermische_leistung": {
+        "name": "Thermal power"
+      },
+      "aktueller_cop": {
+        "name": "Current COP"
+      },
+      "leistung_elektrisch": {
+        "name": "Electrical power"
+      },
+      "betriebsart": {
+        "name": "Operating mode",
+        "state": {
+          "off": "Off",
+          "dhw": "Domestic hot water",
+          "heating": "Heating",
+          "cooling": "Cooling",
+          "dhw_heating": "Domestic hot water + heating",
+          "dhw_cooling": "Domestic hot water + cooling",
+          "defrost": "Defrosting"
+        }
+      },
+      "anlagendaten": {
+        "name": "System data"
+      },
+      "konfigurationssicherungen": {
+        "name": "Configuration backups"
+      },
+      "energie_elektrisch": {
+        "name": "Electrical energy"
+      },
+      "energie_elektrisch_heizen": {
+        "name": "Electrical energy heating"
+      },
+      "energie_elektrisch_warmwasser": {
+        "name": "Electrical energy hot water"
+      },
+      "energie_thermisch": {
+        "name": "Heat energy"
+      },
+      "energie_thermisch_heizen": {
+        "name": "Heat energy heating"
+      },
+      "energie_thermisch_warmwasser": {
+        "name": "Heat energy hot water"
+      },
+      "verdichter_starts": {
+        "name": "Compressor starts"
+      },
+      "verdichter_laufzeit": {
+        "name": "Compressor runtime"
+      }
+    },
+    "switch": {
+      "cfg_par1": {
+        "name": "Quick settings: Unit on/off"
+      },
+      "cfg_par67": {
+        "name": "Heating/cooling circuit 2: Heating/cooling circuit 2"
+      },
+      "cfg_par69": {
+        "name": "Heating/cooling circuit 2: Heating curve circuit 2"
+      },
+      "cfg_par63": {
+        "name": "DHW storage: DHW storage function"
+      },
+      "cfg_par64": {
+        "name": "DHW storage: Reheating function"
+      },
+      "cfg_par41": {
+        "name": "Anti-legionella: Anti-legionella"
+      },
+      "cfg_par19": {
+        "name": "User settings: Heating/cooling timer"
+      },
+      "cfg_par48": {
+        "name": "Backup heating: Backup heater for heating"
+      },
+      "cfg_par50": {
+        "name": "Backup heating: Backup heater for DHW"
+      },
+      "cfg_par24": {
+        "name": "Heating/cooling circuit 1: Heating curve circuit 1"
+      },
+      "cfg_par35": {
+        "name": "Heating/cooling circuit 1: Room temperature affects heating curve"
+      },
+      "cfg_par57": {
+        "name": "Domestic hot water: Priority shifting"
+      },
+      "cfg_par62": {
+        "name": "Domestic hot water: DHW backup heater for priority shifting"
+      },
+      "cfg_par78": {
+        "name": "Heating setback: Setback mode"
+      },
+      "cfg_par80": {
+        "name": "Heating setback: Quiet mode"
+      },
+      "cfg_par45": {
+        "name": "Vacation mode: Vacation mode"
+      },
+      "cfg_par83": {
+        "name": "Utility lock: Utility lock"
+      },
+      "cfg_par84": {
+        "name": "Utility lock: Backup heater during utility lock"
+      },
+      "cfg_par85": {
+        "name": "Utility lock: Circulation pump P0 during utility lock"
+      }
+    }
+  },
+  "exceptions": {
+    "schreibzugriff_aus": {
+      "message": "Write access is disabled. {name} was not changed. Enable it in the integration options under \"Allow writing to the unit\"."
+    },
+    "konfiguration_unbekannt": {
+      "message": "The current configuration is not known right now, nothing was backed up. Try again after the next successful poll."
+    }
+  },
+  "services": {
+    "sicherung_erstellen": {
+      "name": "Back up configuration",
+      "description": "Creates a backup of the complete configuration (about 300 values). Recommended before any change to the unit – and before every visit from the heating engineer.",
+      "fields": {
+        "bezeichnung": {
+          "name": "Label",
+          "description": "Short name under which the backup can be found later."
+        },
+        "grund": {
+          "name": "Reason",
+          "description": "Why the backup was taken – shown later in the overview."
+        },
+        "eintrag": {
+          "name": "Unit",
+          "description": "Only needed if several units are set up."
+        }
+      }
+    },
+    "sicherungen_auflisten": {
+      "name": "List backups",
+      "description": "Returns all existing backups with time, occasion and checksum. Returns a response – fetch it in a script via \"response_variable\".",
+      "fields": {
+        "eintrag": {
+          "name": "Unit",
+          "description": "Only needed if several units are set up."
+        }
+      }
+    },
+    "sicherung_anzeigen": {
+      "name": "Show backup",
+      "description": "Shows a backup in full – system data, all named settings in plain text and the raw values. Does not change anything on the unit.",
+      "fields": {
+        "sicherung": {
+          "name": "Backup",
+          "description": "ID of the backup, or \"neueste\" (newest) or \"aelteste\" (oldest)."
+        },
+        "eintrag": {
+          "name": "Unit",
+          "description": "Only needed if several units are set up."
+        }
+      }
+    },
+    "sicherungen_vergleichen": {
+      "name": "Compare backups",
+      "description": "Shows all differences between two states – by default between a backup and the current state of the unit. The response lists every changed value with name, group and plain-text value.",
+      "fields": {
+        "sicherung": {
+          "name": "Backup",
+          "description": "ID of the backup, or \"neueste\" (newest) or \"aelteste\" (oldest)."
+        },
+        "vergleich_mit": {
+          "name": "Compared with",
+          "description": "ID of a second backup, or \"jetzt\" (now) for the current state of the unit."
+        },
+        "eintrag": {
+          "name": "Unit",
+          "description": "Only needed if several units are set up."
+        }
+      }
+    },
+    "sicherung_wiederherstellen": {
+      "name": "Restore backup",
+      "description": "Writes a backed-up state back to the heat pump. By default as a dry run that only shows what would happen. A real run additionally requires write access to be enabled in the options, and automatically backs up the current state first.",
+      "fields": {
+        "sicherung": {
+          "name": "Backup",
+          "description": "ID of the backup, or \"neueste\" (newest) or \"aelteste\" (oldest)."
+        },
+        "probelauf": {
+          "name": "Dry run",
+          "description": "On: nothing is written, the response only shows the plan. Off: the values are actually set."
+        },
+        "eintrag": {
+          "name": "Unit",
+          "description": "Only needed if several units are set up."
+        }
+      }
+    },
+    "sicherung_loeschen": {
+      "name": "Delete backup",
+      "description": "Removes a backup permanently. Backups documenting a change can be removed this way – the automatic clean-up never touches them.",
+      "fields": {
+        "sicherung": {
+          "name": "Backup",
+          "description": "ID of the backup."
+        },
+        "eintrag": {
+          "name": "Unit",
+          "description": "Only needed if several units are set up."
+        }
+      }
+    },
+    "sicherung_exportieren": {
+      "name": "Export backup to file",
+      "description": "Writes a backup as a JSON file – for keeping outside Home Assistant or passing on to the heating engineer.",
+      "fields": {
+        "sicherung": {
+          "name": "Backup",
+          "description": "ID of the backup."
+        },
+        "pfad": {
+          "name": "Path",
+          "description": "Target file. Without a value it is written to the Home Assistant configuration directory. Other directories must be listed in \"allowlist_external_dirs\"."
+        },
+        "eintrag": {
+          "name": "Unit",
+          "description": "Only needed if several units are set up."
+        }
+      }
+    },
+    "parameter_setzen": {
+      "name": "Set single parameter",
+      "description": "Sets a configuration value directly by its portal ID. Meant for fields without their own entity or whose entity is disabled. The value is checked against range and option list first.",
+      "fields": {
+        "parameter": {
+          "name": "Parameter",
+          "description": "Portal ID in the setdata namespace, e.g. par55."
+        },
+        "wert": {
+          "name": "Value",
+          "description": "Value to write (whole number)."
+        },
+        "eintrag": {
+          "name": "Unit",
+          "description": "Only needed if several units are set up."
+        }
+      }
     }
   }
 }

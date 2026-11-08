@@ -53,6 +53,10 @@ class Setting:
     unit: str | None = None
     device_class: str | None = None
     options: dict[int, str] = field(default_factory=dict)
+    # Sprachneutrale Schluessel je Auswahlwert ([a-z0-9_]) fuer die
+    # Select-Entity; Anzeige ueber entity.select.cfg_parXX.state.<schluessel>.
+    # ``options`` bleibt deutsch fuer beschreibe() und Sicherungs-Diffs.
+    option_keys: dict[int, str] = field(default_factory=dict)
     enabled_default: bool = False
 
     @property
@@ -108,6 +112,7 @@ SETTINGS: dict[str, Setting] = {
         name="Betriebsart",
         kind="select", portal_label="Working Mode",
         options={0: "Bereitschaft", 1: "Heizen", 2: "Kühlen", 3: "Warmwasser", 4: "Automatik"},
+        option_keys={0: "standby", 1: "heating", 2: "cooling", 3: "dhw", 4: "auto"},
         enabled_default=True,
     ),
     "par5": Setting(
@@ -115,6 +120,7 @@ SETTINGS: dict[str, Setting] = {
         name="Sprache der Bedieneinheit",
         kind="select", portal_label="Language",
         options={0: "English", 1: "Slovenščina", 10: "English", 11: "English", 12: "English", 13: "English", 14: "English", 15: "中文", 2: "Deutsch", 3: "Polski", 4: "Italiano", 5: "Русский", 6: "Українська", 7: "Polski", 8: "English", 9: "English"},
+        option_keys={n: f"lang_{n}" for n in range(16)},
         enabled_default=True,
     ),
     "par36": Setting(
@@ -293,6 +299,7 @@ SETTINGS: dict[str, Setting] = {
         name="Vorrang Zusatzheizung Heizen (HBH)",
         kind="select", portal_label="Priority for Backup Heating Sources (HBH)",
         options={0: "Niedriger als Wärmepumpe", 1: "Höher als Wärmepumpe"},
+        option_keys={0: "lower_than_heatpump", 1: "higher_than_heatpump"},
         enabled_default=True,
     ),
     "par50": Setting(
@@ -306,6 +313,7 @@ SETTINGS: dict[str, Setting] = {
         name="Vorrang Zusatzheizung Warmwasser (HWTBH)",
         kind="select", portal_label="Priority for Backup Heating Sources (HWTBH)",
         options={0: "Niedriger als Wärmepumpe", 1: "Höher als Wärmepumpe"},
+        option_keys={0: "lower_than_heatpump", 1: "higher_than_heatpump"},
         enabled_default=True,
     ),
     "par52": Setting(
@@ -329,6 +337,7 @@ SETTINGS: dict[str, Setting] = {
         name="Displaybeleuchtung",
         kind="select", portal_label="Control Panel Backlight Light",
         options={0: "Dauernd an", 1: "3 Minuten", 2: "5 Minuten", 3: "10 Minuten"},
+        option_keys={0: "always_on", 1: "min_3", 2: "min_5", 3: "min_10"},
         enabled_default=True,
     ),
 
@@ -556,6 +565,7 @@ SETTINGS: dict[str, Setting] = {
         name="Umschaltung Heizen/Kühlen",
         kind="select", portal_label="Cooling and Heating Switch",
         options={0: "Deaktiviert", 1: "Außentemperatur", 2: "Externes Signal", 3: "Externes Signal + Außentemperatur"},
+        option_keys={0: "disabled", 1: "ambient", 2: "external", 3: "external_ambient"},
         enabled_default=True,
     ),
     "par11": Setting(

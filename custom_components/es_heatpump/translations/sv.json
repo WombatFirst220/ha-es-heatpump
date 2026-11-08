@@ -16,10 +16,10 @@
           "dhw_margin_k": "Framledningens marginal över värmebörvärdet som markerar varmvatten (K)",
           "flow_entity": "Flödesgivare (valfritt – går före konstanterna, rekommenderas vid modulerande cirkulationspump)",
           "model": "Värmepumpsmodell – valet fyller i det nominella flödet från databladet",
-          "enable_writes": "Allow writing to the unit (off by default — required for settings entities, the restore service and parameter_setzen)",
-          "settings_interval": "Configuration poll interval (seconds) — settings change rarely, 900 is plenty",
-          "backup_interval_h": "Automatic backup interval (hours) — a change is always backed up immediately, this is the idle heartbeat",
-          "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted."
+          "enable_writes": "Tillåt skrivning till enheten (av som standard – krävs för inställningsentiteterna, återställningstjänsten och parameter_setzen)",
+          "settings_interval": "Hämtningsintervall för konfigurationen (sekunder) – inställningar ändras sällan, 900 räcker gott",
+          "backup_interval_h": "Intervall för automatisk säkerhetskopia (timmar) – en ändring säkerhetskopieras alltid direkt, detta är bara viloläget",
+          "backup_keep": "Antal säkerhetskopior att behålla (0 = obegränsat). Säkerhetskopior tagna före en skrivning eller återställning raderas aldrig."
         }
       }
     },
@@ -55,7 +55,17 @@
         },
         "data_description": {
           "model": "Valet fyller i det nominella flödet från databladet.",
-          "dashboard_design": "\"Origami\" kräver temat med samma namn från Marketplace/HACS."
+          "flow_rate": "Termisk effekt och COP beräknas utifrån det. En COP under 1 betyder att värdet är för lågt.",
+          "power_entity": "Värmepumpens elektriska effekt, t.ex. från en Shelly. Krävs för COP.",
+          "flow_entity": "Valfritt. Ersätter konstanterna; rekommenderas om cirkulationspumpen modulerar.",
+          "dhw_margin_k": "Kelvin över värmebörvärdet från vilket framledningen räknas som varmvatten.",
+          "mode_source_entity": "Behövs inte längre sedan v2.4.0, enheten rapporterar själv sitt läge.",
+          "hydraulic_card": "Animerat schema högst upp i översikten. Kortet medföljer.",
+          "dashboard_design": "\"Origami\" kräver temat med samma namn från Marketplace/HACS.",
+          "enable_writes": "Av som standard. Krävs för inställningsentiteterna, återställningstjänsten och parameter_setzen.",
+          "settings_interval": "Inställningar ändras sällan, 900 räcker gott.",
+          "backup_interval_h": "En ändring säkerhetskopieras alltid direkt, detta är bara viloläget.",
+          "backup_keep": "0 = obegränsat. Säkerhetskopior tagna före en skrivning eller återställning raderas aldrig."
         },
         "sections": {
           "messung": {
@@ -70,8 +80,14 @@
               "mode_source_entity": "Källa för driftläge"
             },
             "data_description": {
-              "model": "Valet fyller i det nominella flödet från databladet."
-            }
+              "model": "Valet fyller i det nominella flödet från databladet.",
+              "flow_rate": "Termisk effekt och COP beräknas utifrån det. En COP under 1 betyder att värdet är för lågt.",
+              "power_entity": "Värmepumpens elektriska effekt, t.ex. från en Shelly. Krävs för COP.",
+              "flow_entity": "Valfritt. Ersätter konstanterna; rekommenderas om cirkulationspumpen modulerar.",
+              "dhw_margin_k": "Kelvin över värmebörvärdet från vilket framledningen räknas som varmvatten.",
+              "mode_source_entity": "Behövs inte längre sedan v2.4.0, enheten rapporterar själv sitt läge."
+            },
+            "description": "Underlag för termisk effekt och COP."
           },
           "dashboard": {
             "name": "Instrumentpanel",
@@ -80,6 +96,7 @@
               "dashboard_design": "Design"
             },
             "data_description": {
+              "hydraulic_card": "Animerat schema högst upp i översikten. Kortet medföljer.",
               "dashboard_design": "\"Origami\" kräver temat med samma namn från Marketplace/HACS."
             }
           },
@@ -90,6 +107,12 @@
               "settings_interval": "Hämtning av inställningar (sekunder)",
               "backup_interval_h": "Automatisk säkerhetskopia (timmar)",
               "backup_keep": "Antal säkerhetskopior att spara"
+            },
+            "data_description": {
+              "enable_writes": "Av som standard. Krävs för inställningsentiteterna, återställningstjänsten och parameter_setzen.",
+              "settings_interval": "Inställningar ändras sällan, 900 räcker gott.",
+              "backup_interval_h": "En ändring säkerhetskopieras alltid direkt, detta är bara viloläget.",
+              "backup_keep": "0 = obegränsat. Säkerhetskopior tagna före en skrivning eller återställning raderas aldrig."
             }
           },
           "verbindung": {
@@ -113,8 +136,566 @@
   },
   "issues": {
     "origami_theme_missing": {
-      "title": "Origami theme not installed",
-      "description": "The ES Heatpump dashboard is set to the \"Origami\" design, but the theme \"{theme}\" is not installed. Until it is, Home Assistant shows the default theme.\n\nTo install: Marketplace/HACS → download the repository \"hazymorning/origami\" (category theme), then run the action \"frontend.reload_themes\" under Developer tools → Actions. The Montserrat font is optional, see the Origami README. This notice then disappears by itself."
+      "title": "Origami-temat är inte installerat",
+      "description": "ES Heatpump-instrumentpanelen är inställd på designen \"Origami\", men temat \"{theme}\" är inte installerat. Tills det är det visar Home Assistant standardtemat.\n\nInstallation: Marketplace/HACS → ladda ned repot \"hazymorning/origami\" (kategori tema) och kör sedan åtgärden \"frontend.reload_themes\" under Utvecklarverktyg → Åtgärder. Typsnittet Montserrat är valfritt, se Origami-README. Meddelandet försvinner sedan av sig självt."
+    }
+  },
+  "entity": {
+    "button": {
+      "konfiguration_sichern": {
+        "name": "Säkerhetskopiera konfigurationen nu"
+      }
+    },
+    "number": {
+      "cfg_par36": {
+        "name": "Snabbinställningar: Önskad rumstemperatur värme"
+      },
+      "cfg_par37": {
+        "name": "Snabbinställningar: Önskad rumstemperatur kyla"
+      },
+      "cfg_par55": {
+        "name": "Snabbinställningar: Börvärde varmvatten"
+      },
+      "cfg_par121": {
+        "name": "Snabbinställningar: Värmekurva 1 parallellförskjutning"
+      },
+      "cfg_par122": {
+        "name": "Snabbinställningar: Värmekurva 2 parallellförskjutning"
+      },
+      "cfg_par68": {
+        "name": "Värme-/kylkrets 2: Kylbörvärde (krets 2)"
+      },
+      "cfg_par75": {
+        "name": "Värme-/kylkrets 2: Värmebörvärde krets 2 (utan värmekurva)"
+      },
+      "cfg_par70": {
+        "name": "Värme-/kylkrets 2: Värmekurva 2 punkt 1 – vattentemperatur"
+      },
+      "cfg_par71": {
+        "name": "Värme-/kylkrets 2: Värmekurva 2 punkt 2 – vattentemperatur"
+      },
+      "cfg_par72": {
+        "name": "Värme-/kylkrets 2: Värmekurva 2 punkt 3 – vattentemperatur"
+      },
+      "cfg_par73": {
+        "name": "Värme-/kylkrets 2: Värmekurva 2 punkt 4 – vattentemperatur"
+      },
+      "cfg_par74": {
+        "name": "Värme-/kylkrets 2: Värmekurva 2 punkt 5 – vattentemperatur"
+      },
+      "cfg_par65": {
+        "name": "Varmvattenberedare: Börvärde för återuppvärmning"
+      },
+      "cfg_par66": {
+        "name": "Varmvattenberedare: Omstart-∆T för återuppvärmning"
+      },
+      "cfg_par42": {
+        "name": "Legionellaskydd: Börvärde legionellaskydd"
+      },
+      "cfg_par43": {
+        "name": "Legionellaskydd: Varaktighet legionellaskydd"
+      },
+      "cfg_par44": {
+        "name": "Legionellaskydd: Sluttid legionellaskydd"
+      },
+      "cfg_par52": {
+        "name": "Tillsatsvärme: Starttröskel för elpatron (HBH)"
+      },
+      "cfg_par53": {
+        "name": "Tillsatsvärme: Mätintervall för ökning av vattentemperatur (HWTBH)"
+      },
+      "cfg_par20": {
+        "name": "Värme-/kylkrets 1: Stopp vid vatten-∆T"
+      },
+      "cfg_par21": {
+        "name": "Värme-/kylkrets 1: Omstart vid vatten-∆T"
+      },
+      "cfg_par22": {
+        "name": "Värme-/kylkrets 1: ∆T för sänkning av kompressorvarvtal"
+      },
+      "cfg_par23": {
+        "name": "Värme-/kylkrets 1: Kylbörvärde (krets 1)"
+      },
+      "cfg_par25": {
+        "name": "Värme-/kylkrets 1: Värmekurva punkt 1 – utomhustemperatur"
+      },
+      "cfg_par26": {
+        "name": "Värme-/kylkrets 1: Värmekurva punkt 2 – utomhustemperatur"
+      },
+      "cfg_par27": {
+        "name": "Värme-/kylkrets 1: Värmekurva punkt 3 – utomhustemperatur"
+      },
+      "cfg_par28": {
+        "name": "Värme-/kylkrets 1: Värmekurva punkt 4 – utomhustemperatur"
+      },
+      "cfg_par29": {
+        "name": "Värme-/kylkrets 1: Värmekurva punkt 5 – utomhustemperatur"
+      },
+      "cfg_par30": {
+        "name": "Värme-/kylkrets 1: Värmekurva punkt 1 – vattentemperatur"
+      },
+      "cfg_par31": {
+        "name": "Värme-/kylkrets 1: Värmekurva punkt 2 – vattentemperatur"
+      },
+      "cfg_par32": {
+        "name": "Värme-/kylkrets 1: Värmekurva punkt 3 – vattentemperatur"
+      },
+      "cfg_par33": {
+        "name": "Värme-/kylkrets 1: Värmekurva punkt 4 – vattentemperatur"
+      },
+      "cfg_par34": {
+        "name": "Värme-/kylkrets 1: Värmekurva punkt 5 – vattentemperatur"
+      },
+      "cfg_par38": {
+        "name": "Värme-/kylkrets 1: Värmebörvärde (utan värmekurva)"
+      },
+      "cfg_par56": {
+        "name": "Varmvatten: Omstart-∆T varmvatten"
+      },
+      "cfg_par58": {
+        "name": "Varmvatten: Prioritetsväxling från utomhustemperatur"
+      },
+      "cfg_par59": {
+        "name": "Varmvatten: Minsta drifttid varmvatten"
+      },
+      "cfg_par60": {
+        "name": "Varmvatten: Längsta drifttid värme"
+      },
+      "cfg_par61": {
+        "name": "Varmvatten: Tillåten temperaturavvikelse värme"
+      },
+      "cfg_par79": {
+        "name": "Nattsänkning: Sänkning/höjning"
+      },
+      "cfg_par81": {
+        "name": "Nattsänkning: Tillåten temperaturavvikelse i sänkningsläge"
+      },
+      "cfg_par46": {
+        "name": "Semesterläge: Sänkning av varmvatten under semester"
+      },
+      "cfg_par47": {
+        "name": "Semesterläge: Sänkning av värmevatten under semester"
+      },
+      "cfg_par11": {
+        "name": "Lägesväxling: Värme från utomhustemperatur"
+      },
+      "cfg_par12": {
+        "name": "Lägesväxling: Kyla från utomhustemperatur"
+      }
+    },
+    "select": {
+      "cfg_par4": {
+        "name": "Snabbinställningar: Driftläge",
+        "state": {
+          "standby": "Standby",
+          "heating": "Värme",
+          "cooling": "Kyla",
+          "dhw": "Varmvatten",
+          "auto": "Auto"
+        }
+      },
+      "cfg_par5": {
+        "name": "Snabbinställningar: Språk på manöverpanelen",
+        "state": {
+          "lang_0": "English",
+          "lang_1": "Slovenščina",
+          "lang_2": "Deutsch",
+          "lang_3": "Polski",
+          "lang_4": "Italiano",
+          "lang_5": "Русский",
+          "lang_6": "Українська",
+          "lang_7": "Polski",
+          "lang_8": "English",
+          "lang_9": "English",
+          "lang_10": "English",
+          "lang_11": "English",
+          "lang_12": "English",
+          "lang_13": "English",
+          "lang_14": "English",
+          "lang_15": "中文"
+        }
+      },
+      "cfg_par49": {
+        "name": "Tillsatsvärme: Prioritet för elpatron vid värme (HBH)",
+        "state": {
+          "lower_than_heatpump": "Lägre än värmepumpen",
+          "higher_than_heatpump": "Högre än värmepumpen"
+        }
+      },
+      "cfg_par51": {
+        "name": "Tillsatsvärme: Prioritet för elpatron vid varmvatten (HWTBH)",
+        "state": {
+          "lower_than_heatpump": "Lägre än värmepumpen",
+          "higher_than_heatpump": "Högre än värmepumpen"
+        }
+      },
+      "cfg_par86": {
+        "name": "Övriga alternativ: Displaybelysning",
+        "state": {
+          "always_on": "Alltid på",
+          "min_3": "3 minuter",
+          "min_5": "5 minuter",
+          "min_10": "10 minuter"
+        }
+      },
+      "cfg_par9": {
+        "name": "Lägesväxling: Växling värme/kyla",
+        "state": {
+          "disabled": "Inaktiverad",
+          "ambient": "Utomhustemperatur",
+          "external": "Extern signal",
+          "external_ambient": "Extern signal + utomhustemperatur"
+        }
+      }
+    },
+    "sensor": {
+      "vorlauf_tuo": {
+        "name": "Framledningstemperatur"
+      },
+      "ruecklauf_tui": {
+        "name": "Returtemperatur"
+      },
+      "heizen_soll": {
+        "name": "Vattentemperatur Tup"
+      },
+      "warmwasser_tw": {
+        "name": "Varmvatten"
+      },
+      "heizen": {
+        "name": "Värmevattentemperatur"
+      },
+      "mischventil_1": {
+        "name": "Temperatur blandningsventil 1"
+      },
+      "mischventil_2": {
+        "name": "Temperatur blandningsventil 2"
+      },
+      "raumtemperatur": {
+        "name": "Rumstemperatur"
+      },
+      "aussentemp_ta": {
+        "name": "Utomhustemperatur"
+      },
+      "heissgas_td": {
+        "name": "Hetgastemperatur"
+      },
+      "heizen_soll_manuell": {
+        "name": "Värmebörvärde (manuellt)"
+      },
+      "diag_par15_heartbeat": {
+        "name": "Diagnostik par15 (heartbeat / oklar)"
+      },
+      "luefter_drehzahl": {
+        "name": "Varvtal fläkt 1"
+      },
+      "luefter_2_drehzahl": {
+        "name": "Varvtal fläkt 2"
+      },
+      "verdichter_strom": {
+        "name": "Kompressorström"
+      },
+      "pumpe_p0": {
+        "name": "Pump P0"
+      },
+      "pumpe_p1": {
+        "name": "Pump P1"
+      },
+      "pumpe_p2": {
+        "name": "Pump P2"
+      },
+      "comp_speed_berechnet": {
+        "name": "Beräknat kompressorvarvtal (steg)"
+      },
+      "frequenz_hz": {
+        "name": "Kompressorfrekvens"
+      },
+      "spannung": {
+        "name": "Spänning"
+      },
+      "software_version": {
+        "name": "Programvaruversion"
+      },
+      "ah_betriebszeit": {
+        "name": "Drifttid AH"
+      },
+      "hbh_betriebszeit": {
+        "name": "Drifttid HBH"
+      },
+      "hwtbh_betriebszeit": {
+        "name": "Drifttid HWTBH"
+      },
+      "ventil_oeffnung": {
+        "name": "Öppning expansionsventil"
+      },
+      "hochdruck_pd": {
+        "name": "Högtryck Pd"
+      },
+      "saugdruck_ps": {
+        "name": "Sugtryck Ps"
+      },
+      "sauggas_ts": {
+        "name": "Suggastemperatur Ts"
+      },
+      "lamellentauscher_tp": {
+        "name": "Lamellvärmeväxlare Tp"
+      },
+      "diag_par39": {
+        "name": "Diagnostik par39 (obekräftad, inte strömmen)"
+      },
+      "diag_par40": {
+        "name": "Diagnostik par40 (obekräftad)"
+      },
+      "spreizung": {
+        "name": "Temperaturdifferens"
+      },
+      "thermische_leistung": {
+        "name": "Termisk effekt"
+      },
+      "aktueller_cop": {
+        "name": "Aktuell COP"
+      },
+      "leistung_elektrisch": {
+        "name": "Elektrisk effekt"
+      },
+      "betriebsart": {
+        "name": "Driftläge",
+        "state": {
+          "off": "Av",
+          "dhw": "Varmvatten",
+          "heating": "Värme",
+          "cooling": "Kyla",
+          "dhw_heating": "Varmvatten + värme",
+          "dhw_cooling": "Varmvatten + kyla",
+          "defrost": "Avfrostning"
+        }
+      },
+      "anlagendaten": {
+        "name": "Anläggningsdata"
+      },
+      "konfigurationssicherungen": {
+        "name": "Säkerhetskopior av konfigurationen"
+      },
+      "energie_elektrisch": {
+        "name": "Elektrisk energi"
+      },
+      "energie_elektrisch_heizen": {
+        "name": "Elektrisk energi värme"
+      },
+      "energie_elektrisch_warmwasser": {
+        "name": "Elektrisk energi varmvatten"
+      },
+      "energie_thermisch": {
+        "name": "Värmeenergi"
+      },
+      "energie_thermisch_heizen": {
+        "name": "Värmeenergi värme"
+      },
+      "energie_thermisch_warmwasser": {
+        "name": "Värmeenergi varmvatten"
+      },
+      "verdichter_starts": {
+        "name": "Kompressorstarter"
+      },
+      "verdichter_laufzeit": {
+        "name": "Kompressorns drifttid"
+      }
+    },
+    "switch": {
+      "cfg_par1": {
+        "name": "Snabbinställningar: Enhet på/av"
+      },
+      "cfg_par67": {
+        "name": "Värme-/kylkrets 2: Värme-/kylkrets 2"
+      },
+      "cfg_par69": {
+        "name": "Värme-/kylkrets 2: Värmekurva krets 2"
+      },
+      "cfg_par63": {
+        "name": "Varmvattenberedare: Varmvattenberedarfunktion"
+      },
+      "cfg_par64": {
+        "name": "Varmvattenberedare: Återuppvärmningsfunktion"
+      },
+      "cfg_par41": {
+        "name": "Legionellaskydd: Legionellaskydd"
+      },
+      "cfg_par19": {
+        "name": "Användarinställningar: Timer för värme/kyla"
+      },
+      "cfg_par48": {
+        "name": "Tillsatsvärme: Elpatron för värme"
+      },
+      "cfg_par50": {
+        "name": "Tillsatsvärme: Elpatron för varmvatten"
+      },
+      "cfg_par24": {
+        "name": "Värme-/kylkrets 1: Värmekurva krets 1"
+      },
+      "cfg_par35": {
+        "name": "Värme-/kylkrets 1: Rumstemperatur påverkar värmekurvan"
+      },
+      "cfg_par57": {
+        "name": "Varmvatten: Prioritetsväxling"
+      },
+      "cfg_par62": {
+        "name": "Varmvatten: Elpatron för varmvatten vid prioritetsväxling"
+      },
+      "cfg_par78": {
+        "name": "Nattsänkning: Sänkningsläge"
+      },
+      "cfg_par80": {
+        "name": "Nattsänkning: Tyst läge"
+      },
+      "cfg_par45": {
+        "name": "Semesterläge: Semesterläge"
+      },
+      "cfg_par83": {
+        "name": "Elbolagsspärr: Elbolagsspärr"
+      },
+      "cfg_par84": {
+        "name": "Elbolagsspärr: Elpatron under elbolagsspärr"
+      },
+      "cfg_par85": {
+        "name": "Elbolagsspärr: Cirkulationspump P0 under elbolagsspärr"
+      }
+    }
+  },
+  "exceptions": {
+    "schreibzugriff_aus": {
+      "message": "Skrivåtkomst är avstängd. {name} ändrades inte. Aktivera den i integrationens alternativ under \"Tillåt skrivning till enheten\"."
+    },
+    "konfiguration_unbekannt": {
+      "message": "Den aktuella konfigurationen är inte känd just nu, inget säkerhetskopierades. Försök igen efter nästa lyckade hämtning."
+    }
+  },
+  "services": {
+    "sicherung_erstellen": {
+      "name": "Säkerhetskopiera konfigurationen",
+      "description": "Skapar en säkerhetskopia av hela konfigurationen (cirka 300 värden). Rekommenderas före varje ändring på enheten – och före varje besök av installatören.",
+      "fields": {
+        "bezeichnung": {
+          "name": "Benämning",
+          "description": "Kort namn som säkerhetskopian senare kan hittas under."
+        },
+        "grund": {
+          "name": "Orsak",
+          "description": "Varför säkerhetskopian togs – visas senare i översikten."
+        },
+        "eintrag": {
+          "name": "Enhet",
+          "description": "Behövs bara om flera enheter är konfigurerade."
+        }
+      }
+    },
+    "sicherungen_auflisten": {
+      "name": "Lista säkerhetskopior",
+      "description": "Returnerar alla befintliga säkerhetskopior med tid, anledning och kontrollsumma. Ger ett svar – hämta det i ett skript via \"response_variable\".",
+      "fields": {
+        "eintrag": {
+          "name": "Enhet",
+          "description": "Behövs bara om flera enheter är konfigurerade."
+        }
+      }
+    },
+    "sicherung_anzeigen": {
+      "name": "Visa säkerhetskopia",
+      "description": "Visar en säkerhetskopia i sin helhet – anläggningsdata, alla namngivna inställningar i klartext och råvärdena. Ändrar ingenting på enheten.",
+      "fields": {
+        "sicherung": {
+          "name": "Säkerhetskopia",
+          "description": "ID för säkerhetskopian, eller \"neueste\" (nyaste) eller \"aelteste\" (äldsta)."
+        },
+        "eintrag": {
+          "name": "Enhet",
+          "description": "Behövs bara om flera enheter är konfigurerade."
+        }
+      }
+    },
+    "sicherungen_vergleichen": {
+      "name": "Jämför säkerhetskopior",
+      "description": "Visar alla skillnader mellan två tillstånd – som standard mellan en säkerhetskopia och enhetens aktuella tillstånd. Svaret listar varje ändrat värde med namn, grupp och värde i klartext.",
+      "fields": {
+        "sicherung": {
+          "name": "Säkerhetskopia",
+          "description": "ID för säkerhetskopian, eller \"neueste\" (nyaste) eller \"aelteste\" (äldsta)."
+        },
+        "vergleich_mit": {
+          "name": "Jämfört med",
+          "description": "ID för en andra säkerhetskopia, eller \"jetzt\" (nu) för enhetens aktuella tillstånd."
+        },
+        "eintrag": {
+          "name": "Enhet",
+          "description": "Behövs bara om flera enheter är konfigurerade."
+        }
+      }
+    },
+    "sicherung_wiederherstellen": {
+      "name": "Återställ säkerhetskopia",
+      "description": "Skriver tillbaka ett säkerhetskopierat tillstånd till värmepumpen. Som standard som provkörning som bara visar vad som skulle hända. En riktig körning kräver dessutom att skrivåtkomst är aktiverad i alternativen och säkerhetskopierar automatiskt det aktuella tillståndet först.",
+      "fields": {
+        "sicherung": {
+          "name": "Säkerhetskopia",
+          "description": "ID för säkerhetskopian, eller \"neueste\" (nyaste) eller \"aelteste\" (äldsta)."
+        },
+        "probelauf": {
+          "name": "Provkörning",
+          "description": "På: inget skrivs, svaret visar bara planen. Av: värdena ställs in på riktigt."
+        },
+        "eintrag": {
+          "name": "Enhet",
+          "description": "Behövs bara om flera enheter är konfigurerade."
+        }
+      }
+    },
+    "sicherung_loeschen": {
+      "name": "Radera säkerhetskopia",
+      "description": "Tar bort en säkerhetskopia permanent. Säkerhetskopior som dokumenterar en ändring kan tas bort på detta sätt – den automatiska rensningen rör dem aldrig.",
+      "fields": {
+        "sicherung": {
+          "name": "Säkerhetskopia",
+          "description": "ID för säkerhetskopian."
+        },
+        "eintrag": {
+          "name": "Enhet",
+          "description": "Behövs bara om flera enheter är konfigurerade."
+        }
+      }
+    },
+    "sicherung_exportieren": {
+      "name": "Exportera säkerhetskopia till fil",
+      "description": "Skriver en säkerhetskopia som JSON-fil – för förvaring utanför Home Assistant eller för att lämna vidare till installatören.",
+      "fields": {
+        "sicherung": {
+          "name": "Säkerhetskopia",
+          "description": "ID för säkerhetskopian."
+        },
+        "pfad": {
+          "name": "Sökväg",
+          "description": "Målfil. Utan värde skrivs den till Home Assistants konfigurationskatalog. Andra kataloger måste anges i \"allowlist_external_dirs\"."
+        },
+        "eintrag": {
+          "name": "Enhet",
+          "description": "Behövs bara om flera enheter är konfigurerade."
+        }
+      }
+    },
+    "parameter_setzen": {
+      "name": "Ställ in enskild parameter",
+      "description": "Ställer in ett konfigurationsvärde direkt via dess portal-ID. Avsett för fält utan egen entitet eller vars entitet är inaktiverad. Värdet kontrolleras först mot intervall och alternativlista.",
+      "fields": {
+        "parameter": {
+          "name": "Parameter",
+          "description": "Portal-ID i setdata-namnrymden, t.ex. par55."
+        },
+        "wert": {
+          "name": "Värde",
+          "description": "Värde som ska skrivas (heltal)."
+        },
+        "eintrag": {
+          "name": "Enhet",
+          "description": "Behövs bara om flera enheter är konfigurerade."
+        }
+      }
     }
   }
 }

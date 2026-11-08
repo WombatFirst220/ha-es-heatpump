@@ -60,6 +60,13 @@ def test_origami_setzt_theme_auf_jede_ansicht():
     assert all("theme" not in v for v in zurueck["views"])
 
 
+# Berechnete Zaehler fuer die Auswertung (v4.0.0, sensor.py)
+_ENERGIE_SENSOREN = {f"sensor.es_hp_{x}" for x in (
+    "energie_elektrisch", "energie_elektrisch_heizen", "energie_elektrisch_warmwasser",
+    "energie_thermisch", "energie_thermisch_heizen", "energie_thermisch_warmwasser",
+    "verdichter_starts", "verdichter_laufzeit")}
+
+
 def _origami_karten(cfg):
     return [c for v in cfg["views"] for s in v["sections"] for c in s["cards"]]
 
@@ -87,6 +94,7 @@ def test_origami_nutzt_nur_bekannte_entities():
         "betriebsart", "leistung_elektrisch", "thermische_leistung",
         "aktueller_cop", "spreizung")}
     bekannt.add("number.es_hp_cfg_par55")
+    bekannt |= _ENERGIE_SENSOREN
     ids = set()
     for k in _origami_karten(_layout.gestalte(_bundled(), design="origami", hydraulik=True)):
         if "entity" in k:
@@ -99,7 +107,8 @@ def test_origami_nutzt_nur_bekannte_entities():
 
 
 def test_mode_map_deckt_alle_betriebsarten_ab():
-    assert set(_layout.MODE_MAP) == set(_const.BETRIEBSART_OPTIONS)
+    # "unknown" = HAs eigener Zustand, wenn die Betriebsart nicht bestimmbar ist
+    assert set(_layout.MODE_MAP) == set(_const.BETRIEBSART_STATE_OPTIONS) | {"unknown"}
     erlaubt = {"off", "heating", "dhw", "cooling", "defrost", "idle"}
     assert set(_layout.MODE_MAP.values()) <= erlaubt
 
@@ -147,3 +156,58 @@ def test_einstellungsabschnitte_vollstaendig_und_eindeutig():
         for s in sek.values():
             assert s["name"]
             assert set(s.get("data_description", {})) <= set(s["data"])
+
+
+def _ansicht(cfg, pfad):
+    treffer = [v for v in cfg["views"] if v.get("path") == pfad]
+    assert len(treffer) == 1, pfad
+    return treffer[0]
+
+
+def _alle_karten(karten):
+    for k in karten:
+        yield k
+        yield from _alle_karten(k.get("cards", []))
+
+
+def test_auswertung_im_standard_dashboard():
+    for hydraulik in (False, True):
+        cfg = _layout.gestalte(_bundled(), design="standard", hydraulik=hydraulik)
+        view = _ansicht(cfg, "auswertung")
+        assert view["icon"] == "mdi:chart-box-outline"
+        karten = list(_alle_karten(view["cards"]))
+        assert sum(k["type"] == _layout.ANALYSIS_CARD_TYPE for k in karten) == 1
+        graphen = [k for k in karten if k["type"] == "statistics-graph"]
+        assert graphen and {g["period"] for g in graphen} >= {"month"}
+        ids = {e["entity"] for g in graphen for e in g["entities"]}
+        assert ids <= _ENERGIE_SENSOREN, ids - _ENERGIE_SENSOREN
+
+
+def test_auswertung_im_origami_dashboard():
+    for hydraulik in (False, True):
+        cfg = _layout.gestalte(_bundled(), design="origami", hydraulik=hydraulik)
+        view = _ansicht(cfg, "auswertung")
+        assert view["icon"] == "mdi:chart-box-outline"
+        karten = [c for s in view["sections"] for c in s["cards"]]
+        assert sum(k["type"] == _layout.ANALYSIS_CARD_TYPE for k in karten) == 1
+        # Der Abschnitt der Karte spannt die ganze Breite
+        abschnitt = next(s for s in view["sections"]
+                         if any(c["type"] == _layout.ANALYSIS_CARD_TYPE for c in s["cards"]))
+        assert abschnitt["column_span"] == view["max_columns"]
+        assert any(k["type"] == "statistics-graph" and k["period"] == "month" for k in karten)
+
+
+def test_repo_kopie_des_dashboards_hat_gleiche_ansichten():
+    with (_ROOT.parents[1] / "dashboards" / "es_heatpump.yaml").open(encoding="utf-8") as fh:
+        kopie = yaml.safe_load(fh)
+    assert [v["path"] for v in kopie["views"]] == [v["path"] for v in _bundled()["views"]]
+    assert _ansicht(kopie, "auswertung") == _ansicht(_bundled(), "auswertung")
+
+
+def test_auswertungskarte_wird_mitgeliefert():
+    quelle = (_ROOT / "www" / "es-heatpump-analysis-card.js").read_text(encoding="utf-8")
+    assert 'customElements.define("es-heatpump-analysis-card"' in quelle
+    assert "recorder/statistics_during_period" in quelle
+    assert "es_heatpump/settings_changes" in quelle
+    for slug in _ENERGIE_SENSOREN:
+        assert f'"{slug}"' in quelle, slug

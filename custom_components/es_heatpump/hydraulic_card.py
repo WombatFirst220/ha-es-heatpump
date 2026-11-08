@@ -51,14 +51,12 @@ async def async_register_card(hass: HomeAssistant) -> bool:
         )
         return True
 
-    if not CARD_FILE.exists():
+    # Dateizugriff nicht im Event-Loop (HA warnt sonst vor blockierenden Aufrufen)
+    if not await hass.async_add_executor_job(CARD_FILE.exists):
         _LOGGER.warning("ES Heatpump: %s fehlt, Hydraulik-Karte nicht verfügbar.", CARD_FILE)
         return False
 
-    # Ein statischer Pfad lässt sich je HA-Lauf nur einmal registrieren.
-    if not status["static"]:
-        await _registriere_statischen_pfad(hass)
-        status["static"] = True
+    await async_ensure_static_path(hass)
 
     if not status["url"]:
         from homeassistant.components.frontend import add_extra_js_url
@@ -81,6 +79,18 @@ def async_unregister_card(hass: HomeAssistant) -> None:
     except Exception as err:  # noqa: BLE001
         _LOGGER.debug("ES Heatpump: remove_extra_js_url fehlgeschlagen (%s)", err)
     status["url"] = False
+
+
+async def async_ensure_static_path(hass: HomeAssistant) -> None:
+    """Registriert ``/es_heatpump_static`` (ganz ``www/``) einmal je HA-Lauf.
+
+    Wird auch von der Auswertungskarte (analysis_card.py) genutzt.
+    """
+    status = hass.data.setdefault(_DATA_KEY, {"static": False, "url": False})
+    # Ein statischer Pfad lässt sich je HA-Lauf nur einmal registrieren.
+    if not status["static"]:
+        await _registriere_statischen_pfad(hass)
+        status["static"] = True
 
 
 async def _registriere_statischen_pfad(hass: HomeAssistant) -> None:

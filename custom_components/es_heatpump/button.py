@@ -41,22 +41,22 @@ async def async_setup_entry(
 class SicherungJetztButton(CoordinatorEntity, ButtonEntity):
     """„Konfiguration jetzt sichern“."""
 
+    _attr_has_entity_name = True
+    _attr_translation_key = "konfiguration_sichern"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:content-save-cog"
 
     def __init__(self, coordinator, device_info, username: str) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_backup_now"
-        self._attr_name = "WP Konfiguration jetzt sichern"
         self.entity_id = "button.es_hp_konfiguration_sichern"
         self._attr_device_info = device_info
 
     async def async_press(self) -> None:
         if not self.coordinator.data:
             raise HomeAssistantError(
-                "Der Konfigurationsstand ist gerade nicht bekannt - es wurde "
-                "nichts gesichert. Nach dem nächsten erfolgreichen Abruf erneut "
-                "versuchen."
+                translation_domain=DOMAIN,
+                translation_key="konfiguration_unbekannt",
             )
         sicherung = await self.coordinator.ablage.async_erstelle(
             dict(self.coordinator.data),

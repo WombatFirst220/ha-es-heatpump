@@ -174,6 +174,83 @@ def vergleiche(alt: dict[str, Any], neu: dict[str, Any]) -> list[Abweichung]:
     return ergebnis
 
 
+def _wert_lesbar(par: str, wert: Any) -> str:
+    """Nur der Wert, ohne den Namen davor ("38 °C", "Ein", "Eco")."""
+    if wert is None:
+        return "-"
+    try:
+        return beschreibe(par, wert).split(": ", 1)[-1]
+    except (TypeError, ValueError):
+        return str(wert)
+
+
+def _als_utc(zeitpunkt: str) -> datetime.datetime | None:
+    try:
+        zeit = datetime.datetime.fromisoformat(str(zeitpunkt))
+    except ValueError:
+        return None
+    if zeit.tzinfo is None:
+        # Aeltere Staende ohne Zone: als UTC lesen statt zu raten
+        zeit = zeit.replace(tzinfo=datetime.timezone.utc)
+    return zeit.astimezone(datetime.timezone.utc)
+
+
+def _zeit_utc(zeitpunkt: str) -> str:
+    """ISO-8601-Zeitpunkt in UTC; unlesbare Angaben bleiben unveraendert."""
+    zeit = _als_utc(zeitpunkt)
+    return zeit.isoformat() if zeit is not None else str(zeitpunkt)
+
+
+def _zeit_sortierung(s: "Sicherung") -> tuple[int, Any]:
+    zeit = _als_utc(s.zeitpunkt)
+    return (0, zeit) if zeit is not None else (1, str(s.zeitpunkt))
+
+
+def aenderungsverlauf(
+    sicherungen: Iterable[Sicherung], nur_bekannte: bool = True
+) -> list[dict[str, Any]]:
+    """Einstellungsaenderungen aus aufeinanderfolgenden Sicherungen.
+
+    Grundlage der Auswertungsseite: Sie markiert, wann sich etwas an der
+    Konfiguration geaendert hat, damit sich Verbrauch und Arbeitszahl davor und
+    danach vergleichen lassen.
+
+    Je Paar benachbarter Staende (aelteste zuerst) entsteht ein Eintrag mit dem
+    Zeitpunkt und Anlass der *juengeren* Sicherung - dort ist die Aenderung
+    erstmals zu sehen. Paare ohne Abweichung fallen weg.
+
+    ``nur_bekannte``: Die rund 230 Felder ohne Katalogeintrag sind ueberwiegend
+    Messwerte und Zaehlerstaende, die sich zwischen zwei Sicherungen praktisch
+    immer aendern. Sie mitzuzaehlen, machte aus jeder Sicherung eine
+    "Aenderung". Deshalb standardmaessig nur Werte aus ``SETTINGS``.
+    """
+    reihe = sorted(sicherungen, key=_zeit_sortierung)
+    ergebnis: list[dict[str, Any]] = []
+    for alt, neu in zip(reihe, reihe[1:]):
+        if alt.pruefsumme and alt.pruefsumme == neu.pruefsumme:
+            continue
+        posten = []
+        for a in vergleiche(alt.pars, neu.pars):
+            if nur_bekannte and not a.bekannt:
+                continue
+            vorher, nachher = _wert_lesbar(a.par, a.vorher), _wert_lesbar(a.par, a.nachher)
+            posten.append({
+                "par": a.par,
+                "name": a.name,
+                "group": a.gruppe,
+                "old": a.vorher,
+                "new": a.nachher,
+                "text": f"{a.gruppe} / {a.name}: {vorher} → {nachher}",
+            })
+        if posten:
+            ergebnis.append({
+                "time": _zeit_utc(neu.zeitpunkt),
+                "reason": neu.anlass,
+                "items": posten,
+            })
+    return ergebnis
+
+
 def _par_sortierung(par: str) -> tuple[int, str]:
     try:
         return (int(par[3:]), "")

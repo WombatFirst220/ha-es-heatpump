@@ -1,11 +1,13 @@
 # ES Heatpump – Home Assistant Integration
 
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
-[![HA Version](https://img.shields.io/badge/HA-2024.1%2B-blue.svg)](https://www.home-assistant.io)
+[![HA Version](https://img.shields.io/badge/HA-2024.2%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-3.2.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-4.0.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
+>
+> ⚠️ **Update auf 4.0.0:** Die Zustände der Betriebsart und der Auswahllisten sind jetzt sprachneutrale Schlüssel — Automationen und Templates prüfen, siehe [Breaking Changes in 4.0.0](#-breaking-changes-in-400). · *Updating to 4.0.0: state values changed, see [breaking changes](#-breaking-changes-in-400-english).*
 
 <p align="center">
   <img src="custom_components/es_heatpump/brand/icon.png" alt="ES Heatpump" width="120">
@@ -37,7 +39,13 @@ Home Assistant Integration für **Energy Save Wärmepumpen** (Valtop AW12-R32 u.
   Garantieende, Installateur (seit v3.0.0)
 - 📈 **Alles langzeitfähig** — jede Einstellung ist eine eigene Entity mit
   Verlauf; Textzustände (Betriebsart, Modell, Auswahllisten) ebenfalls
-- 🛠 Mehrsprachig: Deutsch, Englisch, Niederländisch, Schwedisch, Dänisch (Fallback auf Englisch)
+- 📊 **Auswertungsseite** — Strom, Wärme, Arbeitszahl, Verdichtertakte und
+  Außentemperatur je Tag, Woche, Monat und Jahr, mit Vorher/Nachher-Vergleich
+  bei Einstellungsänderungen (seit v4.0.0, siehe [Auswertung](#-auswertung-seit-v400))
+- 🔌 **Energiezähler** in kWh (gesamt, Heizen, Warmwasser) — auch im
+  Energie-Dashboard von Home Assistant nutzbar (seit v4.0.0)
+- 🛠 Mehrsprachig: Deutsch, Englisch, Niederländisch, Schwedisch, Dänisch (Fallback auf Englisch) —
+  seit v4.0.0 auch Entity-Namen und Zustände
 
 ### 📦 Installation via HACS
 
@@ -144,14 +152,16 @@ Formularseite des Portals (`/a/amt/realdata/form`) benennt das Feld als
 „Unit Current Working Mode" und liefert die Bedeutungen als
 Auswahlmöglichkeiten gleich mit:
 
-| `par1` | Portal-Bezeichnung | Integration |
-|---:|---|---|
-| 0 | Standby | `Aus` |
-| 1 | Sanitary Hot Water | `Brauchwasser` |
-| 2 | Heating | `Heizen` |
-| 3 | **Cooling** | `Kuehlen` |
-| 4 | Sanitary Hot Water + Heating | `Brauchwasser + Heizen` |
-| 5 | Sanitary Hot Water + Cooling | `Brauchwasser + Kuehlen` |
+| `par1` | Portal-Bezeichnung | Integration (Anzeige) | Zustand (seit v4.0.0) |
+|---:|---|---|---|
+| 0 | Standby | Aus | `off` |
+| 1 | Sanitary Hot Water | Brauchwasser | `dhw` |
+| 2 | Heating | Heizen | `heating` |
+| 3 | **Cooling** | Kühlen | `cooling` |
+| 4 | Sanitary Hot Water + Heating | Brauchwasser + Heizen | `dhw_heating` |
+| 5 | Sanitary Hot Water + Cooling | Brauchwasser + Kühlen | `dhw_cooling` |
+| – | (Abtauen, siehe unten) | Entfrosten | `defrost` |
+| – | (nicht bestimmbar) | Unbekannt | `unknown` |
 
 `par1` steckt im selben JSON-Endpunkt, den die Integration seit jeher abruft —
 es war nur nie zugeordnet. Bis v2.2.0 galt `par15` als Betriebsart (es ist ein
@@ -181,11 +191,11 @@ den eigenen Werten ab, in dieser Reihenfolge:
 
 | # | Bedingung | Betriebsart |
 |---|---|---|
-| 1 | keine Kompressorfrequenz in den Daten | `Unbekannt` |
-| 2 | Kompressorfrequenz = 0 | `Aus` |
-| 3 | Vorlauf kälter als Rücklauf (Spreizung ≤ −0,5 K) | `Entfrosten` |
-| 4 | Vorlauf > Heizen-Soll + Schwelle (Default 8 K) | `Brauchwasser` |
-| 5 | sonst | `Heizen` |
+| 1 | keine Kompressorfrequenz in den Daten | Unbekannt (`unknown`) |
+| 2 | Kompressorfrequenz = 0 | Aus (`off`) |
+| 3 | Vorlauf kälter als Rücklauf (Spreizung ≤ −0,5 K) | Entfrosten (`defrost`) |
+| 4 | Vorlauf > Heizen-Soll + Schwelle (Default 8 K) | Brauchwasser (`dhw`) |
+| 5 | sonst | Heizen (`heating`) |
 
 Entscheidend ist Regel 4: Verglichen wird gegen den **Sollwert**, nicht gegen
 eine feste Temperatur. Bei Warmwasserbereitung treibt die Maschine den Vorlauf
@@ -231,6 +241,39 @@ Sollwert und Frequenz. Wer die Erkennung übersteuern will, trägt weiterhin ein
 | `sensor.es_hp_thermische_leistung` | `flow_rate × Δ T × 1163 Wh/(m³·K)` — gibt 0 W aus, wenn Kompressor steht |
 | `sensor.es_hp_aktueller_cop` | `Thermische Leistung / Elektr. Leistung` (benötigt Power-Entity) |
 
+#### 🔌 Energiezähler (seit v4.0.0)
+
+Die Wärmepumpe liefert Leistungen (W), keine Arbeit (kWh). Für Tages-, Wochen-,
+Monats- und Jahreswerte legt die Integration deshalb eigene Zähler an
+(`state_class: total_increasing`). Home Assistant verdichtet sie in seiner
+Langzeitstatistik — die Auswertungsseite liest diese Statistik.
+
+| Entity-ID | Inhalt | Einheit |
+|---|---|---|
+| `sensor.es_hp_energie_elektrisch` | Strom gesamt (benötigt Power-Entity) | kWh |
+| `sensor.es_hp_energie_elektrisch_heizen` | Strom im Heizbetrieb (inkl. Abtauen) | kWh |
+| `sensor.es_hp_energie_elektrisch_warmwasser` | Strom für Warmwasser | kWh |
+| `sensor.es_hp_energie_thermisch` | Wärme gesamt | kWh |
+| `sensor.es_hp_energie_thermisch_heizen` | Wärme im Heizbetrieb | kWh |
+| `sensor.es_hp_energie_thermisch_warmwasser` | Wärme für Warmwasser | kWh |
+| `sensor.es_hp_verdichter_starts` | Verdichterstarts (Wechsel `par20` 0 → > 0) | – |
+| `sensor.es_hp_verdichter_laufzeit` | Laufzeit des Verdichters | h |
+
+- **Strom** wird aus der konfigurierten Power-Entity integriert (Wert gilt bis
+  zur nächsten Änderung, zusätzlich jede Minute fortgeschrieben; kW wird
+  umgerechnet). Ohne Power-Entity sind die drei Stromzähler „nicht verfügbar“.
+- **Wärme** wird bei jedem Portalabruf aus der thermischen Leistung integriert
+  (Trapezregel) — sie ist also nur so genau wie der eingestellte
+  **Volumenstrom**.
+- **Aufteilung** nach der Betriebsart zu Beginn jedes Intervalls. Kühlen und
+  Bereitschaft zählen nur zur Gesamtsumme.
+- **Lücken** (HA-Neustart, Portal-Ausfall) über 10–15 Minuten werden nicht
+  geschätzt, sondern ausgelassen. Ein Zähler zählt lieber etwas zu wenig.
+- Die Zähler laufen **ab dem Update** — rückwirkend gibt es keine Werte.
+- Die Stromzähler eignen sich für das **Energie-Dashboard** von Home Assistant
+  (*Einzelne Geräte*). Wer dort schon den Shelly selbst führt, nimmt ihn nicht
+  doppelt auf.
+
 #### 🔍 Diagnose (default deaktiviert, einzeln aktivierbar)
 
 Mischventil 2 (`par10`), Software Version (`par37`), HWTBH Betriebszeit (`par43`), sowie sieben Diagnose-Parameter (`par21`, `par22`, `par23`, `par26`, `par27`, `par39`, `par40`), die mit dem Heizzyklus korrelieren aber nicht eindeutig zuordenbar waren. Aktivierbar unter **Einstellungen → Geräte & Dienste → ES Heatpump → Entitäten**.
@@ -245,12 +288,13 @@ Mischventil 2 (`par10`), Software Version (`par37`), HWTBH Betriebszeit (`par43`
   <img src="docs/dashboard-mobile.png" alt="ES Heatpump Dashboard – Übersicht" width="280">
 </p>
 
-Drei Ansichten. Ihr Aufbau hängt vom gewählten Design ab (siehe unten):
+Vier Ansichten. Ihr Aufbau hängt vom gewählten Design ab (siehe unten):
 
 | Ansicht | Design *Standard* | Design *Origami* (seit v3.2.0) |
 |---|---|---|
 | **Übersicht** | Hydraulik-Schema, Messzeiger (COP, Wärmeabgabe, El. Leistung, Heizwasser, Brauchwasser, Spreizung), Temperaturen, 24-h-Verlauf, System-Technik | *Wärmepumpe* mit Schema, *Jetzt*, *Speicher*, *Verlauf · 24 h* als Kacheln |
 | **Energie** | COP-Statistik (7 Tage), Wärmeabgabe und Frequenz, Heißgas, Betriebsstunden | *Effizienz*, *Leistung · 24 h*, *Betriebsstunden* |
+| **Auswertung** (seit v4.0.0) | Auswertungskarte über die volle Breite, darunter Energie je Tag (30 Tage) und je Monat | *Auswertung*, *Energie je Tag*, *Energie je Monat* |
 | **Diagnose** | Mischventile, Diagnose-Parameter, Geräteinfo | *Kältekreis*, *Elektrik und Lüfter*, *Diagnose-Parameter* |
 
 Die Integration schreibt das Dashboard bei **jedem Start und jeder
@@ -272,6 +316,51 @@ Erklärung zu jedem Feld steht als Hilfetext darunter.
 | **Verbindung zum Portal** *(eingeklappt)* | Portal-URL, Aktualisierungsintervall |
 
 Vor HA 2024.7 erscheinen dieselben Felder ohne Abschnitte.
+
+#### 📊 Auswertung (seit v4.0.0)
+
+Die Seite **Auswertung** im Dashboard zeigt, was die Wärmepumpe über längere
+Zeit geleistet hat — und ob eine Änderung an den Einstellungen etwas gebracht
+hat. Grundlage sind die [Energiezähler](#-energiezähler-seit-v400) und die
+Langzeitstatistik von Home Assistant, es wird nichts zusätzlich gespeichert.
+
+- **Zeiträume:** Tag (je Stunde), Woche (Mo–So, je Tag), Monat (je Tag), Jahr
+  (je Monat) und alle Jahre. Mit ‹ › blättern, Antippen eines Balkens zeigt die
+  Werte und springt per „Anzeigen“ eine Ebene tiefer.
+- **Diagramm:** Strom und Wärme als gestapelte Balken (Heizen / Warmwasser /
+  Sonstiges), dazu Arbeitszahl und Außentemperatur als Linien. Jede Reihe ist
+  über die Legende abschaltbar.
+- **Kennzahlen:** Strom, Wärme, Arbeitszahl (gesamt, Heizen, Warmwasser),
+  Warmwasser-Anteil, Verdichterstarts, Laufzeit, Laufzeit je Start,
+  Ø Außentemperatur, Heizgradtage und **Strom je Heizgradtag** (gleicht
+  unterschiedlich kalte Zeiträume teilweise aus), Ø Vorlauf. Jede Kennzahl mit
+  Veränderung gegenüber dem gleich langen Vorzeitraum.
+- **Einstellungsänderungen:** Aus aufeinanderfolgenden
+  [Konfigurationssicherungen](#-versionierte-konfigurationssicherung) leitet die
+  Integration ab, wann sich welche Einstellung geändert hat. Die Zeitpunkte
+  stehen als Markierung im Diagramm und als Liste darunter.
+- **Vorher / Nachher:** Ein Klick auf eine Änderung vergleicht 3, 7, 14 oder
+  30 volle Tage davor und danach (Arbeitszahl, Strom und Wärme je Tag, Strom je
+  Heizgradtag, Starts je Tag, Laufzeit je Start, Außen- und Vorlauftemperatur).
+  Hinweise erscheinen, wenn der Zeitraum danach noch unvollständig ist, die
+  Außentemperatur deutlich abweicht oder im Fenster weitere Änderungen lagen.
+
+Die Karte heißt `custom:es-heatpump-analysis-card` und wird von der Integration
+immer geladen — sie lässt sich also auch in eigene Dashboards einbauen:
+
+```yaml
+type: custom:es-heatpump-analysis-card
+default_view: month        # day | week | month | year | all
+heating_base_temp: 15      # Basis der Heizgradtage in °C
+# entities:                # nur bei abweichenden Entity-IDs
+#   el: sensor.es_hp_energie_elektrisch
+```
+
+Die **Arbeitszahl** ist hier Wärme ÷ Strom über den Zeitraum — aussagekräftiger
+als der Momentan-COP. Sie hängt an der Strommessung und am eingestellten
+Volumenstrom; ein falscher Volumenstrom verschiebt alle Werte gleichmäßig.
+Die Einstellungsänderungen sind nur so fein wie die Sicherungen (Standard:
+alle 24 h, außerdem vor jedem Schreibzugriff).
 
 #### 🔀 Hydraulik-Schema (seit v3.1.0)
 
@@ -322,6 +411,75 @@ Ist Origami gewählt, aber nicht installiert, erscheint unter *Einstellungen →
 Reparaturen* ein Hinweis. HA zeigt bis dahin das Standard-Theme. Nach
 `frontend.reload_themes` verschwindet der Hinweis ohne Neustart.
 
+### ⚠️ Breaking Changes in 4.0.0
+
+Entity-Namen und Zustände sind seit 4.0.0 echte Home-Assistant-Übersetzungen
+([Issue #6](https://github.com/WombatFirst220/ha-es-heatpump/issues/6)). Damit
+das in jeder Sprache funktioniert, sind die **Zustandswerte** jetzt sprachneutrale
+Schlüssel. In der Oberfläche steht weiterhin der übersetzte Text („Heizen“,
+„Heating“ …) — **Automationen, Skripte und Templates** sehen aber den Schlüssel.
+
+**Unverändert:** alle Entity-IDs und `unique_id`s, Verlauf und
+Langzeitstatistik, Zahlenwerte und Schalter.
+
+**Betriebsart** (`sensor.es_hp_betriebsart`):
+
+| bis 3.2.0 | ab 4.0.0 |
+|---|---|
+| `Aus` | `off` |
+| `Brauchwasser` | `dhw` |
+| `Heizen` | `heating` |
+| `Kuehlen` | `cooling` |
+| `Brauchwasser + Heizen` | `dhw_heating` |
+| `Brauchwasser + Kuehlen` | `dhw_cooling` |
+| `Entfrosten` | `defrost` |
+| `Unbekannt` | kein Wert – HAs eigener Zustand `unknown` |
+
+**Auswahllisten** (`select.es_hp_cfg_*`) — gilt für den Zustand *und* für
+`select.select_option`:
+
+| Entity | bis 3.2.0 | ab 4.0.0 |
+|---|---|---|
+| `select.es_hp_cfg_par4` Betriebsart | `Bereitschaft` · `Heizen` · `Kühlen` · `Warmwasser` · `Automatik` | `standby` · `heating` · `cooling` · `dhw` · `auto` |
+| `select.es_hp_cfg_par9` Umschaltung Heizen/Kühlen | `Deaktiviert` · `Außentemperatur` · `Externes Signal` · `Externes Signal + Außentemperatur` | `disabled` · `ambient` · `external` · `external_ambient` |
+| `select.es_hp_cfg_par49` / `par51` Vorrang Zusatzheizung | `Niedriger als Wärmepumpe` · `Höher als Wärmepumpe` | `lower_than_heatpump` · `higher_than_heatpump` |
+| `select.es_hp_cfg_par86` Displaybeleuchtung | `Dauernd an` · `3 Minuten` · `5 Minuten` · `10 Minuten` | `always_on` · `min_3` · `min_5` · `min_10` |
+| `select.es_hp_cfg_par5` Sprache der Bedieneinheit | Sprachname (`Deutsch`, `English` …) | `lang_<Portalwert>`, z. B. `lang_2` = Deutsch, `lang_0` = English |
+
+**Was anzupassen ist:**
+
+```yaml
+# vorher
+condition: state
+entity_id: sensor.es_hp_betriebsart
+state: "Heizen"
+# nachher
+condition: state
+entity_id: sensor.es_hp_betriebsart
+state: "heating"
+```
+
+```yaml
+# vorher
+action: select.select_option
+target: { entity_id: select.es_hp_cfg_par4 }
+data: { option: "Warmwasser" }
+# nachher
+action: select.select_option
+target: { entity_id: select.es_hp_cfg_par4 }
+data: { option: "dhw" }
+```
+
+In Templates entsprechend `is_state('sensor.es_hp_betriebsart', 'heating')`.
+Wer den angezeigten Text braucht, nimmt `state_translated('sensor.es_hp_betriebsart')`
+(HA 2024.3+). Im Verlauf erscheinen ältere Einträge mit dem alten deutschen Wert.
+
+**Angezeigte Namen:** Die Namen folgen der in Home Assistant eingestellten
+Sprache. Einstellungen, *Anlagendaten*, *Konfigurationssicherungen* und der
+Knopf *Konfiguration jetzt sichern* heißen jetzt wie die Messwerte „Gerätename +
+Name“ (z. B. „ES Wärmepumpe Schnelleinstellung: Betriebsart“ statt „WP Schnelleinstellung: Betriebsart“). Wer einen Namen
+von Hand vergeben hat, behält ihn.
+
 ### 🔄 Migration von v1.x → v2.0.0
 
 **Beim ersten Start nach dem Update** läuft eine einmalige Migration:
@@ -361,7 +519,13 @@ Home Assistant integration for **Energy Save heat pumps** (Valtop AW12-R32 and s
   and an optional **Origami** design (theme by [hazymorning](https://github.com/hazymorning/origami),
   AGPL-3.0, not bundled; install it via Marketplace/HACS) — both switchable in the options (since v3.1.0)
 - 🧹 Clean entity IDs (`sensor.es_hp_*`)
-- 🛠 Multilingual UI: German, English, Dutch, Swedish, Danish (falls back to English)
+- 📊 **Analysis view** (since v4.0.0) — electricity, heat, seasonal performance
+  factor (SPF), compressor cycling and outdoor temperature per day, week, month
+  and year, with a before/after comparison around settings changes
+- 🔌 **Energy counters** in kWh (total, heating, hot water) plus compressor
+  starts and runtime — usable in the Home Assistant Energy dashboard (since v4.0.0)
+- 🛠 Multilingual: German, English, Dutch, Swedish, Danish (falls back to
+  English) — since v4.0.0 including entity names and states
 
 ### 📦 Installation via HACS
 
@@ -462,11 +626,14 @@ entity. Since v2.3.0 it is derived from the machine's own values, in this order:
 
 | # | Condition | Mode |
 |---|---|---|
-| 1 | no compressor frequency in the data | `Unbekannt` |
-| 2 | compressor frequency = 0 | `Aus` (off) |
-| 3 | flow colder than return (spread ≤ −0.5 K) | `Entfrosten` (defrost) |
-| 4 | flow > heating setpoint + margin (default 8 K) | `Brauchwasser` (DHW) |
-| 5 | otherwise | `Heizen` (heating) |
+| 1 | no compressor frequency in the data | `unknown` |
+| 2 | compressor frequency = 0 | `off` |
+| 3 | flow colder than return (spread ≤ −0.5 K) | `defrost` |
+| 4 | flow > heating setpoint + margin (default 8 K) | `dhw` (hot water) |
+| 5 | otherwise | `heating` |
+
+(State values since v4.0.0; up to 3.2.0 these were `Unbekannt`, `Aus`,
+`Entfrosten`, `Brauchwasser`, `Heizen`.)
 
 Rule 4 compares against the **setpoint**, not a fixed temperature. During hot
 water production the machine drives the flow far above whatever the heating
@@ -487,7 +654,8 @@ The plugin creates around 18 visible entities under `sensor.es_hp_*` plus calcul
 
 ### 📋 Dashboard and options (since v3.1)
 
-- The bundled dashboard has three views (Overview, Energy, Diagnostics). The
+- The bundled dashboard has four views (Overview, Energy, Analysis since
+  v4.0.0, Diagnostics). The
   **Standard** design uses gauges and your own theme. The **Origami** design
   (since v3.2.0) is built from sections with headings and tiles and uses the
   Origami theme as view theme. It needs HA 2024.10 and the theme from
@@ -500,6 +668,47 @@ The plugin creates around 18 visible entities under `sensor.es_hp_*` plus calcul
 - The **options dialog** is split into sections: *Measurement and calculation*,
   *Dashboard*, *Write access and backups* (collapsed) and *Portal connection*
   (collapsed). On HA before 2024.7 the same fields appear without sections.
+
+### 📊 Analysis view and energy counters (since v4.0.0)
+
+New counters (`state_class: total_increasing`): `sensor.es_hp_energie_elektrisch`
+(+ `_heizen`, `_warmwasser`; needs the power entity), `sensor.es_hp_energie_thermisch`
+(+ `_heizen`, `_warmwasser`; computed from the configured flow rate),
+`sensor.es_hp_verdichter_starts` and `sensor.es_hp_verdichter_laufzeit` (h).
+Gaps longer than 10–15 minutes are skipped rather than estimated; counting starts
+with the update, there is no back-fill.
+
+The dashboard gets a fourth view, **Auswertung** (analysis), built around the
+bundled `custom:es-heatpump-analysis-card`. It reads Home Assistant's long-term
+statistics: stacked bars for electricity and heat (heating / hot water / other),
+SPF and outdoor temperature as lines, KPIs incl. heating degree days and kWh per
+degree day, each compared with the previous period of the same length. Settings
+changes derived from consecutive configuration backups are marked in the chart;
+clicking one compares 3/7/14/30 full days before and after. The card is always
+loaded and can be used in your own dashboards (`default_view`,
+`heating_base_temp`, `entities` options).
+
+<a id="-breaking-changes-in-400-english"></a>
+### ⚠️ Breaking changes in 4.0.0
+
+Entity names and states now use native Home Assistant translations
+([issue #6](https://github.com/WombatFirst220/ha-es-heatpump/issues/6)). The UI
+shows translated text, but **state values are now language-neutral keys** —
+update automations, scripts and templates. Entity IDs, unique IDs, history and
+statistics are unchanged.
+
+- `sensor.es_hp_betriebsart`: `Aus`→`off`, `Brauchwasser`→`dhw`,
+  `Heizen`→`heating`, `Kuehlen`→`cooling`, `Brauchwasser + Heizen`→`dhw_heating`,
+  `Brauchwasser + Kuehlen`→`dhw_cooling`, `Entfrosten`→`defrost`,
+  `Unbekannt`→ no value (Home Assistant's own `unknown` state).
+- `select.es_hp_cfg_*` options (state and `select.select_option`): par4
+  `standby/heating/cooling/dhw/auto`; par9 `disabled/ambient/external/external_ambient`;
+  par49/par51 `lower_than_heatpump/higher_than_heatpump`; par86
+  `always_on/min_3/min_5/min_10`; par5 `lang_<portal value>`. Full old → new
+  table in the German section above.
+- Names follow your Home Assistant language. Settings entities, the master-data
+  and backup sensors and the backup button are now named "device name + name"
+  (previously "WP …"). Names you set manually are kept.
 
 ### 🔄 Migration from v1.x → v2.0.0
 
@@ -566,6 +775,28 @@ verschwinden ohne Neustart.
 
 Wem die Historie dieser drei Werte egal ist, der kann im Dialog auch einfach
 löschen. Beim Hochdruck hingen hier 187 Tage daran.
+
+### 4.0.0 — 2026-11-08
+
+⚠️ **Breaking:** Zustandswerte der Betriebsart und der Auswahllisten sind jetzt
+sprachneutrale Schlüssel — siehe [Breaking Changes in 4.0.0](#-breaking-changes-in-400).
+
+- **Übersetzte Entity-Namen und Zustände** ([Issue #6](https://github.com/WombatFirst220/ha-es-heatpump/issues/6)):
+  alle Sensoren, Einstellungen, Zustände der Betriebsart und Auswahllisten sowie
+  Fehlermeldungen in Deutsch, Englisch, Niederländisch, Schwedisch und Dänisch.
+  Entity-IDs und `unique_id`s bleiben unverändert.
+- **Neue Installationen** bekommen die Entity-IDs `sensor.es_hp_<slug>` von
+  Anfang an (bisher erst über die Migration beim nächsten Start).
+- **Energiezähler** für Strom und Wärme (gesamt, Heizen, Warmwasser),
+  Verdichterstarts und -laufzeit — siehe [Energiezähler](#-energiezähler-seit-v400).
+- **Auswertungsseite** im Dashboard mit eigener Karte, Vorher/Nachher-Vergleich
+  bei Einstellungsänderungen — siehe [Auswertung](#-auswertung-seit-v400).
+- Neuer WebSocket-Befehl `es_heatpump/settings_changes` (Änderungsverlauf aus
+  den Sicherungen).
+- Thermische Leistung, COP und Wärmezähler rechnen mit derselben Funktion.
+- Ist die Betriebsart nicht bestimmbar, hat der Sensor keinen Wert (HA-Zustand
+  `unknown`) statt eines eigenen „Unbekannt“.
+- Mindestversion jetzt Home Assistant 2024.2 (übersetzte Fehlermeldungen).
 
 ### 3.2.0 — 2026-11-08
 

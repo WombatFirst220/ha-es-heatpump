@@ -41,22 +41,28 @@ async def async_setup_entry(
 
 
 class ESHeatpumpSelect(ESHeatpumpSettingEntity, SelectEntity):
-    """Eine Auswahl mit den Bezeichnungen, die das Portal selbst verwendet."""
+    """Eine Auswahl der Portal-Einstellungen.
+
+    Optionen sind seit GitHub-Issue #6 sprachneutrale Schluessel aus
+    ``Setting.option_keys``; die Anzeige kommt aus
+    ``entity.select.cfg_parXX.state.<schluessel>``. Die deutschen Texte in
+    ``Setting.options`` bleiben fuer Protokolle und Sicherungs-Diffs.
+    """
 
     _plattform = "select"
 
     def __init__(self, coordinator, setting, device_info, username, schreiben) -> None:
         super().__init__(coordinator, setting, device_info, username, schreiben)
-        self._nach_text = dict(setting.options)
-        self._nach_zahl = {v: k for k, v in setting.options.items()}
-        self._attr_options = list(setting.options.values())
+        self._nach_schluessel = dict(setting.option_keys)
+        self._nach_zahl = {v: k for k, v in setting.option_keys.items()}
+        self._attr_options = [setting.option_keys[k] for k in setting.options]
 
     @property
     def current_option(self) -> str | None:
         wert = self.roh_wert
         if wert is None:
             return None
-        return self._nach_text.get(int(wert))
+        return self._nach_schluessel.get(int(wert))
 
     async def async_select_option(self, option: str) -> None:
         if option not in self._nach_zahl:

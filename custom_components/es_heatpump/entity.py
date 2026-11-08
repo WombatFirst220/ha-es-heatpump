@@ -6,6 +6,10 @@ in zwei voellig verschiedenen Bedeutungen (Messwerte gegen Einstellungen), und
 ohne getrennte Namensraeume waere ``sensor.es_hp_par1`` und
 ``switch.es_hp_par1`` dasselbe Wort fuer zwei Dinge. Siehe den Kopf von
 ``settings.py``.
+
+Namen kommen aus den Uebersetzungen (``entity.<plattform>.cfg_parXX.name``,
+Form "<Gruppe>: <Name>"), siehe GitHub-Issue #6. Die Entity-ID wird weiterhin
+ausdruecklich gesetzt, damit sie nicht vom (uebersetzten) Namen abhaengt.
 """
 from __future__ import annotations
 
@@ -27,7 +31,7 @@ _LOGGER = logging.getLogger(__name__)
 class ESHeatpumpSettingEntity(CoordinatorEntity[ESHeatpumpSettingsCoordinator]):
     """Eine bedienbare Einstellung der Waermepumpe."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
@@ -42,7 +46,7 @@ class ESHeatpumpSettingEntity(CoordinatorEntity[ESHeatpumpSettingsCoordinator]):
         self.setting = setting
         self._schreiben_erlaubt = schreiben_erlaubt
         self._attr_unique_id = f"{DOMAIN}_{username}_cfg_{setting.par}"
-        self._attr_name = f"WP {setting.group}: {setting.name}"
+        self._attr_translation_key = setting.slug
         self.entity_id = f"{self._plattform}.es_hp_{setting.slug}"
         self._attr_device_info = device_info
         self._attr_entity_registry_enabled_default = setting.enabled_default
@@ -76,10 +80,11 @@ class ESHeatpumpSettingEntity(CoordinatorEntity[ESHeatpumpSettingsCoordinator]):
     async def _async_setze(self, wert: Any) -> None:
         """Schreibt einen Wert - nach Freigabepruefung und Katalogpruefung."""
         if not self._schreiben_erlaubt:
+            name = self.name if isinstance(self.name, str) else None
             raise Schreibsperre(
-                f"Der Schreibzugriff ist abgeschaltet. {self.setting.name} wurde "
-                "nicht geändert. Einschalten in den Einstellungen der Integration "
-                "unter „Schreibzugriff auf die Anlage erlauben“."
+                translation_domain=DOMAIN,
+                translation_key="schreibzugriff_aus",
+                translation_placeholders={"name": name or self.setting.name},
             )
         geprueft = self.setting.validate(wert)
         await self.coordinator.async_setze(self.setting.par, geprueft)
