@@ -166,6 +166,10 @@
     "cop_unplausibel": {
       "title": "Usandsynlig COP – kontroller volumenstrømmen",
       "description": "Den aktuelle COP har ligget under 1 i flere målinger i træk, mens varmepumpen kørte (seneste værdi: {cop}). Det er fysisk umuligt – anlægget ville afgive mindre varme, end det optager i strøm.\n\nTermisk effekt og COP beregnes ud fra den indstillede volumenstrøm (aktuelt {volumenstrom} m³/h), som næsten helt sikkert er for lav. Nominel værdi ifølge databladet: {richtwert}.\n\nRet den i integrationens indstillinger under \"Måling og beregning → Flow varmekreds\" (eller vælg din model). Denne meddelelse forsvinder af sig selv, så snart COP igen er plausibel."
+    },
+    "cop_unplausibel_warmwasser": {
+      "title": "Usandsynlig COP ved varmt brugsvand – kontrollér flowet for brugsvand",
+      "description": "Under opvarmning af brugsvand har den aktuelle COP været under 1 i flere målinger i træk (seneste værdi: {cop}). Det er fysisk umuligt.\n\nI brugsvandsdrift beregnes den termiske effekt ud fra det indstillede flow for brugsvandskredsen (aktuelt {volumenstrom} m³/h), som næsten helt sikkert er for lavt. Den indbyggede cirkulationspumpe P0 forsyner både varme- og brugsvandskredsen. Medmindre displayet viser et andet pumpetrin for brugsvand, svarer flowet for brugsvand nogenlunde til varmekredsens (aktuelt {heizkreis} m³/h). Nominel værdi ifølge databladet: {richtwert}.\n\nRet det i integrationens indstillinger under \"Måling og beregning → Flow brugsvandskreds\". Meddelelsen forsvinder af sig selv, så snart COP igen er plausibel."
     }
   },
   "entity": {

@@ -166,6 +166,10 @@
     "cop_unplausibel": {
       "title": "Onwaarschijnlijke COP – controleer het debiet",
       "description": "De actuele COP lag tijdens bedrijf meerdere metingen achter elkaar onder 1 (laatste waarde: {cop}). Dat is fysiek onmogelijk – de warmtepomp zou minder warmte afgeven dan hij aan stroom opneemt.\n\nThermisch vermogen en COP worden berekend uit het ingestelde debiet (momenteel {volumenstrom} m³/h), en dat is vrijwel zeker te laag. Nominale waarde volgens het datablad: {richtwert}.\n\nCorrigeer dit in de opties van de integratie onder \"Meting en berekening → Volumestroom verwarmingscircuit\" (of kies uw model). Deze melding verdwijnt vanzelf zodra de COP weer plausibel is."
+    },
+    "cop_unplausibel_warmwasser": {
+      "title": "Onwaarschijnlijke COP bij warm tapwater – controleer het tapwaterdebiet",
+      "description": "Tijdens het verwarmen van tapwater lag de actuele COP meerdere metingen achter elkaar onder 1 (laatste waarde: {cop}). Dat is fysisch onmogelijk.\n\nIn tapwaterbedrijf wordt het thermisch vermogen berekend uit het ingestelde debiet van het tapwatercircuit (nu {volumenstrom} m³/h), en dat is vrijwel zeker te laag. De ingebouwde circulatiepomp P0 voedt zowel het verwarmings- als het tapwatercircuit. Tenzij het display een andere pompstand voor tapwater toont, is het tapwaterdebiet ongeveer gelijk aan dat van het verwarmingscircuit (nu {heizkreis} m³/h). Nominale waarde volgens datasheet: {richtwert}.\n\nCorrigeer het in de integratie-opties onder \"Meting en berekening → Volumestroom warmwatercircuit\". Deze melding verdwijnt vanzelf zodra de COP weer plausibel is."
     }
   },
   "entity": {

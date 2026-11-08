@@ -98,3 +98,38 @@ if __name__ == "__main__":
     for fn in fns:
         fn(); print(f"  ok  {fn.__name__}")
     print(f"\n{len(fns)} Prüfungen bestanden.")
+
+
+# ── v4.1.1: Modellwahl setzt beide Volumenstroeme ────────────────────────────
+nennvolumenstroeme = _flow.nennvolumenstroeme
+
+
+def test_modellwechsel_setzt_heizen_und_warmwasser():
+    neu = nennvolumenstroeme("AWC12-R32-M-V8", {"flow_rate": 1.2, "flow_rate_dhw": 1.0}, None)
+    assert neu == {"flow_rate": 2.02, "flow_rate_dhw": 2.02}
+    # gleiches Modell wie vorher: nichts ueberschreiben (Werte sind von Hand angepasst)
+    assert nennvolumenstroeme("AWC12-R32-M-V8", {"flow_rate": 1.8}, "AWC12-R32-M-V8") == {}
+    # unbekanntes Modell: nichts
+    assert nennvolumenstroeme(_const.MODEL_UNKNOWN, {}, None) == {}
+    assert nennvolumenstroeme(None, {}, "AWC12-R32-M-V8") == {}
+
+
+def test_einrichtung_setzt_nur_standardwerte():
+    std = {"flow_rate": _const.DEFAULT_FLOW_RATE, "flow_rate_dhw": _const.DEFAULT_FLOW_RATE_DHW}
+    assert nennvolumenstroeme("AWC9-R32-M-V8", std, nur_standardwerte=True) == {
+        "flow_rate": NOMINAL["AWC9-R32-M-V8"][1], "flow_rate_dhw": NOMINAL["AWC9-R32-M-V8"][1]}
+    # bewusst eingegebener Heizwert bleibt, Warmwasser auf Standard wird gesetzt
+    neu = nennvolumenstroeme("AWC9-R32-M-V8", {"flow_rate": 1.4, "flow_rate_dhw": 1.0},
+                             nur_standardwerte=True)
+    assert neu == {"flow_rate_dhw": NOMINAL["AWC9-R32-M-V8"][1]}
+    # fehlende Felder gelten als Standard
+    assert set(nennvolumenstroeme("AWC6-R32-M-V8", {}, nur_standardwerte=True)) == {
+        "flow_rate", "flow_rate_dhw"}
+
+
+def test_config_flow_nutzt_nennvolumenstroeme():
+    quelle = (_ROOT / "config_flow.py").read_text(encoding="utf-8")
+    assert "from .flow import nennvolumenstroeme" in quelle
+    assert quelle.count("nennvolumenstroeme(") == 2      # Einrichtung + Optionen
+    assert "nur_standardwerte=True" in quelle
+    assert _const.CONF_FLOW_RATE == "flow_rate" and _const.CONF_FLOW_RATE_DHW == "flow_rate_dhw"

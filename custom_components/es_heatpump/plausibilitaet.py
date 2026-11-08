@@ -41,6 +41,18 @@ COP_UNPLAUSIBEL_FOLGE = 5
 
 # translation_key des Reparaturhinweises (issues.cop_unplausibel)
 ISSUE_COP_UNPLAUSIBEL = "cop_unplausibel"
+# v4.1.1: eigener Text, wenn der unplausible COP beim Warmwasser auftritt. Die
+# Umwaelzpumpe P0 versorgt beide Kreise - der Warmwasser-Volumenstrom ist dann
+# meist zu niedrig eingestellt, nicht der des Heizkreises.
+ISSUE_COP_UNPLAUSIBEL_WW = "cop_unplausibel_warmwasser"
+
+# Betriebsart (intern, siehe mode.py), in der der Warmwasser-Volumenstrom gilt
+_MODUS_WARMWASSER = "Brauchwasser"
+
+
+def cop_issue_schluessel(modus: str | None) -> str:
+    """translation_key des Hinweises passend zur Betriebsart."""
+    return ISSUE_COP_UNPLAUSIBEL_WW if modus == _MODUS_WARMWASSER else ISSUE_COP_UNPLAUSIBEL
 
 # README-Abschnitt "Den Volumenstrom richtig einstellen"
 COP_LEARN_MORE_URL = (

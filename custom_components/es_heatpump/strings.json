@@ -166,6 +166,10 @@
     "cop_unplausibel": {
       "title": "Implausible COP – check the flow rate",
       "description": "The current COP has been below 1 for several consecutive readings while the heat pump was running (last value: {cop}). That is physically impossible – the unit would deliver less heat than it draws in electricity.\n\nThermal power and COP are calculated from the configured flow rate (currently {volumenstrom} m³/h), which is almost certainly too low. Datasheet nominal value: {richtwert}.\n\nCorrect it in the integration options under \"Measurement and calculation → Heating-loop flow rate\" (or select your model). This notice disappears by itself as soon as the COP is plausible again."
+    },
+    "cop_unplausibel_warmwasser": {
+      "title": "Implausible DHW COP – check the DHW flow rate",
+      "description": "While heating domestic hot water, the current COP has been below 1 for several consecutive readings (last value: {cop}). That is physically impossible.\n\nIn DHW mode the thermal power is calculated from the configured DHW flow rate (currently {volumenstrom} m³/h), which is almost certainly too low. The built-in circulation pump P0 serves both the heating and the DHW circuit, so unless the controller display shows a different pump step for DHW, the DHW flow is about the same as the heating flow (currently {heizkreis} m³/h). Datasheet nominal value: {richtwert}.\n\nCorrect it in the integration options under \"Measurement and calculation → DHW-loop flow rate\". This notice disappears by itself as soon as the COP is plausible again."
     }
   },
   "entity": {

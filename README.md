@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.2%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.1.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-4.1.1-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 >
@@ -58,6 +58,27 @@ Home Assistant Integration für **Energy Save Wärmepumpen** (Valtop AW12-R32 u.
 3. Suche nach **ES Heatpump** → **Herunterladen**
 4. **Home Assistant neu starten**
 
+### 🔗 Kompatible und baugleiche Wärmepumpen
+
+Die Integration spricht nicht mit der Wärmepumpe selbst, sondern mit dem Portal
+**myheatpump.com** (bzw. `eu.myheatpump.com`). Sie funktioniert deshalb mit jeder
+Anlage, die dort mit derselben Steuerung erscheint.
+
+| Status | Geräte |
+|---|---|
+| **Getestet** | ES Energy Save **AWC12-R32-M-V8** (Monoblock, „ES V8“) |
+| **Gleiche Serie, sehr wahrscheinlich ohne Anpassung** | ES AWC6/9/15/19-R32-M-V8 und die AW-…-R32-Serie (V8); Volumenstrom-Nennwerte für AWC6–19 sind hinterlegt |
+| **Vermutlich baugleich, ungeprüft** | **Heiko Thermal 6–19** (PL): gleiche Größen, R32-Füllmengen, Schallwerte und dasselbe WLAN-Modul (USR-W600 → `myheatpump.com:18899`), gleiche Parameternummern (Flüsterbetrieb auf `par80`). **Neoheat** (PL) und Geräte mit Portal-Logo **VALTOP** nutzen ebenfalls myheatpump.com |
+
+Hintergrund: Portal und App „MyHeatPump“ (`io.anylink.amitime`) gehören sehr
+wahrscheinlich zur Plattform des chinesischen Herstellers **Amitime**, die
+mehrere Marken als OEM beliefert. Bestätigt ist das nicht. Andere Modelle
+können abweichende Parameter haben. Dann zeigen einzelne Entities falsche oder
+keine Werte, und Schreibzugriffe sollten ausgeschaltet bleiben.
+**Rückmeldungen mit anderen Geräten bitte als
+[Issue](https://github.com/WombatFirst220/ha-es-heatpump/issues)**, am besten mit
+Modell, Portal-Region und einem Diagnose-Download (seit v4.1.0, geschwärzt).
+
 ### ⚡ Einrichtung
 
 **Einstellungen → Geräte & Dienste → Integration hinzufügen → „ES Heatpump"**
@@ -70,7 +91,7 @@ Home Assistant Integration für **Energy Save Wärmepumpen** (Valtop AW12-R32 u.
 | **Aktualisierungsintervall** | Sekunden (10–3600, Default 60) |
 | **Power-Entity** *(optional)* | Sensor mit der elektrischen Leistung (z.B. Shelly) — wird für die COP-Berechnung benötigt |
 | **Volumenstrom Heizkreis** | m³/h — **unbedingt an das eigene Modell anpassen**, siehe Tabelle unten |
-| **Volumenstrom Brauchwasser** *(optional)* | m³/h für den Speicherkreis (Default 1.0) |
+| **Volumenstrom Brauchwasser** *(optional)* | m³/h für den Speicherkreis. Mit gewähltem Modell seit v4.1.1 derselbe Nennwert wie der Heizkreis (die Pumpe P0 versorgt beide Kreise), ohne Modell 1.0 |
 | **Brauchwasser-Schwelle** *(optional)* | K über dem Heizen-Sollwert, ab dem auf Brauchwasser erkannt wird (Default 8) |
 | **Betriebsart-Quelle** *(optional)* | Seit v2.3.0 nicht mehr nötig — nur noch als Übersteuerung, falls eine externe Entity die Betriebsart besser kennt |
 
@@ -102,6 +123,14 @@ der Serie, Zeile **„Zulässiger Wasserdurchfluss Min / Nominal"**:
 
 *(Datenblatt in l/s: 0,18/0,28 · 0,26/0,43 · 0,40/0,56 · 0,62/0,72 · 0,74/0,91 —
 hier auf m³/h umgerechnet.)*
+
+**Warmwasser:** Die eingebaute Pumpe P0 versorgt Heiz- und Warmwasserkreis.
+Solange am Bedienfeld keine andere Pumpenstufe für Brauchwasser eingestellt ist,
+ist der Volumenstrom beim Warmwasser etwa derselbe wie beim Heizen. Seit v4.1.1
+setzt die Modellwahl deshalb beide Felder auf den Nennwert. Wer von einer
+älteren Version kommt und den Warmwasser-Wert nie angefasst hat (1,0 m³/h),
+sollte ihn von Hand anpassen. Ein Warmwasser-COP unter 1 meldet die Integration
+mit einem eigenen Reparaturhinweis.
 
 Am genauesten ist der Wert, den die Umwälzpumpe selbst anzeigt oder den der
 hydraulische Abgleich festgehalten hat. Ohne diese Angabe ist der **Nominalwert**
@@ -154,6 +183,29 @@ Spreizung aber nicht. Bei konstantem Volumenstrom müsste sie es.
 Ohne eines von beiden bleibt der COP eine **Größenordnung, kein Messwert**: am
 Auslegungspunkt richtig, bei Teillast tendenziell zu hoch, bei Volllast zu
 niedrig.
+
+> **Korrektur (v4.1.1): Bei der AWC-R32-M-V8 regelt die eingebaute Pumpe P0
+> nicht mit der Last.** Das Beispiel oben stammt von der Heizkreispumpe hinter
+> dem Pufferspeicher (ESP III), nicht vom Erzeugerkreis. Den Erzeugerkreis wälzt
+> **P0 in der Außeneinheit** um. Laut ES-Installationshandbuch „R32 V8 Series“
+> v3.1 läuft P0 je Betriebsart mit einer **festen Stufe** (High/Middle/Low, nur
+> mit PWM-Pumpe), eine Spreizungsregelung gibt es nicht. `par33` meldet nur
+> 0/1, der Wert „Water flow rate“ am Display ist laut Handbuch die Pumpendrehzahl,
+> „not actual flow rate“. Ein Durchflussmesser ist nicht verbaut, nur ein
+> Strömungsschalter. Folgen:
+>
+> - Der Volumenstrom ist je Betriebsart ungefähr konstant. Eine flache Spreizung
+>   bei steigender Leistung kommt eher vom fallenden COP bei hoher Frequenz und
+>   von einem Fühlerversatz (gemessen: Vorlauf 0,2 K über Rücklauf bei laufender
+>   P0 und stehendem Verdichter, das macht den COP bei 2–2,4 K Spreizung etwa
+>   8–10 % zu hoch).
+> - **Volumenstrom Warmwasser ≈ Volumenstrom Heizen,** solange am Display für
+>   beide dieselbe Pumpenstufe steht. Der Standardwert 1,0 m³/h ist für die AWC12
+>   zu niedrig: Bei 2,8–3,0 K Spreizung und 2,1–2,6 kW Strom ergibt er beim
+>   Warmwasser COP 1,3–1,4, mit 2,0 m³/h plausible 2,6–2,8.
+> - Genau wird es nur mit einem Zähler im gemeinsamen Rücklauf vor dem
+>   Außengerät (z. B. Ultraschall-Wärmemengenzähler mit M-Bus), eingebunden über
+>   das Feld „Volumenstrom-Sensor“.
 
 #### 🔄 Betriebsart (seit v2.4.0 aus dem Gerät)
 
@@ -368,7 +420,7 @@ Ist-Temperatur aus `par7` (Warmwasser TW), Soll-Temperatur aus der Einstellung
 
 #### 🔍 Diagnose (default deaktiviert, einzeln aktivierbar)
 
-Mischventil 2 (`par10`), Software Version (`par37`), HWTBH Betriebszeit (`par43`), sowie sieben Diagnose-Parameter (`par21`, `par22`, `par23`, `par26`, `par27`, `par39`, `par40`), die mit dem Heizzyklus korrelieren aber nicht eindeutig zuordenbar waren. Aktivierbar unter **Einstellungen → Geräte & Dienste → ES Heatpump → Entitäten**.
+Mischventil 2 (`par10`), Software Version (`par37`), HWTBH Betriebszeit (`par43`), sowie zwei Diagnose-Parameter (`par39`, `par40`), die mit dem Heizzyklus korrelieren aber nicht eindeutig zuordenbar sind. Die früheren Diagnose-Parameter `par21`, `par22`, `par23`, `par26` und `par27` sind inzwischen zugeordnet (Expansionsventil, Hochdruck, Saugdruck, Sauggas, Lamellentauscher) und standardmäßig aktiv. Aktivierbar unter **Einstellungen → Geräte & Dienste → ES Heatpump → Entitäten**.
 
 #### ❌ Nicht angelegt
 
@@ -387,7 +439,7 @@ Vier Ansichten. Ihr Aufbau hängt vom gewählten Design ab (siehe unten):
 | **Übersicht** | Hydraulik-Schema, Messzeiger (COP, Wärmeabgabe, El. Leistung, Heizwasser, Brauchwasser, Spreizung), Temperaturen, 24-h-Verlauf, System-Technik | *Wärmepumpe* mit Schema, *Jetzt*, *Speicher*, *Verlauf · 24 h* als Kacheln |
 | **Energie** | COP-Statistik (7 Tage), Wärmeabgabe und Frequenz, Heißgas, Betriebsstunden | *Effizienz*, *Leistung · 24 h*, *Betriebsstunden* |
 | **Auswertung** (seit v4.0.0) | Auswertungskarte über die volle Breite | *Auswertung* |
-| **Diagnose** | Mischventile, Diagnose-Parameter, Geräteinfo | *Kältekreis*, *Elektrik und Lüfter*, *Diagnose-Parameter* |
+| **Diagnose** | Betriebszustand, Mischventile, Kältekreis (seit v4.1.1), Diagnose-Parameter, Geräteinfo | *Kältekreis*, *Elektrik und Lüfter*, *Diagnose-Parameter* |
 
 Die Integration schreibt das Dashboard bei **jedem Start und jeder
 Optionsänderung neu** (Storage-Modus, seit v3.1.1 auch ohne Neustart sichtbar).
@@ -711,6 +763,42 @@ von Hand vergeben hat, behält ihn.
 
 **Wichtig:** Wenn du Automationen oder Skripte hast, die alte Entity-IDs referenzieren, musst du diese manuell auf das neue Schema umstellen. Eine Übersicht aller Renames findest du in [`PARAMETER_MAPPING.md`](PARAMETER_MAPPING.md).
 
+### 🎛️ Was nur am Bedienfeld geht
+
+Das Portal und damit die Integration sehen nicht alle Einstellungen. Folgendes
+gibt es **nur am Touch-Display der Inneneinheit**, teils erst in der
+Installateur-Ebene. Laut ES-Installationshandbuch „R32 V8 Series“ v3.1:
+
+- **Systemuhr: keine automatische Sommer-/Winterzeit.** Die Uhr muss zweimal
+  im Jahr von Hand umgestellt werden. Sonst laufen alle Zeitpläne eine Stunde
+  versetzt. Erkennbar in der Auswertung daran, dass Warmwasserladungen nach der
+  Zeitumstellung eine Stunde früher oder später starten als vorher.
+- **Zeitpläne** für Warmwasserspeicher, Nachheizen, Reduziertsollwert und
+  Flüsterbetrieb („Schlaffunktion“), in Zwei-Stunden-Blöcken je Wochentag. Mit
+  aktiver Speicherfunktion lädt die Anlage Warmwasser **nur** in diesen Fenstern.
+- **TWW ECO:** begrenzt den Verdichter beim Warmwasser auf 50 % der vollen
+  Drehzahl, aber nur **oberhalb** der eingestellten Außentemperatur. Darunter
+  lädt die Anlage mit voller Drehzahl. Bei einer AWC12 waren das 90 statt 61 Hz
+  und spürbar mehr Strom je Ladung. Eine niedrige Freigabetemperatur (z. B.
+  −5 °C) hält die Ladungen auch bei leichtem Frost effizient. Dafür dauern sie
+  länger.
+- **Umwälzpumpe P0:** Typ (AC = nur ein/aus, oder PWM mit Stufe
+  High/Middle/Low je Betriebsart) und Intervallbetrieb. Einen Durchflussmesser
+  gibt es nicht. „Wasser Durchflussmenge“ in den Echtzeitdaten ist die
+  Pumpenansteuerung in %.
+- **Gemittelte Außentemperaturen** (1 h / 4 h / 24 h) zeigt nur das Display.
+
+**Zusammenspiel zweier Portal-Parameter:** `par21` „Wiedereinschaltung bei
+Wasser-Spreizung“ und `par22` „Spreizung für Verdichterdrosselung“. Der Verdichter
+läuft mit **voller Drehzahl**, bis das Heizwasser auf `par22` an den Sollwert
+heran ist. Steht `par21` höher als `par22`, z. B. 4 K gegen 2 K, beginnt
+deshalb fast jeder Start im Vollgasbereich. Wer `par21` erhöht, um das Takten
+zu verringern, sollte `par22` mitziehen.
+
+Wer am Display etwas ändert: vorher **„Einstellungen speichern“**. Das legt einen
+Rücksetzpunkt an, den „Auf gespeicherte Einstellungen zurücksetzen“ wiederherstellt.
+Die Konfigurationssicherungen der Integration enthalten nur die Portal-Parameter.
+
 ### 🐛 Fehlerbehebung
 
 | Problem | Lösung |
@@ -754,6 +842,32 @@ Home Assistant integration for **Energy Save heat pumps** (Valtop AW12-R32 and s
 2. URL: `https://github.com/WombatFirst220/ha-es-heatpump` · Category: **Integration**
 3. Search **ES Heatpump** → **Download**
 4. **Restart Home Assistant**
+
+### 🔗 Compatible and identical heat pumps
+
+The integration talks to the **myheatpump.com** portal, not to the heat pump
+directly, so it works with any unit that shows up there with the same controller.
+
+| Status | Units |
+|---|---|
+| **Tested** | ES Energy Save **AWC12-R32-M-V8** (monobloc, "ES V8") |
+| **Same series, very likely fine** | ES AWC6/9/15/19-R32-M-V8 and the AW-…-R32 (V8) series; nominal flow rates for AWC6–19 are built in |
+| **Probably identical, untested** | **Heiko Thermal 6–19** (PL): same sizes, R32 charges, sound levels, Wi-Fi module (USR-W600 → `myheatpump.com:18899`) and parameter numbers (quiet mode on `par80`). **Neoheat** (PL) and units whose portal shows the **VALTOP** logo also use myheatpump.com |
+
+Portal and app ("MyHeatPump", `io.anylink.amitime`) very likely belong to the
+platform of the Chinese OEM **Amitime** (unconfirmed). Other models may use
+different parameters – keep write access off until the values look right, and
+please report results as an [issue](https://github.com/WombatFirst220/ha-es-heatpump/issues)
+(model, portal region, redacted diagnostics download).
+
+**Settings only available on the indoor display** (not in the portal): the
+system clock (**no automatic DST switch** – adjust it by hand twice a year, or
+all schedules run one hour off), DHW/reheat/quiet-mode schedules, DHW ECO (caps
+the compressor at 50 % only *above* the set outdoor temperature – below it DHW
+runs at full speed), pump P0 type and steps. If you raise `par21` (restart
+spread), raise `par22` (speed-reduction spread) too, otherwise almost every start
+runs at full speed. The DHW flow rate is about the heating flow (P0 serves both
+circuits); since v4.1.1 selecting a model sets both.
 
 ### ⚡ Setup
 
@@ -838,6 +952,18 @@ With a constant flow it would have to.
 Without either, treat the COP as an **order of magnitude, not a measurement**:
 right at the design point, on the high side at part load, on the low side at
 full load.
+
+> **Correction (v4.1.1): on the AWC-R32-M-V8 the built-in pump P0 does not
+> follow the load.** The example above is the heating-circuit pump behind the
+> buffer tank (ESP III), not the heat-pump loop, which is driven by **P0 in the
+> outdoor unit**. According to the ES installation manual "R32 V8 Series" v3.1,
+> P0 runs at a **fixed step per mode** (High/Middle/Low, PWM pump only) with no
+> ΔT control; `par33` only reports 0/1, and "Water flow rate" on the display is
+> the pump speed, "not actual flow rate". There is no flow meter, only a flow
+> switch. Hence the flow is roughly constant per mode, the **DHW flow is about
+> the heating flow** (unless the display shows a different pump step — 1.0 m³/h
+> is too low for an AWC12), and only a meter in the shared return line gives
+> exact values.
 
 #### 🔄 Operating-mode detection (since v2.3.0)
 
@@ -1060,6 +1186,37 @@ verschwinden ohne Neustart.
 
 Wem die Historie dieser drei Werte egal ist, der kann im Dialog auch einfach
 löschen. Beim Hochdruck hingen hier 187 Tage daran.
+
+### 4.1.1 — 2026-11-09
+
+- **Fix Standard-Dashboard:** Die Ansicht *Diagnose* im Design *Standard*
+  verwies noch auf `sensor.es_hp_diag_par21`, `…_par22`, `…_par23`,
+  `…_par26` und `…_par27`. Diese IDs gibt es seit der Zuordnung der Werte nicht
+  mehr, die Karte zeigte deshalb fünfmal „Entität nicht gefunden“. Neu ist dort
+  die Karte *Kältekreis* mit Heißgas, Sauggas, Hochdruck, Saugdruck,
+  Expansionsventil und Lamellentauscher, wie im Design *Origami*. Unter
+  *Diagnose-Parameter* stehen nur noch `par39` und `par40`.
+- `PARAMETER_MAPPING.md` nennt die aktuellen Entity-IDs.
+- Die Repo-Kopie `dashboards/es_heatpump.yaml` ist wieder identisch mit dem
+  mitgelieferten Dashboard (eine Kartenbeschriftung war abgewichen).
+- **Tests:** Jede Entity-ID in den Dashboards, Karten und in
+  `PARAMETER_MAPPING.md` muss eine Entity der Integration sein.
+- **Doku Volumenstrom:** Korrektur zur Pumpe P0 (feste Stufe je Betriebsart,
+  keine Lastregelung) und Hinweis, dass der Volumenstrom Warmwasser bei der
+  AWC12 etwa dem Heizkreis entspricht.
+- **Modellwahl setzt beide Volumenströme:** Heizen **und** Warmwasser bekommen
+  den Nennwert des Datenblatts (bisher nur Heizen, Warmwasser blieb auf
+  1,0 m³/h und ergab bei einer AWC12 Warmwasser-COPs unter 1). Bei der
+  Einrichtung nur für Felder, die noch auf dem Standard stehen; in den Optionen
+  nur, wenn das Modell gewechselt wird. **Bestehende Installationen ändern sich
+  nicht** – den Warmwasser-Wert ggf. von Hand anpassen.
+- **Eigener Reparaturhinweis für Warmwasser-COP < 1:** nennt die richtige
+  Option (Volumenstrom Brauchwasserkreis) und den Heizkreis-Wert als Richtwert.
+  Die Log-Warnung ist ebenfalls betriebsartabhängig.
+- **Doku:** neue Abschnitte „Kompatible und baugleiche Wärmepumpen“ (ES V8,
+  vermutlich Heiko Thermal, Neoheat, VALTOP – ungeprüft) und „Was nur am
+  Bedienfeld geht“ (Uhr ohne Sommerzeit, Zeitpläne, TWW ECO, P0,
+  `par21`/`par22`). `PARAMETER_MAPPING.md`: `par33` = P0 nur 0/1.
 
 ### 4.1.0 — 2026-11-08
 

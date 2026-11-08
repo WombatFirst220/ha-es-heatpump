@@ -98,13 +98,13 @@ Diese Slugs werden via `_attr_suggested_object_id` an HA übergeben, damit die f
 | par41 | `sensor.es_hp_ah_betriebszeit` |
 | par42 | `sensor.es_hp_hbh_betriebszeit` |
 | par43 | `sensor.es_hp_hwtbh_betriebszeit` |
-| par22 | `sensor.es_hp_diag_par22` (diagnostic, disabled by default) |
-| par23 | `sensor.es_hp_diag_par23` |
-| par26 | `sensor.es_hp_diag_par26` |
-| par27 | `sensor.es_hp_diag_par27` |
-| par39 | `sensor.es_hp_diag_par39` |
-| par40 | `sensor.es_hp_diag_par40` |
-| par21 | `sensor.es_hp_diag_par21` |
+| par22 | `sensor.es_hp_hochdruck_pd` (Hochdruck Pd, bar) |
+| par23 | `sensor.es_hp_saugdruck_ps` (Saugdruck Ps, bar) |
+| par26 | `sensor.es_hp_sauggas_ts` (Sauggastemperatur Ts) |
+| par27 | `sensor.es_hp_lamellentauscher_tp` (Lamellentauscher Tp) |
+| par39 | `sensor.es_hp_diag_par39` (diagnostic, disabled by default) |
+| par40 | `sensor.es_hp_diag_par40` (diagnostic, disabled by default) |
+| par21 | `sensor.es_hp_ventil_oeffnung` (Expansionsventil Öffnung) |
 | (berechnet) | `sensor.es_hp_spreizung` |
 | (berechnet) | `sensor.es_hp_thermische_leistung` |
 | (berechnet) | `sensor.es_hp_aktueller_cop` |
@@ -264,6 +264,15 @@ Beschriftung und Feld stehen im konstanten Versatz von etwa +40 px rechts und
 | Fan 1 / Fan 2 | `par28` / `par29` | Ventilatordrehzahlen |
 | Open | `par21` | Expansionsventil |
 | Pump | `par33` | Umwälzpumpe |
+
+**Umwälzpumpe P0 (`par33`, seit v4.1.1 belegt):** Das Portal liefert nur `0`/`1`
+(aus/an), die Integration zeigt das als `sensor.es_hp_pumpe_p0` (standardmäßig
+deaktiviert). Der Wert „Wasser Durchflussmenge“ bzw. „Water flow rate“ in den
+Echtzeitdaten am Display ist laut ES-Installationshandbuch (R32 V8 v3.1, Abschnitt
+14.16) die **Ansteuerung der Pumpe in %**, „not actual flow rate“ – bei einer
+„AC Pumpe“ also 100 oder 0. Einen Durchflussmesser hat die Anlage nicht, nur einen
+Strömungsschalter (Fehler S02/S10/S03). P0 läuft je Betriebsart mit fester Stufe
+(High/Middle/Low, nur bei PWM-Pumpe) und regelt nicht nach Last oder Spreizung.
 
 `realimg.js` rechnet nichts um (`js.formatNumber(value, 1, false)`) — die
 JSON-Werte sind exakt das, was das Schaubild anzeigt.

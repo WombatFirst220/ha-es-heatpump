@@ -297,3 +297,36 @@ def test_standard_dashboard_neue_ids_sind_bekannt():
         binaer = {e for e in ids if e.startswith("binary_sensor.")}
         assert binaer and binaer <= _NEU_V410, (pfad, binaer - _NEU_V410)
         assert _NEU_V410 <= ids, (pfad, _NEU_V410 - ids)
+
+
+def _alle_entity_ids():
+    """Jede Entity hat einen Übersetzungsschlüssel = Slug der Entity-ID (v4.1.1)."""
+    d = json.loads((_ROOT / "strings.json").read_text(encoding="utf-8"))
+    return {f"{plattform}.es_hp_{schluessel}"
+            for plattform, eintraege in d["entity"].items() for schluessel in eintraege}
+
+
+def test_dashboards_verweisen_nur_auf_vorhandene_entities():
+    """Kein Verweis auf umbenannte IDs wie sensor.es_hp_diag_par21 (bis v4.1.0)."""
+    import re
+    muster = re.compile(
+        r"\b(?:sensor|binary_sensor|select|number|switch|button|water_heater)"
+        r"\.es_hp_[a-z0-9_]*[a-z0-9]\b")
+    bekannt = _alle_entity_ids()
+    dateien = [
+        _ROOT / "dashboard" / "es_heatpump.yaml",
+        _ROOT.parents[1] / "dashboards" / "es_heatpump.yaml",
+        _ROOT / "dashboard_layout.py",
+        _ROOT / "hydraulic_card.py",
+        *sorted((_ROOT / "www").glob("*.js")),
+        _ROOT.parents[1] / "PARAMETER_MAPPING.md",
+    ]
+    for pfad in dateien:
+        unbekannt = set(muster.findall(pfad.read_text(encoding="utf-8"))) - bekannt
+        assert not unbekannt, (pfad.name, sorted(unbekannt))
+
+
+def test_repo_kopie_des_dashboards_ist_identisch():
+    gebuendelt = (_ROOT / "dashboard" / "es_heatpump.yaml").read_text(encoding="utf-8")
+    kopie = (_ROOT.parents[1] / "dashboards" / "es_heatpump.yaml").read_text(encoding="utf-8")
+    assert kopie == gebuendelt

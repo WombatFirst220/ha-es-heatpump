@@ -166,6 +166,10 @@
     "cop_unplausibel": {
       "title": "Unplausibler COP – Volumenstrom prüfen",
       "description": "Der aktuelle COP lag im Betrieb mehrere Messungen in Folge unter 1 (zuletzt {cop}). Das ist physikalisch unmöglich – die Wärmepumpe gäbe weniger Wärme ab, als sie Strom aufnimmt.\n\nThermische Leistung und COP werden aus dem eingestellten Volumenstrom berechnet (derzeit {volumenstrom} m³/h), und der ist fast sicher zu niedrig. Nennwert laut Datenblatt: {richtwert}.\n\nIn den Integrationsoptionen unter „Messung und Berechnung → Volumenstrom Heizkreis“ korrigieren (oder das Modell wählen). Dieser Hinweis verschwindet von selbst, sobald der COP wieder plausibel ist."
+    },
+    "cop_unplausibel_warmwasser": {
+      "title": "Unplausibler COP beim Warmwasser – Volumenstrom Warmwasser prüfen",
+      "description": "Während der Warmwasserbereitung lag der aktuelle COP mehrere Abrufe hintereinander unter 1 (zuletzt {cop}). Das ist physikalisch unmöglich.\n\nIm Warmwasserbetrieb wird die thermische Leistung aus dem eingestellten Volumenstrom des Warmwasserkreises berechnet (aktuell {volumenstrom} m³/h), und der ist fast sicher zu niedrig. Die eingebaute Umwälzpumpe P0 versorgt Heiz- und Warmwasserkreis. Solange am Display keine andere Pumpenstufe für Warmwasser eingestellt ist, entspricht der Warmwasser-Volumenstrom etwa dem des Heizkreises (aktuell {heizkreis} m³/h). Nennwert laut Datenblatt: {richtwert}.\n\nKorrigieren unter Optionen → „Messung und Berechnung → Volumenstrom Brauchwasserkreis“. Der Hinweis verschwindet von selbst, sobald der COP wieder plausibel ist."
     }
   },
   "entity": {

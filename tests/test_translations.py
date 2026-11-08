@@ -275,7 +275,8 @@ def test_reconfigure_und_reparaturhinweis_uebersetzt():
     assert 'reason="reconfigure_successful"' in quelle
     assert 'reason="benutzer_bereits_eingerichtet"' in quelle
     sensor = (_ROOT / "sensor.py").read_text(encoding="utf-8")
-    assert "translation_key=ISSUE_COP_UNPLAUSIBEL" in sensor
+    assert "translation_key=cop_issue_schluessel(modus)" in sensor
+    assert '"heizkreis": f"{self._flow_heating:.2f}"' in sensor
     for pfad in list(_PFLICHT.values()) + [
         _ROOT / "translations" / f"{s}.json" for s in _WEITERE
     ]:
@@ -289,3 +290,10 @@ def test_reconfigure_und_reparaturhinweis_uebersetzt():
         issue = daten["issues"]["cop_unplausibel"]
         assert issue["title"], pfad.name
         assert _platzhalter(issue["description"]) == {"cop", "volumenstrom", "richtwert"}, pfad.name
+        ww = daten["issues"]["cop_unplausibel_warmwasser"]
+        assert ww["title"], pfad.name
+        assert _platzhalter(ww["description"]) == {
+            "cop", "volumenstrom", "richtwert", "heizkreis"}, pfad.name
+        # nennt die Option so, wie sie in dieser Sprache heisst
+        sek = daten["options"]["step"]["init"]["sections"]["messung"]
+        assert sek["data"]["flow_rate_dhw"] in ww["description"], pfad.name

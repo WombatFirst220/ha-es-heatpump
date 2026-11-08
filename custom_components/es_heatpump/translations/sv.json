@@ -166,6 +166,10 @@
     "cop_unplausibel": {
       "title": "Orimlig COP – kontrollera flödet",
       "description": "Aktuell COP har legat under 1 i flera mätningar i följd medan värmepumpen var i drift (senaste värde: {cop}). Det är fysikaliskt omöjligt – enheten skulle avge mindre värme än den tar upp i el.\n\nTermisk effekt och COP beräknas från det inställda flödet (för närvarande {volumenstrom} m³/h), som nästan säkert är för lågt. Nominellt värde enligt databladet: {richtwert}.\n\nKorrigera det i integrationens alternativ under \"Mätning och beräkning → Flöde värmekrets\" (eller välj din modell). Detta meddelande försvinner av sig självt så snart COP är rimlig igen."
+    },
+    "cop_unplausibel_warmwasser": {
+      "title": "Orimlig COP vid varmvatten – kontrollera varmvattenflödet",
+      "description": "Under varmvattenberedning har aktuell COP legat under 1 i flera mätningar i rad (senaste värde: {cop}). Det är fysikaliskt omöjligt.\n\nI varmvattendrift beräknas den termiska effekten från det inställda flödet i varmvattenkretsen (just nu {volumenstrom} m³/h), som nästan säkert är för lågt. Den inbyggda cirkulationspumpen P0 försörjer både värme- och varmvattenkretsen. Om displayen inte visar ett annat pumpsteg för varmvatten motsvarar varmvattenflödet ungefär värmekretsens (just nu {heizkreis} m³/h). Nominellt värde enligt databladet: {richtwert}.\n\nKorrigera det i integrationens alternativ under \"Mätning och beräkning → Flöde varmvattenkrets\". Meddelandet försvinner av sig självt när COP är rimlig igen."
     }
   },
   "entity": {

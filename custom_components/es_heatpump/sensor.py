@@ -91,9 +91,9 @@ from .plausibilitaet import (
     AKTION_MELDEN,
     COP_LEARN_MORE_URL,
     COP_UNPLAUSIBEL_FOLGE,
-    ISSUE_COP_UNPLAUSIBEL,
     CopWaechter,
     cop_issue_id,
+    cop_issue_schluessel,
     richtwert_text,
 )
 from .flow import active_flow_rate as _active_flow_rate, flow_from_entity
@@ -544,7 +544,7 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
 
     def _pruefe_plausibilitaet(self) -> None:
         try:
-            cop, _, active_flow = self._cop_roh()
+            cop, modus, active_flow = self._cop_roh()
         except Exception:  # noqa: BLE001 - die Anzeige darf daran nicht scheitern
             return
         aktion = self._waechter.messpunkt(cop)
@@ -557,11 +557,12 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
                 is_persistent=False,
                 severity=ir.IssueSeverity.WARNING,
                 learn_more_url=COP_LEARN_MORE_URL,
-                translation_key=ISSUE_COP_UNPLAUSIBEL,
+                translation_key=cop_issue_schluessel(modus),
                 translation_placeholders={
                     "cop": f"{cop:.2f}",
                     "volumenstrom": f"{active_flow:.2f}",
                     "richtwert": richtwert_text(self._modell),
+                    "heizkreis": f"{self._flow_heating:.2f}",
                 },
             )
         elif aktion == AKTION_LOESCHEN:
@@ -635,9 +636,14 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
                 "Richtwert aus dem Datenblatt der AWC-R32-M-Serie, Zeile "
                 "'Zulaessiger Wasserdurchfluss Min/Nominal': AWC6 1.01, AWC9 1.55, "
                 "AWC12 2.02, AWC15 2.59, AWC19 3.28 m3/h (Nominalwert). "
-                "In den Integrationsoptionen unter 'Volumenstrom Heizkreislauf' "
-                "korrigieren.",
+                "In den Integrationsoptionen unter '%s' korrigieren.%s",
                 cop, mode, active_flow,
+                "Volumenstrom Brauchwasserkreis" if mode == "Brauchwasser"
+                else "Volumenstrom Heizkreislauf",
+                (" Die Umwaelzpumpe P0 versorgt Heiz- und Warmwasserkreis; ohne "
+                 "abweichende Pumpenstufe am Display ist der Warmwasser-"
+                 f"Volumenstrom etwa der des Heizkreises ({self._flow_heating:.2f} m3/h).")
+                if mode == "Brauchwasser" else "",
             )
         elif cop >= 1.0:
             self._warned_implausible = False

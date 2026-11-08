@@ -50,7 +50,9 @@ ORIGAMI_HACS_URL      = (
 DEFAULT_BASE_URL        = "https://www.myheatpump.com"
 DEFAULT_SCAN_INTERVAL   = 60        # seconds
 DEFAULT_FLOW_RATE       = 1.2       # m³/h — see NOMINAL_FLOW_RATES_M3H, set per model!
-DEFAULT_FLOW_RATE_DHW   = 1.0       # m³/h — DHW coil circuit, typical default
+DEFAULT_FLOW_RATE_DHW   = 1.0       # m³/h — nur ohne Modellwahl; mit Modell setzt der
+                                    # Config-Flow seit v4.1.1 den Nennwert (P0 versorgt
+                                    # Heiz- UND Warmwasserkreis, siehe flow.nennvolumenstroeme)
 DEFAULT_DHW_MARGIN_K    = 8.0       # K — Vorlauf above heating setpoint ⇒ DHW mode
 DEFAULT_ENABLE_WRITES    = False    # Schreibzugriff bewusst abgeschaltet
 DEFAULT_SETTINGS_INTERVAL = 900     # s — Einstellungen aendern sich selten
@@ -78,11 +80,13 @@ NOMINAL_FLOW_RATES_M3H = {
     "AWC19-R32-M-V8": (2.66, 3.28),
 }
 
-# A modulating circulation pump (proportional-pressure or "Auto" mode) changes
-# the flow with the load, so a single constant can only ever be exact at one
-# operating point.  Telltale sign in the data: the spread stays roughly flat
-# while the compressor power varies by a factor of two or more.  Users with a
-# flow meter can wire it up via CONF_FLOW_ENTITY and skip the constant
+# The AWC-R32-M-V8 loop is driven by the built-in pump P0, which runs either
+# on/off ("AC pump") or at one fixed PWM step per mode - it does not follow the
+# load (ES installation manual "R32 V8 Series" v3.1, corrected in v4.1.1). The
+# flow is therefore roughly constant per mode; deviations come from a different
+# pump step for DHW or from sensor offsets, not from load-dependent control.
+# The display value "Water flow rate" is the pump drive in %, not a flow. Users
+# with a flow meter can wire it up via CONF_FLOW_ENTITY and skip the constant
 # altogether.  Unit expected: m³/h (l/min and l/h are converted automatically).
 FLOW_ENTITY_UNITS_TO_M3H = {
     "m³/h": 1.0, "m3/h": 1.0,

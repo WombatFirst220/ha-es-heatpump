@@ -9,11 +9,14 @@ The heat pump neither measures nor reports its water flow. Thermal output and
 COP are therefore calculated from a configured constant. That is only exact if
 the circulation pump runs at a fixed speed.
 
-Many installations use a pump in proportional-pressure or "Auto" mode, which
-raises the flow as the load rises. The constant is then right at one operating
-point and wrong everywhere else. The telltale sign is in the data: with a fixed
-flow the spread has to grow with the compressor power, and with a modulating
-pump it stays roughly flat.
+On the AWC-R32-M-V8 the loop is driven by the built-in pump P0 in the outdoor
+unit. According to the ES installation manual ("R32 V8 Series" v3.1) P0 is
+either an AC pump (on/off only) or a PWM pump with one fixed step (High /
+Middle / Low) per mode - there is no load- or spread-based control. The flow is
+therefore roughly constant per mode, and heating and DHW share the same pump:
+the DHW flow is about the heating flow unless the display shows a different
+pump step (v4.1.1). A heating-circuit pump behind a buffer tank does not change
+the flow through the heat pump.
 
 Since v2.3.1 a live flow sensor can be configured instead; the constant is only
 the fallback.
@@ -22,7 +25,50 @@ from __future__ import annotations
 
 from typing import Any
 
-from .const import FLOW_ENTITY_UNITS_TO_M3H
+from .const import (
+    DEFAULT_FLOW_RATE,
+    DEFAULT_FLOW_RATE_DHW,
+    FLOW_ENTITY_UNITS_TO_M3H,
+    NOMINAL_FLOW_RATES_M3H,
+)
+
+
+def nennvolumenstroeme(
+    modell: str | None,
+    eingabe: dict[str, Any],
+    vorher_modell: str | None = None,
+    *,
+    nur_standardwerte: bool = False,
+) -> dict[str, float]:
+    """Volumenstroeme, die die Modellwahl setzen soll (v4.1.1).
+
+    Liefert ``{"flow_rate": x, "flow_rate_dhw": x}`` mit dem Nennwert des
+    Datenblatts, oder ein leeres dict, wenn nichts zu setzen ist:
+
+    - unbekanntes Modell: nichts;
+    - Optionen (``nur_standardwerte=False``): nur wenn das Modell gewechselt
+      hat - danach bleiben beide Werte von Hand anpassbar;
+    - Einrichtung (``nur_standardwerte=True``): nur Felder, die noch auf dem
+      Standardwert stehen, damit eine bewusste Eingabe nicht verloren geht.
+
+    Beide Kreise bekommen denselben Wert, weil P0 Heiz- und Warmwasserkreis
+    versorgt. Bis v4.1.0 blieb der Warmwasser-Wert auf 1,0 m³/h stehen und
+    ergab bei einer AWC12 Warmwasser-COPs unter 1.
+    """
+    if modell not in NOMINAL_FLOW_RATES_M3H:
+        return {}
+    nenn = NOMINAL_FLOW_RATES_M3H[modell][1]
+    if nur_standardwerte:
+        neu: dict[str, float] = {}
+        for key, standard in (("flow_rate", DEFAULT_FLOW_RATE),
+                              ("flow_rate_dhw", DEFAULT_FLOW_RATE_DHW)):
+            wert = eingabe.get(key, standard)
+            if wert is None or float(wert) == float(standard):
+                neu[key] = nenn
+        return neu
+    if modell == vorher_modell:
+        return {}
+    return {"flow_rate": nenn, "flow_rate_dhw": nenn}
 
 
 def flow_from_entity(state: Any) -> tuple[float | None, str]:

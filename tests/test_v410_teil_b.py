@@ -154,6 +154,11 @@ def test_cop_konstanten():
     assert P.COP_UNPLAUSIBEL_FOLGE == 5
     assert P.ISSUE_COP_UNPLAUSIBEL == "cop_unplausibel"
     assert P.cop_issue_id("abc") == "cop_unplausibel_abc"
+    # v4.1.1: eigener Text fuer den Warmwasserbetrieb, gleiche Issue-ID
+    assert P.ISSUE_COP_UNPLAUSIBEL_WW == "cop_unplausibel_warmwasser"
+    assert P.cop_issue_schluessel("Brauchwasser") == "cop_unplausibel_warmwasser"
+    for modus in ("Heizen", "Brauchwasser + Heizen", "Unbekannt", None):
+        assert P.cop_issue_schluessel(modus) == "cop_unplausibel", modus
     assert P.COP_LEARN_MORE_URL.endswith("#-den-volumenstrom-richtig-einstellen")
     readme = (_ROOT.parents[1] / "README.md").read_text(encoding="utf-8")
     assert "#### ⚠️ Den Volumenstrom richtig einstellen" in readme

@@ -274,15 +274,28 @@ views:
             name: Mischventil 2
 
       - type: entities
+        title: Kältekreis
+        entities:
+          - entity: sensor.es_hp_heissgas_td
+            name: Heißgas Td
+          - entity: sensor.es_hp_sauggas_ts
+            name: Sauggas Ts
+          - entity: sensor.es_hp_hochdruck_pd
+            name: Hochdruck Pd
+          - entity: sensor.es_hp_saugdruck_ps
+            name: Saugdruck Ps
+          - entity: sensor.es_hp_ventil_oeffnung
+            name: Expansionsventil Öffnung
+          - entity: sensor.es_hp_lamellentauscher_tp
+            name: Lamellentauscher Tp
+
+      - type: entities
         title: Diagnose-Parameter
         entities:
-          - entity: sensor.es_hp_diag_par21
-          - entity: sensor.es_hp_diag_par22
-          - entity: sensor.es_hp_diag_par23
-          - entity: sensor.es_hp_diag_par26
-          - entity: sensor.es_hp_diag_par27
           - entity: sensor.es_hp_diag_par39
+            name: par39 (unbestätigt)
           - entity: sensor.es_hp_diag_par40
+            name: par40 (unbestätigt)
 
       - type: entities
         title: Geräteinfo

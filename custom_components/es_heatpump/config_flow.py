@@ -27,6 +27,7 @@ from homeassistant.helpers.selector import (
 )
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
+from .flow import nennvolumenstroeme
 from .const import (
     CONF_BACKUP_INTERVAL,
     CONF_BACKUP_KEEP,
@@ -213,6 +214,11 @@ class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if fehler:
                 errors["base"] = fehler
             else:
+                # v4.1.1: gewaehltes Modell setzt beide Volumenstroeme auf den
+                # Nennwert, sofern sie noch auf dem Standard stehen.
+                user_input.update(nennvolumenstroeme(
+                    user_input.get(CONF_MODEL), user_input, nur_standardwerte=True,
+                ))
                 return self.async_create_entry(
                     title=f"ES Heatpump ({user_input[CONF_USERNAME]})",
                     data=user_input,
@@ -505,17 +511,17 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
                 if user_input.get(key) in (None, ""):
                     user_input[key] = ""
 
-            # Modellwahl setzt den Volumenstrom auf den Nennwert des Datenblatts,
-            # sobald sich das Modell geaendert hat. Danach bleibt der Wert von
-            # Hand anpassbar.
+            # Modellwahl setzt beide Volumenstroeme (Heizen und Warmwasser, seit
+            # v4.1.1) auf den Nennwert des Datenblatts, sobald sich das Modell
+            # geaendert hat. Danach bleiben die Werte von Hand anpassbar.
             modell = user_input.get(CONF_MODEL)
-            vorher = self._wert(CONF_MODEL)
-            if modell and modell != vorher and modell in NOMINAL_FLOW_RATES_M3H:
-                user_input[CONF_FLOW_RATE] = NOMINAL_FLOW_RATES_M3H[modell][1]
+            neu = nennvolumenstroeme(modell, user_input, self._wert(CONF_MODEL))
+            if neu:
+                user_input.update(neu)
                 _LOGGER.info(
-                    "ES Heatpump: Modell %s gewaehlt, Volumenstrom auf den "
-                    "Nennwert %.2f m3/h gesetzt.",
-                    modell, NOMINAL_FLOW_RATES_M3H[modell][1],
+                    "ES Heatpump: Modell %s gewaehlt, Volumenstrom Heizen und "
+                    "Warmwasser auf den Nennwert %.2f m3/h gesetzt.",
+                    modell, neu[CONF_FLOW_RATE],
                 )
 
             return self.async_create_entry(title="", data=user_input)
