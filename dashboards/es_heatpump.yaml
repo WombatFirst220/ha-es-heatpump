@@ -209,6 +209,18 @@ views:
           - entity: sensor.es_hp_hbh_betriebszeit
             name: HBH Gesamt
 
+      # ── Effizienz und Standby (v4.1.0) ────────────────────────────────
+      - type: entities
+        title: Effizienz & Standby
+        icon: mdi:speedometer
+        entities:
+          - entity: sensor.es_hp_carnot_guetegrad
+            name: Carnot-Gütegrad
+          - entity: sensor.es_hp_energie_elektrisch_standby
+            name: Standby-Verbrauch
+          - entity: binary_sensor.es_hp_takten
+            name: Verdichter taktet
+
   # ────────────────────────────────────────────────────────────────────────
   # View 3: Auswertung (v4.0.0)
   # ────────────────────────────────────────────────────────────────────────
@@ -238,6 +250,20 @@ views:
           einer Mess-Größe zugeordnet werden und sind standardmäßig **deaktiviert**.
           Aktivieren unter *Einstellungen → Geräte & Dienste → ES Heatpump →
           Entitäten*.
+
+      # ── Betriebszustand (v4.1.0) ──────────────────────────────────────
+      - type: entities
+        title: Betriebszustand
+        icon: mdi:heat-pump-outline
+        entities:
+          - entity: binary_sensor.es_hp_verdichter
+            name: Verdichter
+          - entity: binary_sensor.es_hp_warmwasserbereitung
+            name: Warmwasserbereitung
+          - entity: binary_sensor.es_hp_abtauen
+            name: Abtauen
+          - entity: binary_sensor.es_hp_takten
+            name: Verdichter taktet
 
       - type: entities
         title: Mischventile

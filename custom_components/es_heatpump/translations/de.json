@@ -29,6 +29,15 @@
         "data": {
           "password": "Passwort"
         }
+      },
+      "reconfigure": {
+        "title": "ES Wärmepumpe – Neu konfigurieren",
+        "description": "Portal-URL und Zugangsdaten dieses Eintrags ändern (derzeit {username}). Die Anmeldung wird vor dem Speichern geprüft. Sicherungen, Energiezähler und Verlauf bleiben erhalten; ändert sich der Benutzer, behalten Entities und Gerät ihre Entity-IDs.",
+        "data": {
+          "username": "Benutzername (E-Mail-Adresse)",
+          "password": "Passwort",
+          "base_url": "Portal-URL"
+        }
       }
     },
     "error": {
@@ -38,7 +47,9 @@
     },
     "abort": {
       "already_configured": "Diese Wärmepumpe ist bereits eingerichtet.",
-      "reauth_successful": "Zugangsdaten aktualisiert, die Integration startet neu."
+      "reauth_successful": "Zugangsdaten aktualisiert, die Integration startet neu.",
+      "reconfigure_successful": "Einstellungen gespeichert, die Integration startet neu.",
+      "benutzer_bereits_eingerichtet": "Ein anderer ES-Heatpump-Eintrag verwendet diesen Benutzer bereits. Diesen Eintrag zuerst entfernen oder einen anderen Benutzer wählen."
     }
   },
   "options": {
@@ -151,9 +162,35 @@
     "origami_theme_missing": {
       "title": "Origami-Theme nicht installiert",
       "description": "Das ES-Heatpump-Dashboard soll im Design „Origami“ erscheinen, aber das Theme „{theme}“ ist nicht installiert. Bis dahin zeigt Home Assistant das Standard-Theme.\n\nInstallation: Marktplatz/HACS → Repository „hazymorning/origami“ (Kategorie Theme) herunterladen, danach unter Entwicklerwerkzeuge → Aktionen „frontend.reload_themes“ ausführen. Die Schrift Montserrat ist optional, siehe README von Origami. Der Hinweis verschwindet dann von selbst."
+    },
+    "cop_unplausibel": {
+      "title": "Unplausibler COP – Volumenstrom prüfen",
+      "description": "Der aktuelle COP lag im Betrieb mehrere Messungen in Folge unter 1 (zuletzt {cop}). Das ist physikalisch unmöglich – die Wärmepumpe gäbe weniger Wärme ab, als sie Strom aufnimmt.\n\nThermische Leistung und COP werden aus dem eingestellten Volumenstrom berechnet (derzeit {volumenstrom} m³/h), und der ist fast sicher zu niedrig. Nennwert laut Datenblatt: {richtwert}.\n\nIn den Integrationsoptionen unter „Messung und Berechnung → Volumenstrom Heizkreis“ korrigieren (oder das Modell wählen). Dieser Hinweis verschwindet von selbst, sobald der COP wieder plausibel ist."
     }
   },
   "entity": {
+    "binary_sensor": {
+      "verdichter": {
+        "name": "Verdichter"
+      },
+      "abtauen": {
+        "name": "Abtauen"
+      },
+      "warmwasserbereitung": {
+        "name": "Warmwasserbereitung"
+      },
+      "takten": {
+        "name": "Verdichter taktet",
+        "state_attributes": {
+          "starts_letzte_stunde": {
+            "name": "Starts in der letzten Stunde"
+          },
+          "mittlere_laufzeit_min": {
+            "name": "Mittlere Laufzeit (min)"
+          }
+        }
+      }
+    },
     "button": {
       "konfiguration_sichern": {
         "name": "Konfiguration jetzt sichern"
@@ -511,6 +548,17 @@
       },
       "verdichter_laufzeit": {
         "name": "Verdichterlaufzeit"
+      },
+      "energie_elektrisch_standby": {
+        "name": "Elektrische Energie Standby"
+      },
+      "carnot_guetegrad": {
+        "name": "Carnot-Gütegrad",
+        "state_attributes": {
+          "cop_carnot": {
+            "name": "Carnot-COP"
+          }
+        }
       }
     },
     "switch": {
@@ -570,6 +618,11 @@
       },
       "cfg_par85": {
         "name": "EVU-Sperre: Umwälzpumpe P0 während EVU-Sperre"
+      }
+    },
+    "water_heater": {
+      "warmwasser": {
+        "name": "Warmwasser"
       }
     }
   },

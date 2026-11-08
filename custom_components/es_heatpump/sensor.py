@@ -39,6 +39,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_USERNAME
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import (
     async_track_state_change_event,
@@ -52,10 +53,10 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .device import baue_device_info
 
 from .const import (
-    BETRIEBSART_ALIASES,
     BETRIEBSART_STATE_KEYS,
     BETRIEBSART_STATE_OPTIONS,
     CALC_BETRIEBSART,
+    CALC_CARNOT,
     CALC_COP,
     CALC_ELEC_POWER,
     CALC_SPREIZUNG,
@@ -67,6 +68,7 @@ from .const import (
     CONF_FLOW_ENTITY,
     CONF_ENERGY_ENTITY,
     CONF_POWER_ENTITY,
+    CONF_MODEL,
     DEFAULT_FLOW_RATE,
     DEFAULT_FLOW_RATE_DHW,
     DEFAULT_DHW_MARGIN_K,
@@ -80,7 +82,19 @@ from .const import (
 from .mode import (
     betriebsart_aus_par1 as _betriebsart_aus_par1,
     derive_betriebsart as _derive_betriebsart,
-    ist_abtauen as _ist_abtauen,
+    mode_from_source as _mode_from_source,
+    resolve_betriebsart as _resolve_betriebsart,
+    verdichter_laeuft as _verdichter_laeuft,
+)
+from .plausibilitaet import (
+    AKTION_LOESCHEN,
+    AKTION_MELDEN,
+    COP_LEARN_MORE_URL,
+    COP_UNPLAUSIBEL_FOLGE,
+    ISSUE_COP_UNPLAUSIBEL,
+    CopWaechter,
+    cop_issue_id,
+    richtwert_text,
 )
 from .flow import active_flow_rate as _active_flow_rate, flow_from_entity
 from .energy import (
@@ -96,63 +110,22 @@ from .energy import (
     EnergieZaehler,
     VerdichterZaehler,
     ZaehlerstandFolger,
+    carnot_guetegrad as _carnot_guetegrad,
     energie_in_kwh,
     kategorie_von,
     leistung_in_w,
     thermische_leistung_w,
+    verdichter_steht,
 )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Helpers — Betriebsart resolution + active flow-rate
+# Helpers — Volumenstrom
 # ─────────────────────────────────────────────────────────────────────────────
 #
-# v2.2.1 update: par15 was previously assumed to encode the operating mode
-# but turned out to be a periodic heartbeat signal (toggles 0↔1 every ~10
-# minutes, independent of actual operation).  The real mode is now read
-# from a user-configured external entity (e.g. a multiscrape sensor that
-# scrapes the portal's HTML "Unit Current Working Mode" field).  If no
-# external source is configured, mode falls back to "Unbekannt" and the
-# active flow rate defaults to the heating value (best-effort assumption,
-# since heating dominates typical usage).
-
-_NUMERIC_MODE_MAP = {0: "Aus", 1: "Brauchwasser", 2: "Heizen", 3: "Entfrosten"}
-_PAREN_NUMBER_RE = __import__("re").compile(r"\(([-+]?\d+(?:\.\d+)?)\)")
-
-
-def _mode_from_source(hass: HomeAssistant, mode_source: str | None) -> str:
-    """Read the mode from an external helper entity (optional override)."""
-    if not mode_source:
-        return "Unbekannt"
-    state = hass.states.get(mode_source)
-    if state is None or state.state in ("unknown", "unavailable", ""):
-        return "Unbekannt"
-    raw = str(state.state).strip().lower()
-
-    # Exact match in known aliases
-    if raw in BETRIEBSART_ALIASES:
-        return BETRIEBSART_ALIASES[raw]
-
-    # Multiscrape-style "Unbekannt (0.0)" / "Unknown (2.0)" — pull the
-    # numeric part out of the parentheses and map it.
-    m = _PAREN_NUMBER_RE.search(raw)
-    if m:
-        try:
-            as_int = int(float(m.group(1)))
-            if as_int in _NUMERIC_MODE_MAP:
-                return _NUMERIC_MODE_MAP[as_int]
-        except (ValueError, TypeError):
-            pass
-
-    # Numeric fallback for sources that only return the par15-style int
-    try:
-        as_int = int(float(raw))
-        if as_int in _NUMERIC_MODE_MAP:
-            return _NUMERIC_MODE_MAP[as_int]
-    except (ValueError, TypeError):
-        pass
-    return "Unbekannt"
-
+# Die Aufloesung der Betriebsart (par1, externe Entity, Ableitung) samt
+# Zwischenspeicher steht seit v4.1.0 in mode.py - die Binaersensoren brauchen
+# sie ebenso. Die alten Namen bleiben hier als Aliase erhalten.
 
 def _live_flow(hass: HomeAssistant, flow_entity: str | None) -> tuple[float | None, str]:
     """Read the optional live flow sensor, converted to m³/h."""
@@ -172,81 +145,6 @@ def _geraeteklasse(wert: str | None) -> Any:
     if wert == "temperature_delta":
         return _DEVICE_CLASS_DELTA
     return wert
-
-
-# Zwischenspeicher fuer _resolve_betriebsart (v4.0.1). Bis zu acht Entities
-# fragten je Abruf dieselbe Betriebsart ab, jede rechnete sie vollstaendig neu.
-# Schluessel: Datenstand des Koordinators (Objekt-Identitaet, gegen
-# Wiederverwendung der id() durch die mitgehaltene Referenz abgesichert),
-# Optionen und Zustand der externen Betriebsart-Entity. Das Ergebnis ist damit
-# exakt dasselbe wie ohne Zwischenspeicher.
-_BETRIEBSART_CACHE: dict[tuple, tuple[Any, tuple[str, str]]] = {}
-_BETRIEBSART_CACHE_MAX = 32
-
-
-def _resolve_betriebsart(
-    hass: HomeAssistant,
-    mode_source: str | None,
-    data: dict[str, Any] | None = None,
-    dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
-) -> tuple[str, str]:
-    """Wie ``_resolve_betriebsart_neu``, aber je Datenstand nur einmal gerechnet."""
-    if not data:
-        return _resolve_betriebsart_neu(hass, mode_source, data, dhw_margin_k)
-    quelle_zustand = None
-    if mode_source:
-        state = hass.states.get(mode_source)
-        quelle_zustand = state.state if state is not None else None
-    schluessel = (id(data), mode_source, dhw_margin_k, quelle_zustand)
-    treffer = _BETRIEBSART_CACHE.get(schluessel)
-    if treffer is not None and treffer[0] is data:
-        return treffer[1]
-    ergebnis = _resolve_betriebsart_neu(hass, mode_source, data, dhw_margin_k)
-    if len(_BETRIEBSART_CACHE) >= _BETRIEBSART_CACHE_MAX:
-        _BETRIEBSART_CACHE.clear()
-    _BETRIEBSART_CACHE[schluessel] = (data, ergebnis)
-    return ergebnis
-
-
-def _resolve_betriebsart_neu(
-    hass: HomeAssistant,
-    mode_source: str | None,
-    data: dict[str, Any] | None = None,
-    dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
-) -> tuple[str, str]:
-    """Canonical operating mode, with the reason as second element.
-
-    Order of precedence:
-
-    1. **``par1``** — the unit's own "Unit Current Working Mode" (since
-       v2.4.0). Authoritative, because it is what the machine reports.
-    2. **``mode_source_entity``** — the external helper some setups configured
-       before v2.4.0. It reads the same information from the portal's HTML, one
-       step removed, so it only applies when ``par1`` is unavailable.
-    3. **derivation** from frequency, spread and flow-vs-setpoint (v2.3.0) —
-       the fallback for units that report no ``par1``.
-
-    On top of that: defrosting is not a mode in the portal's vocabulary. While
-    the cycle runs in reverse the unit keeps reporting "Heating", so that case
-    is corrected here.
-    """
-    data = data or {}
-
-    modus, grund = _betriebsart_aus_par1(data)
-    if modus is None and mode_source:
-        extern = _mode_from_source(hass, mode_source)
-        if extern != "Unbekannt":
-            modus, grund = extern, f"externe Entity {mode_source} meldet {extern}"
-    if modus is None and data:
-        modus, grund = _derive_betriebsart(data, dhw_margin_k)
-    if modus is None:
-        return "Unbekannt", grund
-
-    if modus in ("Heizen", "Brauchwasser + Heizen") and _ist_abtauen(data):
-        return "Entfrosten", (
-            f"{grund}, aber Vorlauf unter Rücklauf — Kreisprozess umgekehrt"
-        )
-    return modus, grund
 
 
 from .coordinator import ESHeatpumpCoordinator
@@ -278,41 +176,13 @@ async def async_setup_entry(
         _settings.data if _settings is not None else None,
     )
 
-    # Read calculation settings from options first, fallback to initial data
-    flow_rate = float(
-        entry.options.get(
-            CONF_FLOW_RATE,
-            entry.data.get(CONF_FLOW_RATE, DEFAULT_FLOW_RATE),
-        )
-    )
-    flow_rate_dhw = float(
-        entry.options.get(
-            CONF_FLOW_RATE_DHW,
-            entry.data.get(CONF_FLOW_RATE_DHW, DEFAULT_FLOW_RATE_DHW),
-        )
-    )
-    power_entity = entry.options.get(
-        CONF_POWER_ENTITY,
-        entry.data.get(CONF_POWER_ENTITY),
-    ) or None
-    energy_entity = entry.options.get(
-        CONF_ENERGY_ENTITY,
-        entry.data.get(CONF_ENERGY_ENTITY),
-    ) or None
-    mode_source = entry.options.get(
-        CONF_MODE_SOURCE,
-        entry.data.get(CONF_MODE_SOURCE),
-    ) or None
-    flow_entity = entry.options.get(
-        CONF_FLOW_ENTITY,
-        entry.data.get(CONF_FLOW_ENTITY),
-    ) or None
-    dhw_margin_k = float(
-        entry.options.get(
-            CONF_DHW_MARGIN_K,
-            entry.data.get(CONF_DHW_MARGIN_K, DEFAULT_DHW_MARGIN_K),
-        )
-    )
+    o = messoptionen(entry)
+    flow_rate = o["flow_rate"]
+    flow_rate_dhw = o["flow_rate_dhw"]
+    power_entity = o["power_entity"]
+    mode_source = o["mode_source"]
+    flow_entity = o["flow_entity"]
+    dhw_margin_k = o["dhw_margin_k"]
 
     entities: list[SensorEntity] = []
 
@@ -340,6 +210,8 @@ async def async_setup_entry(
         COPSensor(
             coordinator, device_info, username,
             flow_rate, flow_rate_dhw, power_entity, mode_source, hass, dhw_margin_k, flow_entity,
+            modell=entry.options.get(CONF_MODEL, entry.data.get(CONF_MODEL)),
+            entry_id=entry.entry_id,
         )
     )
     entities.append(
@@ -351,16 +223,21 @@ async def async_setup_entry(
         )
     )
 
+    # Carnot-Guetegrad (v4.1.0)
+    entities.append(
+        CarnotGuetegradSensor(
+            coordinator, device_info, username,
+            flow_rate, flow_rate_dhw, power_entity, mode_source, hass, dhw_margin_k, flow_entity,
+        )
+    )
+
     # ── Stammdaten und Sicherungsstand (v3.0.0) ──────────────────────────
     entities.append(StammdatenSensor(coordinator, device_info, username))
     if _settings is not None:
         entities.append(SicherungenSensor(_settings, device_info, username))
 
     # ── Energiezaehler fuer die Auswertungsseite ─────────────────────────
-    bilanz = EnergieBilanz(
-        hass, coordinator, power_entity, mode_source, dhw_margin_k,
-        flow_rate, flow_rate_dhw, flow_entity, energy_entity,
-    )
+    bilanz = bilanz_fuer(hass, entry)
     zaehler_entities = [
         EnergieZaehlerSensor(bilanz, device_info, username, slug, art, teil)
         for slug, art, teil in ENERGIE_ZAEHLER
@@ -375,7 +252,45 @@ async def async_setup_entry(
         len(entities), len(PARAMETER_SENSORS),
     )
     async_add_entities(entities)
-    entry.async_on_unload(bilanz.async_starte())
+
+
+def messoptionen(entry: ConfigEntry) -> dict[str, Any]:
+    """Mess- und Rechenoptionen eines Eintrags (Optionen vor Ersteinrichtung)."""
+    def wert(schluessel: str, standard: Any = None) -> Any:
+        return entry.options.get(schluessel, entry.data.get(schluessel, standard))
+
+    return {
+        "flow_rate": float(wert(CONF_FLOW_RATE, DEFAULT_FLOW_RATE)),
+        "flow_rate_dhw": float(wert(CONF_FLOW_RATE_DHW, DEFAULT_FLOW_RATE_DHW)),
+        "power_entity": wert(CONF_POWER_ENTITY) or None,
+        "energy_entity": wert(CONF_ENERGY_ENTITY) or None,
+        "mode_source": wert(CONF_MODE_SOURCE) or None,
+        "flow_entity": wert(CONF_FLOW_ENTITY) or None,
+        "dhw_margin_k": float(wert(CONF_DHW_MARGIN_K, DEFAULT_DHW_MARGIN_K)),
+    }
+
+
+@callback
+def bilanz_fuer(hass: HomeAssistant, entry: ConfigEntry) -> "EnergieBilanz":
+    """Die eine EnergieBilanz eines Eintrags - beim ersten Aufruf angelegt.
+
+    Sensoren (Zaehler) und Binaersensoren (Takten, v4.1.0) teilen sich den
+    Verdichter-Zaehler. Die Plattformen werden parallel eingerichtet; wer zuerst
+    kommt, legt die Bilanz an und startet die Beobachtung. Sie liegt im
+    Buendel des Eintrags und endet mit dessen Entladen.
+    """
+    buendel = hass.data[DOMAIN][entry.entry_id]
+    bilanz = buendel.get("bilanz")
+    if bilanz is None:
+        o = messoptionen(entry)
+        bilanz = EnergieBilanz(
+            hass, buendel["api"], o["power_entity"], o["mode_source"],
+            o["dhw_margin_k"], o["flow_rate"], o["flow_rate_dhw"],
+            o["flow_entity"], o["energy_entity"],
+        )
+        buendel["bilanz"] = bilanz
+        entry.async_on_unload(bilanz.async_starte())
+    return bilanz
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -594,6 +509,8 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         hass: HomeAssistant,
         dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
         flow_entity: str | None = None,
+        modell: str | None = None,
+        entry_id: str | None = None,
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_COP}"
@@ -607,50 +524,108 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         self._dhw_margin_k = dhw_margin_k
         self._flow_entity = flow_entity
         self._warned_implausible = False
+        # Reparaturhinweis (v4.1.0): nur mit Eintrags-Kennung; der
+        # Carnot-Guetegrad erbt die Rechnung, aber nicht den Hinweis.
+        self._modell = modell
+        self._issue_id = cop_issue_id(entry_id) if entry_id else None
+        self._waechter = CopWaechter(COP_UNPLAUSIBEL_FOLGE)
 
-    @property
-    def native_value(self) -> float | None:
-        if not self._power_entity:
-            return None
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Je Portalabruf genau ein Messpunkt fuer den Plausibilitaets-Waechter.
+
+        Hier und nicht in ``native_value``: Die Eigenschaft wird bei jedem
+        Schreiben des Zustands gelesen, die Zaehlung soll aber
+        Portalabrufe zaehlen ("5 aufeinanderfolgende Werte").
+        """
+        if self._issue_id is not None:
+            self._pruefe_plausibilitaet()
+        super()._handle_coordinator_update()
+
+    def _pruefe_plausibilitaet(self) -> None:
+        try:
+            cop, _, active_flow = self._cop_roh()
+        except Exception:  # noqa: BLE001 - die Anzeige darf daran nicht scheitern
+            return
+        aktion = self._waechter.messpunkt(cop)
+        if aktion == AKTION_MELDEN:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                self._issue_id,
+                is_fixable=False,
+                is_persistent=False,
+                severity=ir.IssueSeverity.WARNING,
+                learn_more_url=COP_LEARN_MORE_URL,
+                translation_key=ISSUE_COP_UNPLAUSIBEL,
+                translation_placeholders={
+                    "cop": f"{cop:.2f}",
+                    "volumenstrom": f"{active_flow:.2f}",
+                    "richtwert": richtwert_text(self._modell),
+                },
+            )
+        elif aktion == AKTION_LOESCHEN:
+            ir.async_delete_issue(self.hass, DOMAIN, self._issue_id)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._issue_id is not None:
+            ir.async_delete_issue(self.hass, DOMAIN, self._issue_id)
+        await super().async_will_remove_from_hass()
+
+    def _cop_roh(self) -> tuple[float | None, str, float]:
+        """Ungerundeter COP samt Betriebsart und wirksamem Volumenstrom.
+
+        Gemeinsame Rechnung fuer diesen Sensor und den Carnot-Guetegrad
+        (v4.1.0). ``None`` = nicht bestimmbar, 0 = keine Waermeabgabe.
+        """
         data = self.coordinator.data or {}
-        vor, rue, freq = data.get("par4"), data.get("par5"), data.get("par20")
-        if vor is None or rue is None:
-            return None
-        if not freq or freq <= 0:
-            return 0.0
-
         mode, _ = _resolve_betriebsart(
             self._hass, self._mode_source, data, self._dhw_margin_k
         )
+        if not self._power_entity:
+            return None, mode, 0.0
+        vor, rue, freq = data.get("par4"), data.get("par5"), data.get("par20")
+        if vor is None or rue is None:
+            return None, mode, 0.0
+        if not freq or freq <= 0:
+            return 0.0, mode, 0.0
+
         live, _ = _live_flow(self._hass, self._flow_entity)
         active_flow = _active_flow_rate(
             mode, self._flow_heating, self._flow_dhw, live
         )
         if active_flow <= 0:
-            return 0.0
+            return 0.0, mode, active_flow
 
         state = self._hass.states.get(self._power_entity)
         if state is None or state.state in ("unknown", "unavailable"):
-            return None
+            return None, mode, active_flow
         try:
             elec_w = abs(float(state.state))
         except (ValueError, TypeError):
-            return None
+            return None, mode, active_flow
         if elec_w < 50:    # below this we treat the heatpump as effectively idle
-            return 0.0
+            return 0.0, mode, active_flow
 
         therm_w = thermische_leistung_w(
             data, mode, self._flow_heating, self._flow_dhw, live
         )
         if therm_w is None or therm_w <= 0:
-            return 0.0
-        cop = therm_w / elec_w
+            return 0.0, mode, active_flow
+        return therm_w / elec_w, mode, active_flow
+
+    @property
+    def native_value(self) -> float | None:
+        cop, mode, active_flow = self._cop_roh()
+        if cop is None or cop <= 0:
+            return cop
 
         # Plausibilitaetspruefung: Ein COP unter 1 bedeutet, die Maschine gaebe
         # weniger Waerme ab als sie Strom aufnimmt - physikalisch unmoeglich.
         # Da die thermische Leistung aus dem EINGESTELLTEN Volumenstrom
         # gerechnet wird, ist praktisch immer dieser zu niedrig. Einmal pro
-        # Neustart warnen, nicht bei jedem Messwert.
+        # Neustart warnen, nicht bei jedem Messwert. Den Reparaturhinweis
+        # (v4.1.0) verwaltet _pruefe_plausibilitaet je Portalabruf.
         if cop < 1.0 and not self._warned_implausible:
             self._warned_implausible = True
             _LOGGER.warning(
@@ -682,6 +657,67 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
                 self._hass, self._mode_source, self.coordinator.data, self._dhw_margin_k
             )[0],
         }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Calculated: Carnot-Guetegrad (v4.1.0)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CarnotGuetegradSensor(COPSensor):
+    """Aktueller COP im Verhaeltnis zum praktischen Carnot-COP (in %).
+
+    Formel und Offsets in ``energy.carnot_guetegrad``. Der COP wird genauso
+    gerechnet wie beim Sensor ``aktueller_cop`` (geerbt), aber ungerundet und
+    ohne dessen Plausibilitaetswarnung. Nur bei laufendem Verdichter und
+    positivem COP, sonst ``None``.
+    """
+
+    _attr_translation_key = "carnot_guetegrad"
+    _unrecorded_attributes = frozenset({"cop_carnot"})
+    _attr_native_unit_of_measurement = "%"
+    _attr_state_class = "measurement"
+    _attr_icon = "mdi:speedometer"
+    _attr_suggested_display_precision = 0
+
+    def __init__(
+        self,
+        coordinator,
+        device_info: DeviceInfo,
+        username: str,
+        flow_rate_heating: float,
+        flow_rate_dhw: float,
+        power_entity: str | None,
+        mode_source: str | None,
+        hass: HomeAssistant,
+        dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
+        flow_entity: str | None = None,
+    ) -> None:
+        super().__init__(
+            coordinator, device_info, username, flow_rate_heating, flow_rate_dhw,
+            power_entity, mode_source, hass, dhw_margin_k, flow_entity,
+        )
+        # unique_id/entity_id des COP-Sensors ueberschreiben; kein
+        # Reparaturhinweis (den meldet der COP-Sensor selbst)
+        self._issue_id = None
+        self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_CARNOT}"
+        self.entity_id = "sensor.es_hp_carnot_guetegrad"
+
+    def _werte(self) -> tuple[float | None, float | None]:
+        data = self.coordinator.data or {}
+        cop, _, _ = self._cop_roh()
+        return _carnot_guetegrad(
+            cop, data.get("par4"), data.get("par24"), _verdichter_laeuft(data)
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        guete, _ = self._werte()
+        return None if guete is None else round(guete, 1)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        _, ideal = self._werte()
+        return {"cop_carnot": None if ideal is None else round(ideal, 2)}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1031,7 +1067,8 @@ class EnergieBilanz:
         }
         self.verdichter = VerdichterZaehler(MAX_LUECKE_VERDICHTER_S)
         self.folger = ZaehlerstandFolger(self.zaehler[ART_ELEKTRISCH])
-        self._entities: list[SensorEntity] = []
+        # Zaehler-Sensoren und der Binaersensor "takten" (v4.1.0)
+        self._entities: list[Any] = []
         self._zuletzt_geschrieben: dict[str, float] = {}
         self._ausstehend = False
 
@@ -1041,10 +1078,10 @@ class EnergieBilanz:
         return self.energy_entity or self.power_entity
 
     # -- Entities ------------------------------------------------------
-    def anmelden(self, entity: SensorEntity) -> None:
+    def anmelden(self, entity: Any) -> None:
         self._entities.append(entity)
 
-    def abmelden(self, entity: SensorEntity) -> None:
+    def abmelden(self, entity: Any) -> None:
         if entity in self._entities:
             self._entities.remove(entity)
 
@@ -1062,9 +1099,17 @@ class EnergieBilanz:
             self.hass, self._mode_source, self.coordinator.data, self._dhw_margin_k
         )[0]
 
+    def _standby(self) -> bool:
+        """Verdichter steht (par20 == 0) laut letztem Portalabruf."""
+        return verdichter_steht((self.coordinator.data or {}).get("par20"))
+
     @staticmethod
     def _jetzt() -> float:
         return dt_util.utcnow().timestamp()
+
+    def jetzt(self) -> float:
+        """Zeitbasis der Zaehler (Sekunden), auch fuer die Takt-Erkennung."""
+        return self._jetzt()
 
     @callback
     def _elektrisch_messen(self) -> None:
@@ -1077,7 +1122,7 @@ class EnergieBilanz:
                     state.state, state.attributes.get("unit_of_measurement")
                 )
             kwh = self.folger.messpunkt(
-                jetzt, stand, kategorie_von(self._betriebsart())
+                jetzt, stand, kategorie_von(self._betriebsart()), self._standby()
             )
         else:
             state = self.hass.states.get(self.power_entity) if self.power_entity else None
@@ -1087,7 +1132,7 @@ class EnergieBilanz:
                     state.state, state.attributes.get("unit_of_measurement")
                 )
             kwh = self.zaehler[ART_ELEKTRISCH].messpunkt(
-                jetzt, leistung, kategorie_von(self._betriebsart())
+                jetzt, leistung, kategorie_von(self._betriebsart()), self._standby()
             )
         if kwh > 0:
             self._ausstehend = True
@@ -1126,6 +1171,10 @@ class EnergieBilanz:
             self._schreibe(ART_THERMISCH)
         if verdichter:
             self._schreibe("verdichter")
+        # Takt-Erkennung: nach JEDEM Abruf, weil Starts aus dem Stunden-Fenster
+        # herausfallen, ohne dass sich am Verdichter etwas aendert. Erst nach
+        # dem Zaehler, damit der Binaersensor den neuen Stand zeigt.
+        self._schreibe("takt")
 
     @callback
     def async_starte(self):

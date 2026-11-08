@@ -67,6 +67,29 @@ _ENERGIE_SENSOREN = {f"sensor.es_hp_{x}" for x in (
     "verdichter_starts", "verdichter_laufzeit")}
 
 
+# Neue Entities v4.1.0 (binary_sensor.py, sensor.py)
+_NEU_V410 = {
+    "binary_sensor.es_hp_verdichter", "binary_sensor.es_hp_abtauen",
+    "binary_sensor.es_hp_warmwasserbereitung", "binary_sensor.es_hp_takten",
+    "sensor.es_hp_carnot_guetegrad", "sensor.es_hp_energie_elektrisch_standby",
+}
+
+
+def _ids(karten):
+    """Alle Entity-IDs in Karten (auch verschachtelt, Badges, Listen)."""
+    ids = set()
+    for k in karten:
+        if "entity" in k:
+            ids.add(k["entity"])
+        for b in k.get("badges", []):
+            ids.add(b["entity"] if isinstance(b, dict) else b)
+        if isinstance(k.get("entities"), list):
+            for e in k["entities"]:
+                ids.add(e if isinstance(e, str) else e["entity"])
+        ids |= _ids(k.get("cards", []))
+    return ids
+
+
 def _origami_karten(cfg):
     return [c for v in cfg["views"] for s in v["sections"] for c in s["cards"]]
 
@@ -95,6 +118,7 @@ def test_origami_nutzt_nur_bekannte_entities():
         "aktueller_cop", "spreizung")}
     bekannt.add("number.es_hp_cfg_par55")
     bekannt |= _ENERGIE_SENSOREN
+    bekannt |= _NEU_V410
     ids = set()
     for k in _origami_karten(_layout.gestalte(_bundled(), design="origami", hydraulik=True)):
         if "entity" in k:
@@ -222,6 +246,16 @@ def test_auswertungskarte_wird_mitgeliefert():
     ws = (_ROOT / "websocket_api.py").read_text(encoding="utf-8")
     assert 'f"{DOMAIN}/analysis_config"' in ws
     assert "async_register_command(hass, ws_analysis_config)" in ws
+    # v4.1.0: Verlaufsreihen fuer die Zyklen-Rekonstruktion (Takt-Abschnitt)
+    assert '"frequency": ("par20", "frequenz_hz")' in ws
+    assert '"mode": (CALC_BETRIEBSART, "betriebsart")' in ws
+    assert "history/history_during_period" in quelle
+    for eid in ("sensor.es_hp_frequenz_hz", "sensor.es_hp_betriebsart"):
+        assert f'"{eid}"' in quelle, eid
+    assert 'frequency: "frequency", mode: "mode"' in quelle
+    # Standard-IDs der Karte passen zu den Slugs der Integration
+    assert _const.PARAMETER_SENSORS["par20"]["slug"] == "frequenz_hz"
+    assert _const.CALC_BETRIEBSART == "calc_betriebsart"
 
 
 def test_stromzaehler_option_in_formularen():
@@ -234,3 +268,32 @@ def test_stromzaehler_option_in_formularen():
         assert d["config"]["step"]["user"]["data"]["energy_entity"], pfad.name
         sek = d["options"]["step"]["init"]["sections"]["messung"]
         assert sek["data"]["energy_entity"] and sek["data_description"]["energy_entity"], pfad.name
+
+
+def test_neue_entities_v410_in_beiden_designs():
+    """Binaersensoren, Carnot und Standby stehen in Energie bzw. Diagnose."""
+    standard = _bundled()
+    for pfad, erwartet in (
+        ("energy", {"sensor.es_hp_carnot_guetegrad", "sensor.es_hp_energie_elektrisch_standby"}),
+        ("diagnose", {"binary_sensor.es_hp_verdichter", "binary_sensor.es_hp_abtauen",
+                      "binary_sensor.es_hp_warmwasserbereitung", "binary_sensor.es_hp_takten"}),
+    ):
+        assert erwartet <= _ids(_ansicht(standard, pfad)["cards"]), pfad
+        for hydraulik in (False, True):
+            cfg = _layout.gestalte(standard, design="origami", hydraulik=hydraulik)
+            karten = [c for s in _ansicht(cfg, pfad)["sections"] for c in s["cards"]]
+            assert erwartet <= _ids(karten), (pfad, hydraulik)
+    # Uebersicht bleibt unveraendert schlank
+    assert not (_ids(_ansicht(standard, "overview")["cards"]) & _NEU_V410)
+
+
+def test_standard_dashboard_neue_ids_sind_bekannt():
+    """Beide YAML-Kopien: jede binary_sensor- und v4.1.0-ID gibt es wirklich."""
+    for pfad in (_ROOT / "dashboard" / "es_heatpump.yaml",
+                 _ROOT.parents[1] / "dashboards" / "es_heatpump.yaml"):
+        with pfad.open(encoding="utf-8") as fh:
+            cfg = yaml.safe_load(fh)
+        ids = _ids([k for v in cfg["views"] for k in v.get("cards", [])])
+        binaer = {e for e in ids if e.startswith("binary_sensor.")}
+        assert binaer and binaer <= _NEU_V410, (pfad, binaer - _NEU_V410)
+        assert _NEU_V410 <= ids, (pfad, _NEU_V410 - ids)

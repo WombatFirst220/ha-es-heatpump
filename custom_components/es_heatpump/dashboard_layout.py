@@ -218,6 +218,10 @@ def origami_ansichten(hydraulik: bool) -> list[dict[str, Any]]:
                 "chart_type": "line", "period": "hour", "days_to_show": 7,
                 "stat_types": ["mean"], "grid_options": VOLL,
             },
+            # v4.1.0: Gütegrad gegenüber Carnot und Verbrauch im Stillstand
+            _kachel("sensor.es_hp_carnot_guetegrad", "Gütegrad", "mdi:speedometer", "green"),
+            _kachel("sensor.es_hp_energie_elektrisch_standby", "Standby",
+                    "mdi:power-sleep", "blue-grey"),
         ),
         _abschnitt(
             _kopf("Leistung · 24 h"),
@@ -234,6 +238,14 @@ def origami_ansichten(hydraulik: bool) -> list[dict[str, Any]]:
     ]
 
     diagnose = [
+        # v4.1.0: Binärsensoren aus Frequenz und Betriebsart
+        _abschnitt(
+            _kopf("Betriebszustand"),
+            _kachel("binary_sensor.es_hp_verdichter", "Verdichter", None, "indigo"),
+            _kachel("binary_sensor.es_hp_warmwasserbereitung", "Warmwasser", None, "deep-orange"),
+            _kachel("binary_sensor.es_hp_abtauen", "Abtauen", None, "light-blue"),
+            _kachel("binary_sensor.es_hp_takten", "Takten", None, "red"),
+        ),
         _abschnitt(
             _kopf("Kältekreis"),
             _kachel("sensor.es_hp_heissgas_td", "Heißgas", None, "red"),

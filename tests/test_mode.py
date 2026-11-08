@@ -165,6 +165,89 @@ def test_kein_einbruch_direkt_nach_dem_verdichterstart():
     assert daten["par4"] > daten["par6"] + M
 
 
+# ── Aufloesung der Betriebsart und Binaersensoren (v4.1.0) ───────────────
+#
+# resolve_betriebsart stand bis v4.0.1 in sensor.py; seit v4.1.0 teilen sich
+# Sensoren und Binaersensoren die eine Fassung in mode.py.
+
+_M = _lade("mode")
+
+
+class _Zustand:
+    def __init__(self, state):
+        self.state = state
+
+
+class _Hass:
+    """Ersatz fuer hass: nur hass.states.get(entity_id)."""
+
+    def __init__(self, **zustaende):
+        self.states = self
+        self._z = {k.replace("__", "."): _Zustand(v) for k, v in zustaende.items()}
+        self.abfragen = 0
+
+    def get(self, eid):
+        self.abfragen += 1
+        return self._z.get(eid)
+
+
+def test_aufloesung_par1_hat_vorrang():
+    hass = _Hass(sensor__modus="Heizen")
+    daten = {"par1": 1, "par20": 50, "par4": 50.0, "par5": 45.0}
+    assert _M.resolve_betriebsart(hass, "sensor.modus", daten, M)[0] == "Brauchwasser"
+
+
+def test_aufloesung_externe_entity_ohne_par1():
+    hass = _Hass(sensor__modus="Unknown (2.0)")
+    daten = {"par20": 50, "par4": 33.0, "par5": 30.0, "par8": 31.0}
+    modus, grund = _M.resolve_betriebsart(hass, "sensor.modus", daten, M)
+    assert modus == "Heizen" and "sensor.modus" in grund
+    assert _M.mode_from_source(_Hass(x__y="abtauen"), "x.y") == "Entfrosten"
+    assert _M.mode_from_source(_Hass(x__y="unavailable"), "x.y") == "Unbekannt"
+    assert _M.mode_from_source(_Hass(), None) == "Unbekannt"
+
+
+def test_aufloesung_abtauen_korrigiert_heizen():
+    daten = {"par1": 2, "par20": 60, "par4": 25.0, "par5": 28.0}
+    assert _M.resolve_betriebsart(_Hass(), None, daten, M)[0] == "Entfrosten"
+
+
+def test_aufloesung_zwischenspeicher_je_datenstand():
+    hass = _Hass(sensor__modus="heizen")
+    daten = {"par20": 50, "par4": 33.0, "par5": 30.0, "par8": 31.0}
+    erst = _M.resolve_betriebsart(hass, "sensor.modus", daten, M)
+    vorher = hass.abfragen
+    assert _M.resolve_betriebsart(hass, "sensor.modus", daten, M) == erst
+    # Nur der Zustand der Quelle wird fuer den Schluessel gelesen, nicht neu gerechnet
+    assert hass.abfragen == vorher + 1
+    # Neuer Datenstand (neues Objekt) -> neu gerechnet
+    neu = dict(daten, par20=0)
+    assert _M.resolve_betriebsart(hass, "sensor.modus", neu, M)[0] == "Heizen"
+    assert _M.resolve_betriebsart(hass, None, neu, M)[0] == "Aus"
+
+
+def test_verdichter_laeuft():
+    assert _M.verdichter_laeuft({"par20": 35}) is True
+    assert _M.verdichter_laeuft({"par20": "0"}) is False
+    assert _M.verdichter_laeuft({"par20": None}) is None
+    assert _M.verdichter_laeuft({}) is None
+    assert _M.verdichter_laeuft(None) is None
+    assert _M.verdichter_laeuft({"par20": "x"}) is None
+
+
+def test_warmwasserbereitung_und_abtauen():
+    for modus in ("Brauchwasser", "Brauchwasser + Heizen", "Brauchwasser + Kuehlen"):
+        assert _M.ist_warmwasserbereitung(modus) is True
+        assert _M.ist_entfrosten(modus) is False
+    for modus in ("Heizen", "Kuehlen", "Aus", "Entfrosten"):
+        assert _M.ist_warmwasserbereitung(modus) is False
+    assert _M.ist_entfrosten("Entfrosten") is True
+    assert _M.ist_entfrosten("Heizen") is False
+    for modus in ("Unbekannt", None):
+        assert _M.ist_warmwasserbereitung(modus) is None
+        assert _M.ist_entfrosten(modus) is None
+
+
 if __name__ == "__main__":
     fns = _alle_tests()
     for fn in fns:

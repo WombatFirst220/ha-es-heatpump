@@ -61,6 +61,8 @@ from __future__ import annotations
 from typing import Any
 
 from .const import (
+    BETRIEBSART_ALIASES,
+    DEFAULT_DHW_MARGIN_K,
     DEFROST_SPREAD_K,
     DHW_ABSOLUTE_FALLBACK_C,
     PAR1_BETRIEBSART,
@@ -172,3 +174,169 @@ def derive_betriebsart(
     if vor > schwelle:
         return "Brauchwasser", f"Vorlauf {vor:.1f} °C über {herkunft}"
     return "Heizen", f"Vorlauf {vor:.1f} °C unter {herkunft}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Aufloesung der Betriebsart (bis v4.0.1 in sensor.py, seit v4.1.0 hier)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Sensoren UND Binaersensoren brauchen dieselbe Betriebsart. Damit es genau eine
+# Rechnung samt Zwischenspeicher gibt, steht sie hier. ``hass`` wird nur als
+# Objekt mit ``hass.states.get(entity_id)`` gebraucht - das Modul bleibt frei von
+# Home-Assistant-Importen und laesst sich mit einem Ersatzobjekt testen.
+#
+# v2.2.1: par15 galt als Betriebsart, ist aber ein Herzschlag (wechselt alle
+# ~10 min zwischen 0 und 1). Die externe Entity (``mode_source_entity``) ist
+# seitdem die optionale Quelle, wenn das Geraet kein par1 meldet.
+
+_NUMERIC_MODE_MAP = {0: "Aus", 1: "Brauchwasser", 2: "Heizen", 3: "Entfrosten"}
+_PAREN_NUMBER_RE = __import__("re").compile(r"\(([-+]?\d+(?:\.\d+)?)\)")
+
+
+def mode_from_source(hass: Any, mode_source: str | None) -> str:
+    """Betriebsart aus einer externen Hilfs-Entity (optionaler Vorrang)."""
+    if not mode_source:
+        return "Unbekannt"
+    state = hass.states.get(mode_source)
+    if state is None or state.state in ("unknown", "unavailable", ""):
+        return "Unbekannt"
+    raw = str(state.state).strip().lower()
+
+    # Bekannte Schreibweisen
+    if raw in BETRIEBSART_ALIASES:
+        return BETRIEBSART_ALIASES[raw]
+
+    # Multiscrape-Form "Unbekannt (0.0)" / "Unknown (2.0)" - die Zahl in den
+    # Klammern auswerten.
+    m = _PAREN_NUMBER_RE.search(raw)
+    if m:
+        try:
+            as_int = int(float(m.group(1)))
+            if as_int in _NUMERIC_MODE_MAP:
+                return _NUMERIC_MODE_MAP[as_int]
+        except (ValueError, TypeError):
+            pass
+
+    # Reine Zahl (Quellen im Stil von par15)
+    try:
+        as_int = int(float(raw))
+        if as_int in _NUMERIC_MODE_MAP:
+            return _NUMERIC_MODE_MAP[as_int]
+    except (ValueError, TypeError):
+        pass
+    return "Unbekannt"
+
+
+# Zwischenspeicher fuer resolve_betriebsart (v4.0.1). Bis zu acht Entities
+# fragten je Abruf dieselbe Betriebsart ab, jede rechnete sie vollstaendig neu.
+# Schluessel: Datenstand des Koordinators (Objekt-Identitaet, gegen
+# Wiederverwendung der id() durch die mitgehaltene Referenz abgesichert),
+# Optionen und Zustand der externen Betriebsart-Entity. Das Ergebnis ist damit
+# exakt dasselbe wie ohne Zwischenspeicher.
+_BETRIEBSART_CACHE: dict[tuple, tuple[Any, tuple[str, str]]] = {}
+_BETRIEBSART_CACHE_MAX = 32
+
+
+def resolve_betriebsart(
+    hass: Any,
+    mode_source: str | None,
+    data: dict[str, Any] | None = None,
+    dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
+) -> tuple[str, str]:
+    """Wie ``resolve_betriebsart_neu``, aber je Datenstand nur einmal gerechnet."""
+    if not data:
+        return resolve_betriebsart_neu(hass, mode_source, data, dhw_margin_k)
+    quelle_zustand = None
+    if mode_source:
+        state = hass.states.get(mode_source)
+        quelle_zustand = state.state if state is not None else None
+    schluessel = (id(data), mode_source, dhw_margin_k, quelle_zustand)
+    treffer = _BETRIEBSART_CACHE.get(schluessel)
+    if treffer is not None and treffer[0] is data:
+        return treffer[1]
+    ergebnis = resolve_betriebsart_neu(hass, mode_source, data, dhw_margin_k)
+    if len(_BETRIEBSART_CACHE) >= _BETRIEBSART_CACHE_MAX:
+        _BETRIEBSART_CACHE.clear()
+    _BETRIEBSART_CACHE[schluessel] = (data, ergebnis)
+    return ergebnis
+
+
+def resolve_betriebsart_neu(
+    hass: Any,
+    mode_source: str | None,
+    data: dict[str, Any] | None = None,
+    dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
+) -> tuple[str, str]:
+    """Kanonische Betriebsart, als zweites Element die Begruendung.
+
+    Rangfolge:
+
+    1. **``par1``** - die Geraeteangabe "Unit Current Working Mode" (seit
+       v2.4.0). Massgeblich, weil die Maschine sie selbst meldet.
+    2. **``mode_source_entity``** - die externe Hilfs-Entity aus der Zeit vor
+       v2.4.0. Sie liest dieselbe Angabe aus dem Portal-HTML und gilt nur, wenn
+       par1 fehlt.
+    3. **Ableitung** aus Frequenz, Spreizung und Vorlauf gegen Heizwasser
+       (v2.3.0) - der Rueckfall fuer Geraete ohne par1.
+
+    Dazu: Abtauen kennt das Portal nicht als Betriebsart. Waehrend der
+    Kreisprozess umgekehrt laeuft, meldet das Geraet weiter "Heizen"; dieser
+    Fall wird hier korrigiert.
+    """
+    data = data or {}
+
+    modus, grund = betriebsart_aus_par1(data)
+    if modus is None and mode_source:
+        extern = mode_from_source(hass, mode_source)
+        if extern != "Unbekannt":
+            modus, grund = extern, f"externe Entity {mode_source} meldet {extern}"
+    if modus is None and data:
+        modus, grund = derive_betriebsart(data, dhw_margin_k)
+    if modus is None:
+        return "Unbekannt", grund
+
+    if modus in ("Heizen", "Brauchwasser + Heizen") and ist_abtauen(data):
+        return "Entfrosten", (
+            f"{grund}, aber Vorlauf unter Rücklauf — Kreisprozess umgekehrt"
+        )
+    return modus, grund
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Zustaende der Binaersensoren (v4.1.0)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Betriebsarten, in denen das Umschaltventil zum Warmwasserspeicher steht
+WARMWASSER_BETRIEBSARTEN = frozenset({
+    "Brauchwasser", "Brauchwasser + Heizen", "Brauchwasser + Kuehlen",
+})
+
+
+def verdichter_laeuft(data: dict[str, Any] | None) -> bool | None:
+    """True bei Verdichterfrequenz par20 > 0; ``None``, wenn par20 fehlt."""
+    roh = (data or {}).get(PAR_FREQUENZ)
+    if roh is None:
+        return None
+    try:
+        return float(roh) > 0
+    except (TypeError, ValueError):
+        return None
+
+
+def ist_warmwasserbereitung(betriebsart: str | None) -> bool | None:
+    """Warmwasserbereitung laut aufgeloester Betriebsart; ``None`` = unbekannt."""
+    if betriebsart in (None, "Unbekannt"):
+        return None
+    return betriebsart in WARMWASSER_BETRIEBSARTEN
+
+
+def ist_entfrosten(betriebsart: str | None) -> bool | None:
+    """Abtauen laut aufgeloester Betriebsart; ``None`` = unbekannt.
+
+    ``resolve_betriebsart`` hat ``ist_abtauen`` (Vorlauf unter Ruecklauf bei
+    laufendem Verdichter) dann schon beruecksichtigt - fuer die Ableitung ohne
+    par1 ebenso wie als Korrektur einer Geraeteangabe "Heizen".
+    """
+    if betriebsart in (None, "Unbekannt"):
+        return None
+    return betriebsart == "Entfrosten"

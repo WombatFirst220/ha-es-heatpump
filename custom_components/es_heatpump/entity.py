@@ -79,32 +79,50 @@ class ESHeatpumpSettingEntity(CoordinatorEntity[ESHeatpumpSettingsCoordinator]):
 
     async def _async_setze(self, wert: Any) -> None:
         """Schreibt einen Wert - nach Freigabepruefung und Katalogpruefung."""
-        if not self._schreiben_erlaubt:
-            raise Schreibsperre(
-                translation_domain=DOMAIN,
-                translation_key="schreibzugriff_aus",
-                translation_placeholders={"name": self._anzeigename()},
-            )
-        try:
-            geprueft = self.setting.validate(wert)
-        except ValueError as err:
-            # Als ServiceValidationError, damit die Oberflaeche den Grund
-            # nennt - ein nacktes ValueError erscheint dort nur als
-            # "Unbekannter Fehler".
-            raise ServiceValidationError(
-                str(err),
-                translation_domain=DOMAIN,
-                translation_key="ungueltiger_wert",
-                translation_placeholders={
-                    "name": self._anzeigename(),
-                    "fehler": str(err),
-                },
-            ) from err
-        await self.coordinator.async_setze(self.setting.par, geprueft)
+        await async_schreibe_einstellung(
+            self.coordinator, self.setting, wert,
+            self._schreiben_erlaubt, self._anzeigename(),
+        )
 
     def _anzeigename(self) -> str:
         name = self.name if isinstance(self.name, str) else None
         return name or self.setting.name
+
+
+async def async_schreibe_einstellung(
+    koordinator: ESHeatpumpSettingsCoordinator,
+    setting: Setting,
+    wert: Any,
+    schreiben_erlaubt: bool,
+    anzeigename: str,
+) -> None:
+    """Der eine Schreibweg aller Bedien-Entities (seit v4.1.0 auch water_heater).
+
+    Reihenfolge: Schreibsperre -> Katalogpruefung -> ``async_setze`` des
+    Konfigurations-Koordinators (legt vorher eine Sicherung an).
+    """
+    if not schreiben_erlaubt:
+        raise Schreibsperre(
+            translation_domain=DOMAIN,
+            translation_key="schreibzugriff_aus",
+            translation_placeholders={"name": anzeigename},
+        )
+    try:
+        geprueft = setting.validate(wert)
+    except ValueError as err:
+        # Als ServiceValidationError, damit die Oberflaeche den Grund
+        # nennt - ein nacktes ValueError erscheint dort nur als
+        # "Unbekannter Fehler".
+        raise ServiceValidationError(
+            str(err),
+            translation_domain=DOMAIN,
+            translation_key="ungueltiger_wert",
+            translation_placeholders={
+                "name": anzeigename,
+                "fehler": str(err),
+            },
+        ) from err
+    await koordinator.async_setze(setting.par, geprueft)
 
 
 class Schreibsperre(HomeAssistantError):

@@ -29,6 +29,15 @@
         "data": {
           "password": "Adgangskode"
         }
+      },
+      "reconfigure": {
+        "title": "ES Varmepumpe – Omkonfigurer",
+        "description": "Skift portal-URL og loginoplysninger for denne post (aktuelt {username}). Login kontrolleres, før noget gemmes. Sikkerhedskopier, energitællere og historik bevares; ændres brugernavnet, beholder entiteter og enhed deres entitets-ID'er.",
+        "data": {
+          "username": "Brugernavn (e-mailadresse)",
+          "password": "Adgangskode",
+          "base_url": "Portal-URL"
+        }
       }
     },
     "error": {
@@ -38,7 +47,9 @@
     },
     "abort": {
       "already_configured": "Denne varmepumpe er allerede konfigureret.",
-      "reauth_successful": "Loginoplysninger opdateret, integrationen genstarter."
+      "reauth_successful": "Loginoplysninger opdateret, integrationen genstarter.",
+      "reconfigure_successful": "Indstillinger gemt, integrationen genstarter.",
+      "benutzer_bereits_eingerichtet": "En anden ES Heatpump-post bruger allerede dette brugernavn. Fjern den post først, eller vælg et andet brugernavn."
     }
   },
   "options": {
@@ -151,9 +162,35 @@
     "origami_theme_missing": {
       "title": "Origami-tema ikke installeret",
       "description": "ES Heatpump-dashboardet er sat til designet \"Origami\", men temaet \"{theme}\" er ikke installeret. Indtil det er, viser Home Assistant standardtemaet.\n\nInstallation: Marketplace/HACS → download repositoriet \"hazymorning/origami\" (kategori tema), og kør derefter handlingen \"frontend.reload_themes\" under Udviklerværktøjer → Handlinger. Skrifttypen Montserrat er valgfri, se Origami-README. Denne meddelelse forsvinder derefter af sig selv."
+    },
+    "cop_unplausibel": {
+      "title": "Usandsynlig COP – kontroller volumenstrømmen",
+      "description": "Den aktuelle COP har ligget under 1 i flere målinger i træk, mens varmepumpen kørte (seneste værdi: {cop}). Det er fysisk umuligt – anlægget ville afgive mindre varme, end det optager i strøm.\n\nTermisk effekt og COP beregnes ud fra den indstillede volumenstrøm (aktuelt {volumenstrom} m³/h), som næsten helt sikkert er for lav. Nominel værdi ifølge databladet: {richtwert}.\n\nRet den i integrationens indstillinger under \"Måling og beregning → Flow varmekreds\" (eller vælg din model). Denne meddelelse forsvinder af sig selv, så snart COP igen er plausibel."
     }
   },
   "entity": {
+    "binary_sensor": {
+      "verdichter": {
+        "name": "Kompressor"
+      },
+      "abtauen": {
+        "name": "Afrimning"
+      },
+      "warmwasserbereitung": {
+        "name": "Varmtvandsproduktion"
+      },
+      "takten": {
+        "name": "Kompressor kortcykler",
+        "state_attributes": {
+          "starts_letzte_stunde": {
+            "name": "Starter i den seneste time"
+          },
+          "mittlere_laufzeit_min": {
+            "name": "Gennemsnitlig driftstid (min)"
+          }
+        }
+      }
+    },
     "button": {
       "konfiguration_sichern": {
         "name": "Sikkerhedskopiér konfiguration nu"
@@ -511,6 +548,17 @@
       },
       "verdichter_laufzeit": {
         "name": "Kompressordriftstid"
+      },
+      "energie_elektrisch_standby": {
+        "name": "Elektrisk energi standby"
+      },
+      "carnot_guetegrad": {
+        "name": "Carnot-virkningsgrad",
+        "state_attributes": {
+          "cop_carnot": {
+            "name": "Carnot-COP"
+          }
+        }
       }
     },
     "switch": {
@@ -570,6 +618,11 @@
       },
       "cfg_par85": {
         "name": "Forsyningsspærring: Cirkulationspumpe P0 under forsyningsspærring"
+      }
+    },
+    "water_heater": {
+      "warmwasser": {
+        "name": "Varmt vand"
       }
     }
   },

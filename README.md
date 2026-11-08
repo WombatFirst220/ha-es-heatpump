@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.2%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.0.1-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-4.1.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 >
@@ -43,7 +43,11 @@ Home Assistant Integration für **Energy Save Wärmepumpen** (Valtop AW12-R32 u.
   Außentemperatur je Tag, Woche, Monat und Jahr, mit Vorher/Nachher-Vergleich
   bei Einstellungsänderungen (seit v4.0.0, siehe [Auswertung](#-auswertung-seit-v400))
 - 🔌 **Energiezähler** in kWh (gesamt, Heizen, Warmwasser) — auch im
-  Energie-Dashboard von Home Assistant nutzbar (seit v4.0.0)
+  Energie-Dashboard von Home Assistant nutzbar (seit v4.0.0), dazu Standby (seit v4.1.0)
+- 🟢 **Binärsensoren** Verdichter, Abtauen, Warmwasserbereitung und Takten,
+  **Carnot-Gütegrad**, **Warmwasserspeicher** als `water_heater` (seit v4.1.0)
+- 🔔 **Ereignis bei Einstellungsänderung**, Reparaturhinweis bei unplausiblem
+  COP, Diagnosedaten und „Neu konfigurieren“ (seit v4.1.0)
 - 🛠 Mehrsprachig: Deutsch, Englisch, Niederländisch, Schwedisch, Dänisch (Fallback auf Englisch) —
   seit v4.0.0 auch Entity-Namen und Zustände
 
@@ -72,6 +76,7 @@ Home Assistant Integration für **Energy Save Wärmepumpen** (Valtop AW12-R32 u.
 
 Nach dem Speichern erscheinen alle Entitäten im Geräte-Eintrag, und das Dashboard **„ES Heatpump"** in der Seitenleiste.
 
+<a id="-den-volumenstrom-richtig-einstellen"></a>
 #### ⚠️ Den Volumenstrom richtig einstellen
 
 **Das ist die mit Abstand häufigste Fehlerquelle.** Die Wärmepumpe misst ihren
@@ -105,7 +110,12 @@ die richtige Wahl.
 **Gegenprobe:** Ein COP unter 1 ist physikalisch unmöglich — die Maschine gäbe
 weniger Wärme ab, als sie Strom aufnimmt. Tritt das auf, ist der Volumenstrom zu
 niedrig. Seit v2.3.0 schreibt die Integration in diesem Fall einmal pro Neustart
-eine Warnung ins Log. Zur Einordnung: Bei 2,02 m³/h, 2,8 K Spreizung und 1350 W
+eine Warnung ins Log; seit v4.1.0 erscheint zusätzlich unter *Einstellungen →
+System → Reparaturen* der Hinweis **„Unplausibler COP – Volumenstrom prüfen“**,
+sobald fünf aufeinanderfolgende Werte im Betrieb unter 1 liegen (einzelne
+Ausreißer beim Anlauf, Abtauen oder Umschalten lösen ihn nicht aus). Er nennt den
+letzten COP, den eingestellten Volumenstrom und den Nennwert laut Datenblatt und
+verschwindet von selbst, sobald der COP wieder ≥ 1 ist. Zur Einordnung: Bei 2,02 m³/h, 2,8 K Spreizung und 1350 W
 elektrisch ergibt sich COP 4,86 — das Datenblatt nennt für eine AWC12 bei
 Wasser 30/35 °C und 7 °C Außentemperatur einen COP zwischen 4,30 und 4,90.
 
@@ -240,6 +250,39 @@ Sollwert und Frequenz. Wer die Erkennung übersteuern will, trägt weiterhin ein
 | `sensor.es_hp_spreizung` | `Vorlauf − Rücklauf` (Δ T des Heizkreises) |
 | `sensor.es_hp_thermische_leistung` | `flow_rate × Δ T × 1163 Wh/(m³·K)` — gibt 0 W aus, wenn Kompressor steht |
 | `sensor.es_hp_aktueller_cop` | `Thermische Leistung / Elektr. Leistung` (benötigt Power-Entity) |
+| `sensor.es_hp_carnot_guetegrad` | `COP / COP_Carnot × 100 %` (seit v4.1.0, siehe unten; Attribut `cop_carnot`) |
+
+#### 🎯 Carnot-Gütegrad (seit v4.1.0)
+
+Der COP hängt stark vom Wetter ab: Bei 10 °C draußen und 30 °C Vorlauf ist ein
+COP von 5 normal, bei −5 °C und 45 °C Vorlauf wäre er ein Wunder. Der
+**Carnot-Gütegrad** rechnet das heraus — er sagt, welcher Anteil des
+physikalisch Möglichen erreicht wird:
+
+```
+COP_Carnot = (T_Vorlauf + 2 + 273,15) / ((T_Vorlauf + 2) − (T_Außen − 6))
+Gütegrad   = COP / COP_Carnot × 100 %
+```
+
+Temperaturen in °C, Vorlauf `par4`, Außentemperatur `par24`. Die Offsets bilden
+nach, dass das Kältemittel etwa 2 K wärmer kondensiert, als der Vorlauf ist,
+und etwa 6 K kälter verdampft, als die Außenluft ist („praktischer“
+Carnot-COP). Beispiel: 35 °C Vorlauf, 7 °C außen → COP_Carnot = 310,15 / 36 =
+8,6; ein COP von 4,3 entspricht dann 50 %. Als grobe Orientierung erreichen
+gute Luft-Wasser-Wärmepumpen im eingeschwungenen Betrieb etwa 40–55 %.
+
+- Nur bei laufendem Verdichter und positivem COP, sonst kein Wert; bei einem
+  Temperaturhub ≤ 1 K ebenfalls nicht (der Carnot-COP strebt dort gegen
+  unendlich).
+- Er erbt die Schwächen des COP: falscher Volumenstrom oder ungenaue
+  Strommessung verschieben ihn genauso.
+- Die **Auswertungsseite** zeigt ihn je Zeitraum wärmegewichtet aus
+  Stundenwerten (Σ Wärme ÷ Σ (Strom × COP_Carnot)), nur Stunden mit laufendem
+  Verdichter, ohne unplausible Tage.
+
+Die Idee und die Offsets stammen von [heatpumpmonitor.org](https://heatpumpmonitor.org)
+(OpenEnergyMonitor, Kennzahl „Practical Carnot COP“); Code wurde nicht
+übernommen.
 
 #### 🔌 Energiezähler (seit v4.0.0)
 
@@ -258,7 +301,13 @@ Langzeitstatistik — die Auswertungsseite liest diese Statistik.
 | `sensor.es_hp_energie_thermisch_warmwasser` | Wärme für Warmwasser | kWh |
 | `sensor.es_hp_verdichter_starts` | Verdichterstarts (Wechsel `par20` 0 → > 0) | – |
 | `sensor.es_hp_verdichter_laufzeit` | Laufzeit des Verdichters | h |
+| `sensor.es_hp_energie_elektrisch_standby` | Strom bei stehendem Verdichter (`par20` = 0), seit v4.1.0 | kWh |
 
+- **Standby** (seit v4.1.0) ist eine Teilmenge von *Strom gesamt*: alles, was
+  die Anlage aufnimmt, während der Verdichter steht (Regelung, Umwälzpumpe,
+  Kurbelwannenheizung). Er wird zusätzlich zur Aufteilung Heizen/Warmwasser
+  gebucht, ist also kein dritter Summand. Fehlt `par20` in einem Abruf, zählt
+  nichts als Standby.
 - **Strom** wird aus der konfigurierten Power-Entity integriert (Wert gilt bis
   zur nächsten Änderung, zusätzlich jede Minute fortgeschrieben; kW wird
   umgerechnet). Ohne Power-Entity sind die drei Stromzähler „nicht verfügbar“.
@@ -283,6 +332,39 @@ Langzeitstatistik — die Auswertungsseite liest diese Statistik.
 - Die Stromzähler eignen sich für das **Energie-Dashboard** von Home Assistant
   (*Einzelne Geräte*). Wer dort schon den Shelly selbst führt, nimmt ihn nicht
   doppelt auf.
+
+#### 🟢 Binärsensoren (seit v4.1.0)
+
+| Entity-ID | an, wenn … | Geräteklasse |
+|---|---|---|
+| `binary_sensor.es_hp_verdichter` | Kompressorfrequenz `par20` > 0 | `running` |
+| `binary_sensor.es_hp_abtauen` | aufgelöste Betriebsart *Entfrosten* (`defrost`) | `running` |
+| `binary_sensor.es_hp_warmwasserbereitung` | Betriebsart Brauchwasser, Brauchwasser + Heizen oder Brauchwasser + Kühlen | `running` |
+| `binary_sensor.es_hp_takten` | mehr als 3 Verdichterstarts in der letzten Stunde **oder** mittlere Laufzeit der letzten 3 Zyklen unter 10 min | `problem` |
+
+Die Betriebsart ist dieselbe wie bei `sensor.es_hp_betriebsart`
+(siehe [Betriebsart](#-betriebsart-seit-v240-aus-dem-gerät)). **Takten**: Drei
+Starts je Stunde nennen Hersteller von Scroll- und Rotationsverdichtern
+üblicherweise als Obergrenze; unter 10 Minuten Laufzeit erreicht der
+Kreisprozess kaum seinen stationären Zustand. Das Laufzeit-Kriterium gilt nur,
+solange der jüngste Zyklus höchstens 6 Stunden zurückliegt. Die Zyklen werden
+nur im Speicher gehalten — nach einem Neustart meldet der Sensor erst wieder,
+wenn genug Starts beobachtet wurden. Attribute: `starts_letzte_stunde`,
+`mittlere_laufzeit_min`.
+
+#### 🚿 Warmwasserspeicher als `water_heater` (seit v4.1.0)
+
+`water_heater.es_hp_warmwasser` fasst den Speicher in einer Entity zusammen:
+Ist-Temperatur aus `par7` (Warmwasser TW), Soll-Temperatur aus der Einstellung
+*Warmwasser Solltemperatur* (25–75 °C, ganze Grad). Der Zustand ist fest
+`heat_pump` (Wärmepumpe).
+
+> 🔒 **Die Solltemperatur lässt sich nur mit freigegebenem Schreibzugriff
+> ändern** (Optionen → *Schreibzugriff und Sicherungen*). Ohne ihn ist die
+> Entity reine Anzeige: Die Oberfläche bietet keinen Regler an, und ein Aufruf
+> von `water_heater.set_temperature` endet mit einer Fehlermeldung. Mit
+> Schreibzugriff gilt derselbe Weg wie bei `number.es_hp_cfg_par55` —
+> Bereichsprüfung, Sicherung vor dem Schreiben.
 
 #### 🔍 Diagnose (default deaktiviert, einzeln aktivierbar)
 
@@ -354,6 +436,53 @@ Langzeitstatistik von Home Assistant, es wird nichts zusätzlich gespeichert.
   Heizgradtag, Starts je Tag, Laufzeit je Start, Außen- und Vorlauftemperatur).
   Hinweise erscheinen, wenn der Zeitraum danach noch unvollständig ist, die
   Außentemperatur deutlich abweicht oder im Fenster weitere Änderungen lagen.
+- **Seit v4.1.0:** [Carnot-Gütegrad](#-carnot-gütegrad-seit-v410) je Zeitraum,
+  Standby-Strom (sobald der Zähler den ganzen Zeitraum abdeckt) und Starts je
+  Laufstunde mit Warnfarbe nach denselben Schwellen wie `binary_sensor.es_hp_takten`.
+- **Takten / Verdichterzyklen (seit v4.1.0):** eigener, einklappbarer Abschnitt
+  unter den Kennzahlen, siehe unten.
+
+**Takten / Verdichterzyklen (seit v4.1.0, Karte 1.4.0):** Damit lässt sich
+sehen, wie oft und wie lange der Verdichter läuft — und ob z. B. eine geänderte
+Abschalt-/Wiedereinschaltspreizung etwas bewirkt hat.
+
+- Die Karte **rekonstruiert jeden Verdichterlauf aus dem Zustandsverlauf** von
+  `sensor.es_hp_frequenz_hz` (Zyklus = Frequenz von 0 auf > 0 bis zurück auf 0)
+  und ordnet ihm die überwiegende Betriebsart aus `sensor.es_hp_betriebsart` zu
+  (Heizen, Warmwasser, Abtauen; auch die alten deutschen Zustände bis v3.x).
+  `unavailable`/`unknown` bis 10 min werden überbrückt; längere Lücken beenden
+  einen laufenden Zyklus, der dann nicht gewertet wird. Läufe, deren Beginn
+  oder Ende außerhalb des Verlaufs liegt, sind blass gezeichnet und zählen
+  nicht zu Dauer und Klassen.
+- **Tag:** Zeitstrahl der Läufe über 24 h, farbig nach Betriebsart, Lücken
+  schraffiert; Antippen zeigt Beginn, Dauer, Pause davor und Betriebsart.
+  **Woche/Monat:** Starts je Tag (gestapelt nach Betriebsart) und Ø Laufzeit je
+  Zyklus als Linie (rechte Achse, min; gestrichelt die 10-min-Schwelle); Tage
+  über einer Takt-Schwelle (mehr als 3 Starts in 60 min oder Ø Laufzeit unter
+  10 min — wie `binary_sensor.es_hp_takten`) sind markiert.
+- **Kennzahlen:** Starts, Ø/Min./Max. Laufzeit, Ø und längste Pause, Starts je
+  Laufstunde, Anteil Zyklen unter 10 min, max. Starts in 60 min; dazu
+  **Histogramme** der Laufzeiten und Pausen (< 10, 10–20, 20–40, 40–60, 60–120,
+  > 120 min).
+- **Quelle je Tag:** Starts und Laufzeit kommen aus den Zählern
+  `sensor.es_hp_verdichter_starts`/`…_laufzeit`, wo deren Statistik den Tag
+  abdeckt, sonst aus dem Verlauf — nie beides addiert. Dauern, Pausen, Klassen
+  und die Aufteilung nach Betriebsart gibt es nur aus dem Verlauf. Der Recorder
+  hält den Verlauf standardmäßig nur **10 Tage** (`purge_keep_days`); die Karte
+  ermittelt, wie weit er reicht, und schreibt es dazu („aus dem Verlauf
+  rekonstruiert (Recorder hält ~10 Tage, ab …)“). Ältere Tage gibt es nur aus
+  den Zählern. **Jahr/Alle Jahre** zeigen Starts und Ø Laufzeit je Monat nur
+  aus den Zählern.
+- **Vorher / Nachher** vergleicht zusätzlich Ø Pause und den Anteil der Zyklen
+  unter 10 min; Starts je Tag und Laufzeit je Start kommen aus den Zählern oder
+  dem Verlauf. Reicht beides nicht so weit zurück, steht dort „–“ mit Hinweis.
+- Der Verlauf wird nur für den angezeigten Zeitraum geladen (± 1 Tag, höchstens
+  so weit, wie der Recorder reicht) und je Tag zwischengespeichert — nicht bei
+  jedem Zustands-Update. Eingeklappt lädt der Abschnitt nichts.
+
+Wer Zyklen über längere Zeit vergleichen will, kann `purge_keep_days` des
+Recorders erhöhen (kostet Speicherplatz für *alle* Entities) — die Zähler der
+Integration liefern Starts und Laufzeit ohnehin dauerhaft.
 
 Die Karte heißt `custom:es-heatpump-analysis-card` und wird von der Integration
 immer geladen — sie lässt sich also auch in eigene Dashboards einbauen:
@@ -362,8 +491,11 @@ immer geladen — sie lässt sich also auch in eigene Dashboards einbauen:
 type: custom:es-heatpump-analysis-card
 default_view: month        # day | week | month | year | all
 heating_base_temp: 15      # Basis der Heizgradtage in °C
+# cycles: false            # Abschnitt „Takten / Verdichterzyklen“ ausblenden
 # entities:                # nur bei abweichenden Entity-IDs
 #   el: sensor.es_hp_energie_elektrisch
+#   frequency: sensor.es_hp_frequenz_hz
+#   mode: sensor.es_hp_betriebsart
 ```
 
 Die **Arbeitszahl** ist hier Wärme ÷ Strom über den Zeitraum — aussagekräftiger
@@ -443,6 +575,62 @@ das Theme deshalb nur über seinen Namen an. Installieren lässt es sich so:
 Ist Origami gewählt, aber nicht installiert, erscheint unter *Einstellungen →
 Reparaturen* ein Hinweis. HA zeigt bis dahin das Standard-Theme. Nach
 `frontend.reload_themes` verschwindet der Hinweis ohne Neustart.
+
+#### 🔔 Ereignis bei Einstellungsänderung (seit v4.1.0)
+
+Erkennt der Konfigurationsabruf (Standard: alle 15 Minuten) eine Änderung
+gegenüber dem vorherigen gültigen Stand, feuert die Integration das Ereignis
+`es_heatpump_einstellung_geaendert` – egal, ob an der Bedieneinheit, in der
+Portal-App oder aus Home Assistant verstellt wurde. Nicht beim ersten Abruf nach
+dem Start und nie für Portal-Aussetzer (der „fast alles 0“-Stand wird vorher
+verworfen). Im **Logbuch** erscheint es als „Einstellung geändert: …“.
+
+Nutzlast:
+
+```yaml
+entry_id: 01J…            # Konfigurationseintrag
+zeitpunkt: "2026-11-08T14:15:03+01:00"
+aenderungen:
+  - par: par…             # setdata-Feld
+    name: …               # Name aus dem Einstellungskatalog
+    gruppe: …
+    alt: 38
+    neu: 40
+    text: "…: 38 °C → 40 °C"
+```
+
+Beispiel-Automation – Benachrichtigung aufs Handy:
+
+```yaml
+alias: Wärmepumpe – Einstellung geändert
+triggers:
+  - trigger: event
+    event_type: es_heatpump_einstellung_geaendert
+actions:
+  - action: notify.mobile_app_mein_handy
+    data:
+      title: Wärmepumpe – Einstellung geändert
+      message: >-
+        {{ trigger.event.data.aenderungen | map(attribute='text') | join('\n') }}
+mode: queued
+```
+
+*(Vor HA 2024.10: `trigger:`/`platform: event` und `action:`/`service:` statt
+`triggers:`/`trigger:` und `actions:`/`action:`.)*
+
+#### 🛠 Neu konfigurieren und Diagnosedaten (seit v4.1.0)
+
+- **Neu konfigurieren** (*Einstellungen → Geräte & Dienste → ES Heatpump → ⋮ →
+  Neu konfigurieren*, ab HA 2024.4): Portal-URL, Benutzer und Passwort ändern,
+  ohne den Eintrag zu löschen. Die Anmeldung wird vorher geprüft. Ein neuer
+  Benutzer wird nur übernommen, wenn kein anderer Eintrag ihn schon verwendet;
+  Entity-IDs, Historie und Sicherungen bleiben erhalten.
+- **Diagnosedaten herunterladen** (gleiches Menü): letzte Messwerte,
+  Konfigurationsstand, Kurzfassung der Sicherungen, Zählerstände, aufgelöste
+  Betriebsart samt Begründung und Zustand der Abrufe – für Fehlerberichte.
+  Passwort, Benutzer/E-Mail-Adressen, MAC, Seriennummern, Artikelnummer,
+  Besitzer, Standort, Installateur, Portal-Kennungen (`mn`, `devid`) und
+  Sitzungs-Cookies sind geschwärzt.
 
 ### ⚠️ Breaking Changes in 4.0.0
 
@@ -685,6 +873,30 @@ precedence.
 
 The plugin creates around 18 visible entities under `sensor.es_hp_*` plus calculated sensors for **Spread**, **Thermal Output** and **COP**. Diagnostic sensors are registered but disabled by default — enable them under **Settings → Devices & Services → ES Heatpump → Entities**. Unidentified parameters that always return `0.0` are not exposed at all. See the German section above and [`PARAMETER_MAPPING.md`](PARAMETER_MAPPING.md) for the full table with verification details.
 
+**New in v4.1.0:**
+
+| Entity ID | Meaning |
+|---|---|
+| `binary_sensor.es_hp_verdichter` | Compressor running (`par20` > 0) |
+| `binary_sensor.es_hp_abtauen` | Defrosting (resolved operating mode `defrost`) |
+| `binary_sensor.es_hp_warmwasserbereitung` | Hot-water production (mode DHW, DHW + heating, DHW + cooling) |
+| `binary_sensor.es_hp_takten` | Short cycling: more than 3 starts in the last hour **or** mean runtime of the last 3 cycles below 10 min (the runtime criterion expires 6 h after the last cycle) |
+| `sensor.es_hp_carnot_guetegrad` | Carnot efficiency in % (see below) |
+| `sensor.es_hp_energie_elektrisch_standby` | Electricity while the compressor is stopped (kWh, subset of the total) |
+| `water_heater.es_hp_warmwasser` | DHW tank: current temperature `par7`, target = setting *DHW setpoint* (25–75 °C) |
+
+- **Water heater:** the target temperature can only be changed with **write
+  access enabled** in the options. Without it the entity is display-only (no
+  slider, `water_heater.set_temperature` raises an error); with it, the same
+  path as `number.es_hp_cfg_par55` applies (range check, backup before writing).
+- **Carnot efficiency** = COP / COP_Carnot × 100 % with the practical Carnot COP
+  `(T_flow + 2 + 273.15) / ((T_flow + 2) − (T_outdoor − 6))` (°C; condensing
+  ~2 K above the flow, evaporating ~6 K below the outdoor air). It removes most
+  of the weather dependence of the COP; only while the compressor runs. The idea
+  and the offsets come from [heatpumpmonitor.org](https://heatpumpmonitor.org)
+  (OpenEnergyMonitor, "Practical Carnot COP"); no code was taken over. The
+  analysis card shows it per period, heat-weighted from hourly values.
+
 ### 📋 Dashboard and options (since v3.1)
 
 - The bundled dashboard has four views (Overview, Energy, Analysis since
@@ -728,6 +940,38 @@ the electrical power, and the hourly mean of the thermal power (missing hours
 are not extrapolated). Such bars are not split into heating/hot water and have
 no starts/runtime. With the meter option set, the electricity counters follow
 the meter's increments instead of integrating the power.
+
+Since v4.1.0 (card 1.4.0) a collapsible **Short cycling / compressor cycles**
+section reconstructs every compressor run from the state history of
+`sensor.es_hp_frequenz_hz` (0 → > 0 → 0; gaps up to 10 min are bridged, longer
+gaps void the running cycle) with the dominant mode from
+`sensor.es_hp_betriebsart`. Day: timeline of the runs coloured by mode; week/
+month: starts per day stacked by mode plus the average runtime per cycle, days
+above the short-cycling thresholds marked; histograms of runtimes and pauses;
+before/after comparison of starts per day, runtime per cycle, average pause and
+share of cycles under 10 min. Starts and runtime come from the integration's
+counters where their statistics cover a day, otherwise from the history (never
+both). The recorder keeps the history for ~10 days by default; the card shows
+how far it reaches, older periods only have the counters (year/all years:
+counters only). History is loaded only for the visible period and cached per day.
+
+### 🔔 Settings-change event, reconfigure, diagnostics (since v4.1.0)
+
+- When the configuration poll detects a change against the previous valid state,
+  the event `es_heatpump_einstellung_geaendert` is fired with `entry_id`,
+  `zeitpunkt` and `aenderungen` (list of `par`, `name`, `gruppe`, `alt`, `neu`,
+  `text`). Not on the first poll after start-up and never for portal glitches. It
+  shows up in the logbook as "Einstellung geändert: …". Use it as an automation
+  trigger (`trigger: event`, `event_type: es_heatpump_einstellung_geaendert`), see
+  the German example above.
+- **Reconfigure** (HA 2024.4+): change portal URL, username and password without
+  removing the entry; the login is verified first, a username already used by
+  another entry is refused, entity IDs and history are kept.
+- **Download diagnostics**: credentials, e-mail addresses, MAC, serial and article
+  numbers, owner, location, installer, portal IDs and cookies are redacted.
+- **Repair issue "Implausible COP"**: raised after five consecutive readings
+  below 1 while running (the flow rate is almost certainly set too low), cleared
+  automatically once the COP is plausible again.
 
 <a id="-breaking-changes-in-400-english"></a>
 ### ⚠️ Breaking changes in 4.0.0
@@ -816,6 +1060,59 @@ verschwinden ohne Neustart.
 
 Wem die Historie dieser drei Werte egal ist, der kann im Dialog auch einfach
 löschen. Beim Hochdruck hingen hier 187 Tage daran.
+
+### 4.1.0 — 2026-11-08
+
+- **Binärsensoren:** `binary_sensor.es_hp_verdichter`, `…_abtauen`,
+  `…_warmwasserbereitung` und `…_takten` (mehr als 3 Starts je Stunde oder
+  mittlere Laufzeit der letzten 3 Zyklen unter 10 min) — siehe
+  [Binärsensoren](#-binärsensoren-seit-v410).
+- **Warmwasserspeicher** als `water_heater.es_hp_warmwasser` (Ist `par7`, Soll
+  *Warmwasser Solltemperatur*). Die Solltemperatur lässt sich nur mit
+  freigegebenem Schreibzugriff ändern, sonst ist die Entity reine Anzeige.
+- **Carnot-Gütegrad** `sensor.es_hp_carnot_guetegrad` (COP im Verhältnis zum
+  praktischen Carnot-COP, Idee von heatpumpmonitor.org) — als Sensor und je
+  Zeitraum auf der Auswertungsseite, siehe
+  [Carnot-Gütegrad](#-carnot-gütegrad-seit-v410).
+- **Standby-Zähler** `sensor.es_hp_energie_elektrisch_standby`: Strom bei
+  stehendem Verdichter.
+- **Auswertungskarte 1.4.0:** Carnot-Gütegrad, Standby-Strom, Starts je
+  Laufstunde mit Warnfarbe (Schwellen wie der Takt-Sensor) und neuer Abschnitt
+  **Takten / Verdichterzyklen**: Verdichterläufe aus dem Zustandsverlauf
+  rekonstruiert (Zeitstrahl je Tag, Starts je Tag nach Betriebsart, Ø Laufzeit,
+  Pausen, Histogramme, Vorher/Nachher), Quelle je Tag Zähler oder Verlauf —
+  siehe [Auswertung](#-auswertung-seit-v400). `es_heatpump/analysis_config`
+  nennt dafür zusätzlich `frequency` und `mode`.
+- **Ereignis `es_heatpump_einstellung_geaendert`** bei jeder erkannten
+  Einstellungsänderung (Bedieneinheit, Portal-App oder Home Assistant), mit
+  Logbuch-Eintrag — nicht beim ersten Abruf nach dem Start und nie für
+  Portal-Aussetzer. Beispiel-Automation siehe
+  [Ereignis bei Einstellungsänderung](#-ereignis-bei-einstellungsänderung-seit-v410).
+- **Reparaturhinweis „Unplausibler COP“** nach fünf aufeinanderfolgenden Werten
+  unter 1 im Betrieb; verschwindet von selbst, sobald der COP wieder plausibel
+  ist.
+- **Diagnosedaten herunterladen** mit geschwärzten Zugangsdaten, Kennungen und
+  personenbezogenen Stammdaten.
+- **Neu konfigurieren:** Portal-URL, Benutzer und Passwort ändern, ohne den
+  Eintrag zu löschen; bei einem Benutzerwechsel werden `unique_id`s und
+  Geräteeintrag mitgezogen, Entity-IDs und Historie bleiben.
+- **Dashboard:** Karten/Kacheln *Effizienz & Standby* und *Betriebszustand*
+  (Standard und Origami).
+- Intern: Die Betriebsart-Auflösung liegt jetzt in `mode.py` (auch für die
+  Binärsensoren), alle Bedien-Entities schreiben über denselben geprüften Weg,
+  Sensoren und Binärsensoren teilen sich die Energie-Bilanz eines Eintrags.
+
+*English:* New binary sensors (compressor running, defrosting, hot-water
+production, short cycling), a `water_heater` entity for the DHW tank (target
+temperature only with write access enabled), Carnot efficiency sensor (idea from
+heatpumpmonitor.org) and a standby electricity counter; analysis card 1.4.0
+shows Carnot efficiency, standby, starts per run hour and a new short-cycling
+section with compressor cycles reconstructed from the recorder history
+(timeline, starts per day by mode, runtimes, pauses, histograms, before/after). New event
+`es_heatpump_einstellung_geaendert` with logbook entry (not on the first poll,
+never for portal glitches), repair issue for an implausible COP (five
+consecutive readings below 1), redacted diagnostics download, and a reconfigure
+step (portal URL, username, password) that keeps entity IDs and history.
 
 ### 4.0.1 — 2026-11-08
 

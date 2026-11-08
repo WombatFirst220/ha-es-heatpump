@@ -280,14 +280,35 @@ class _Api:
         return None
 
 
+class _Bus:
+    def __init__(self):
+        self.ereignisse = []
+
+    def async_fire(self, typ, daten):
+        self.ereignisse.append((typ, daten))
+
+
+class _Hass:
+    def __init__(self):
+        self.bus = _Bus()
+
+
 def test_koordinator_verwirft_aussetzer():
-    """Kein Übernehmen, keine Sicherung, Abruf gilt als fehlgeschlagen."""
+    """Kein Übernehmen, keine Sicherung, Abruf gilt als fehlgeschlagen.
+
+    Seit v4.1.0 auch: kein Ereignis beim ersten Abruf und keins für den
+    Aussetzer - genau eins für die echte Änderung danach.
+    """
     async def lauf():
         ablage = _ablage()
+        hass = _Hass()
         api = _Api([ECHT, AUSSETZER, {**ECHT, "par1": 0}])
-        k = SC.ESHeatpumpSettingsCoordinator(None, api, ablage, 900, 24, "4.0.1")
+        k = SC.ESHeatpumpSettingsCoordinator(
+            hass, api, ablage, 900, 24, "4.0.1", entry_id="eintrag1"
+        )
         k.data = await k._async_update_data()
         assert len(ablage.alle) == 1                         # Erstaufnahme
+        assert hass.bus.ereignisse == []                     # erster Abruf: nichts
         _JETZT[0] += datetime.timedelta(minutes=15)
         try:
             await k._async_update_data()
@@ -302,6 +323,12 @@ def test_koordinator_verwirft_aussetzer():
         assert len(ablage.alle) == 2
         assert ablage.neueste.label == "Änderung erkannt"
         assert "Anlage ein/aus" in ablage.neueste.grund
+        assert len(hass.bus.ereignisse) == 1                 # nur die echte Aenderung
+        typ, daten = hass.bus.ereignisse[0]
+        assert typ == "es_heatpump_einstellung_geaendert"
+        assert daten["entry_id"] == "eintrag1" and daten["zeitpunkt"]
+        assert [a["par"] for a in daten["aenderungen"]] == ["par1"]
+        assert daten["aenderungen"][0]["text"].startswith("Anlage ein/aus: ")
     asyncio.run(lauf())
 
 

@@ -1,7 +1,14 @@
 """Constants for the ES Heatpump integration."""
 
 DOMAIN = "es_heatpump"
-PLATFORMS = ["sensor", "number", "select", "switch", "button"]
+
+# Ereignis bei erkannter Einstellungsaenderung (v4.1.0), siehe
+# settings_coordinator.py und logbook.py
+EVENT_EINSTELLUNG_GEAENDERT = f"{DOMAIN}_einstellung_geaendert"
+
+PLATFORMS = [
+    "sensor", "binary_sensor", "number", "select", "switch", "button", "water_heater",
+]
 
 # ── Config entry keys ────────────────────────────────────────────────────────
 CONF_BASE_URL         = "base_url"
@@ -118,6 +125,7 @@ CALC_THERM_LEISTUNG = "calc_therm_leistung"
 CALC_COP            = "calc_cop"
 CALC_ELEC_POWER     = "calc_elec_power"     # mirror of the configured power_entity
 CALC_BETRIEBSART    = "calc_betriebsart"    # derived from mode_source_entity
+CALC_CARNOT         = "calc_carnot_guetegrad"  # COP / Carnot-COP in %, v4.1.0
 
 # ── Betriebsart: die Geraeteangabe par1 ──────────────────────────────────────
 # Die Formularseite des Portals (/a/amt/realdata/form) benennt par1 als

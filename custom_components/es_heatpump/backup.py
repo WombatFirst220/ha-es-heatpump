@@ -285,6 +285,64 @@ def _wert_lesbar(par: str, wert: Any) -> str:
         return str(wert)
 
 
+# Wie viele Aenderungen der Text des Ereignisses (und damit die Logbuchzeile)
+# ausschreibt; der Rest steht vollstaendig in ``aenderungen``.
+EREIGNIS_TEXT_MAX = 3
+
+
+def aenderungen_fuer_ereignis(
+    alt: dict[str, Any] | None, neu: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Nutzlast ``aenderungen`` des Ereignisses ``es_heatpump_einstellung_geaendert``.
+
+    Je geaendertem Wert ein Eintrag ``{par, name, gruppe, alt, neu, text}``;
+    ``text`` ist die lesbare Form ("Heizkurve: 38 °C → 40 °C"). Ohne
+    vorherigen Stand (erster Abruf nach dem Start) gibt es nichts zu melden -
+    das ist keine Aenderung, sondern ein Kennenlernen.
+    """
+    if not alt or not neu:
+        return []
+    aus: list[dict[str, Any]] = []
+    for a in vergleiche(alt, neu):
+        aus.append({
+            "par": a.par,
+            "name": a.name,
+            "gruppe": a.gruppe,
+            "alt": a.vorher,
+            "neu": a.nachher,
+            "text": f"{a.name}: {_ereignis_wert(a, a.vorher)} → "
+                    f"{_ereignis_wert(a, a.nachher)}",
+        })
+    return aus
+
+
+def _ereignis_wert(a: Abweichung, wert: Any) -> str:
+    """Lesbarer Wert; Felder ohne Katalogeintrag als nackte Zahl ("5", nicht "par299 = 5")."""
+    if a.bekannt:
+        return _wert_lesbar(a.par, wert)
+    if wert is None:
+        return "-"
+    return f"{wert:g}" if isinstance(wert, (int, float)) else str(wert)
+
+
+def ereignis_text(aenderungen: list[dict[str, Any]]) -> str:
+    """Kurzfassung fuer das Logbuch: die ersten Aenderungen, Rest gezaehlt.
+
+    Benannte Einstellungen kommen vor Feldern ohne Katalogeintrag - die
+    "Unbenanntes Feld par203" interessieren im Logbuch am wenigsten.
+    """
+    if not aenderungen:
+        return ""
+    sortiert = sorted(
+        aenderungen, key=lambda a: a.get("gruppe") == "Ohne Katalogeintrag"
+    )
+    text = "; ".join(str(a.get("text", "")) for a in sortiert[:EREIGNIS_TEXT_MAX])
+    rest = len(sortiert) - EREIGNIS_TEXT_MAX
+    if rest > 0:
+        text += f" (+{rest})"
+    return text
+
+
 def _als_utc(zeitpunkt: str) -> datetime.datetime | None:
     try:
         zeit = datetime.datetime.fromisoformat(str(zeitpunkt))

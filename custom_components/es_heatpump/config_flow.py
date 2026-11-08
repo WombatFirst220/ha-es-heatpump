@@ -117,8 +117,44 @@ def _base_url_selector() -> SelectSelector:
         )
     )
 from .coordinator import ESHeatpumpCoordinator, eigene_clientsession
+from .konto import neuer_titel, umbenannte_unique_id
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@callback
+def _async_benutzer_umziehen(hass, eintrag, alt: str, neu: str) -> None:
+    """Entity- und Geraeteregister auf den neuen Benutzer umschreiben (v4.1.0).
+
+    Ohne das bekaemen nach dem Neuladen alle Entities neue unique_ids und
+    stuenden als Doppelgaenger neben den alten - siehe ``konto.py``.
+    """
+    from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
+
+    ent_reg = er.async_get(hass)
+    for ent in er.async_entries_for_config_entry(ent_reg, eintrag.entry_id):
+        neu_uid = umbenannte_unique_id(ent.unique_id, DOMAIN, alt, neu)
+        if neu_uid is None:
+            continue
+        try:
+            ent_reg.async_update_entity(ent.entity_id, new_unique_id=neu_uid)
+        except ValueError as err:
+            _LOGGER.warning(
+                "ES Heatpump: unique_id von %s nicht umschreibbar: %s",
+                ent.entity_id, err,
+            )
+
+    dev_reg = dr.async_get(hass)
+    geraet = dev_reg.async_get_device(identifiers={(DOMAIN, alt)})
+    if geraet is not None:
+        dev_reg.async_update_device(
+            geraet.id,
+            new_identifiers={
+                (d, (neu if (d, k) == (DOMAIN, alt) else k))
+                for d, k in geraet.identifiers
+            },
+        )
 
 
 async def _async_pruefe_zugang(
@@ -286,6 +322,124 @@ class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={"username": benutzer},
             errors=errors,
         )
+
+    # ── Neu konfigurieren (v4.1.0) ───────────────────────────────────────
+    # Portal-URL, Benutzer und Passwort aendern, ohne den Eintrag zu loeschen
+    # (und damit Sicherungen, Zaehlerstaende und Historie zu verlieren). Home
+    # Assistant bietet den Schritt ab 2024.4 an; aeltere Versionen kennen
+    # SOURCE_RECONFIGURE nicht und rufen ihn nie auf.
+
+    def _reconfigure_eintrag(self) -> config_entries.ConfigEntry | None:
+        holen = getattr(self, "_get_reconfigure_entry", None)   # ab HA 2024.11
+        if holen is not None:
+            try:
+                return holen()
+            except Exception:  # noqa: BLE001
+                pass
+        return self.hass.config_entries.async_get_entry(
+            self.context.get("entry_id", "")
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        errors: dict[str, str] = {}
+        eintrag = self._reconfigure_eintrag()
+        if eintrag is None:  # pragma: no cover - Eintrag inzwischen geloescht
+            return self.async_abort(reason="reconfigure_successful")
+
+        alt_benutzer = eintrag.data[CONF_USERNAME]
+        alt_basis = eintrag.options.get(
+            CONF_BASE_URL, eintrag.data.get(CONF_BASE_URL, DEFAULT_BASE_URL)
+        ) or DEFAULT_BASE_URL
+
+        if user_input is not None:
+            benutzer = str(user_input[CONF_USERNAME]).strip()
+            basis = (user_input.get(CONF_BASE_URL) or DEFAULT_BASE_URL).strip()
+            neue_uid = benutzer.lower()
+
+            # Benutzer darf nur wechseln, wenn kein anderer Eintrag ihn hat
+            if neue_uid != (eintrag.unique_id or alt_benutzer.lower()):
+                for anderer in self.hass.config_entries.async_entries(DOMAIN):
+                    if anderer.entry_id != eintrag.entry_id and anderer.unique_id == neue_uid:
+                        return self.async_abort(reason="benutzer_bereits_eingerichtet")
+
+            fehler = await _async_pruefe_zugang(
+                self.hass, benutzer, user_input[CONF_PASSWORD], basis
+            )
+            if fehler:
+                errors["base"] = fehler
+            else:
+                return self._reconfigure_abschliessen(
+                    eintrag, benutzer, user_input[CONF_PASSWORD], basis
+                )
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_USERNAME, default=alt_benutzer): str,
+                vol.Required(CONF_PASSWORD): str,
+                vol.Required(CONF_BASE_URL, default=alt_basis): _base_url_selector(),
+            }
+        )
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=schema,
+            description_placeholders={"username": alt_benutzer},
+            errors=errors,
+        )
+
+    def _reconfigure_abschliessen(
+        self,
+        eintrag: config_entries.ConfigEntry,
+        benutzer: str,
+        passwort: str,
+        basis: str,
+    ) -> config_entries.FlowResult:
+        """Register umschreiben, Eintrag aktualisieren, neu laden."""
+        alt_benutzer = eintrag.data[CONF_USERNAME]
+        if benutzer != alt_benutzer:
+            _async_benutzer_umziehen(self.hass, eintrag, alt_benutzer, benutzer)
+
+        daten = {
+            **eintrag.data,
+            CONF_USERNAME: benutzer,
+            CONF_PASSWORD: passwort,
+            CONF_BASE_URL: basis,
+        }
+        # Die Optionen haben Vorrang vor den Einrichtungsdaten (seit v4.0.1);
+        # eine dort abgelegte Portal-URL muss mitziehen, sonst bliebe die neue
+        # wirkungslos.
+        optionen = dict(eintrag.options)
+        if CONF_BASE_URL in optionen:
+            optionen[CONF_BASE_URL] = basis
+        titel = neuer_titel(eintrag.title, alt_benutzer, benutzer)
+        uid = benutzer.lower()
+
+        geaendert = (
+            daten != dict(eintrag.data)
+            or optionen != dict(eintrag.options)
+            or titel != eintrag.title
+            or uid != eintrag.unique_id
+        )
+        aktualisieren = getattr(self, "async_update_reload_and_abort", None)
+        # Wie beim Reauth: Aeltere HA-Fassungen laden nur bei geaenderten
+        # Daten neu - bei unveraenderten Angaben haendisch.
+        if aktualisieren is not None and geaendert:
+            return aktualisieren(
+                eintrag,
+                unique_id=uid,
+                title=titel,
+                data=daten,
+                options=optionen,
+                reason="reconfigure_successful",
+            )
+        self.hass.config_entries.async_update_entry(
+            eintrag, unique_id=uid, title=titel, data=daten, options=optionen
+        )
+        self.hass.async_create_task(
+            self.hass.config_entries.async_reload(eintrag.entry_id)
+        )
+        return self.async_abort(reason="reconfigure_successful")
 
     @staticmethod
     @callback

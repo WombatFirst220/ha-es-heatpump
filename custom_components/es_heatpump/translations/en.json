@@ -29,6 +29,15 @@
         "data": {
           "password": "Password"
         }
+      },
+      "reconfigure": {
+        "title": "ES Heat Pump – Reconfigure",
+        "description": "Change the portal URL and the credentials of this entry (currently {username}). The login is checked before anything is saved. Backups, energy counters and history are kept; if the username changes, entities and the device keep their entity IDs.",
+        "data": {
+          "username": "Username (e-mail address)",
+          "password": "Password",
+          "base_url": "Portal URL"
+        }
       }
     },
     "error": {
@@ -38,7 +47,9 @@
     },
     "abort": {
       "already_configured": "This heat pump is already configured.",
-      "reauth_successful": "Credentials updated, the integration is restarting."
+      "reauth_successful": "Credentials updated, the integration is restarting.",
+      "reconfigure_successful": "Settings saved, the integration is restarting.",
+      "benutzer_bereits_eingerichtet": "Another ES Heatpump entry already uses this username. Remove that entry first or choose a different username."
     }
   },
   "options": {
@@ -151,9 +162,35 @@
     "origami_theme_missing": {
       "title": "Origami theme not installed",
       "description": "The ES Heatpump dashboard is set to the \"Origami\" design, but the theme \"{theme}\" is not installed. Until it is, Home Assistant shows the default theme.\n\nTo install: Marketplace/HACS → download the repository \"hazymorning/origami\" (category theme), then run the action \"frontend.reload_themes\" under Developer tools → Actions. The Montserrat font is optional, see the Origami README. This notice then disappears by itself."
+    },
+    "cop_unplausibel": {
+      "title": "Implausible COP – check the flow rate",
+      "description": "The current COP has been below 1 for several consecutive readings while the heat pump was running (last value: {cop}). That is physically impossible – the unit would deliver less heat than it draws in electricity.\n\nThermal power and COP are calculated from the configured flow rate (currently {volumenstrom} m³/h), which is almost certainly too low. Datasheet nominal value: {richtwert}.\n\nCorrect it in the integration options under \"Measurement and calculation → Heating-loop flow rate\" (or select your model). This notice disappears by itself as soon as the COP is plausible again."
     }
   },
   "entity": {
+    "binary_sensor": {
+      "verdichter": {
+        "name": "Compressor"
+      },
+      "abtauen": {
+        "name": "Defrosting"
+      },
+      "warmwasserbereitung": {
+        "name": "Hot water production"
+      },
+      "takten": {
+        "name": "Compressor short cycling",
+        "state_attributes": {
+          "starts_letzte_stunde": {
+            "name": "Starts in the last hour"
+          },
+          "mittlere_laufzeit_min": {
+            "name": "Mean run time (min)"
+          }
+        }
+      }
+    },
     "button": {
       "konfiguration_sichern": {
         "name": "Back up configuration now"
@@ -511,6 +548,17 @@
       },
       "verdichter_laufzeit": {
         "name": "Compressor runtime"
+      },
+      "energie_elektrisch_standby": {
+        "name": "Electrical energy standby"
+      },
+      "carnot_guetegrad": {
+        "name": "Carnot efficiency",
+        "state_attributes": {
+          "cop_carnot": {
+            "name": "Carnot COP"
+          }
+        }
       }
     },
     "switch": {
@@ -570,6 +618,11 @@
       },
       "cfg_par85": {
         "name": "Utility lock: Circulation pump P0 during utility lock"
+      }
+    },
+    "water_heater": {
+      "warmwasser": {
+        "name": "Hot water"
       }
     }
   },

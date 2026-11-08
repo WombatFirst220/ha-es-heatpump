@@ -8,6 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 
 from .backup_store import Sicherungsablage
 from .const import (
@@ -47,6 +48,7 @@ from .analysis_card import (
     async_unregister_analysis_card,
 )
 from .hydraulic_card import async_register_card, async_unregister_card
+from .plausibilitaet import cop_issue_id
 from .services import async_entferne_dienste, async_registriere_dienste
 from .settings_coordinator import ESHeatpumpSettingsCoordinator
 from .websocket_api import async_registriere_websocket
@@ -120,6 +122,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         scan_interval=int(_option(CONF_SETTINGS_INTERVAL, DEFAULT_SETTINGS_INTERVAL)),
         backup_interval_h=int(_option(CONF_BACKUP_INTERVAL, DEFAULT_BACKUP_INTERVAL)),
         version=version,
+        entry_id=entry.entry_id,
     )
     # Ein Fehlschlag hier darf die Messwerte nicht mitreissen: Wer die
     # Integration wegen der Temperaturen einsetzt, soll sie behalten, auch wenn
@@ -202,6 +205,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry (the dashboard stays, see async_remove_entry)."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+    # Reparaturhinweis "COP unplausibel" (v4.1.0) gehoert zum laufenden
+    # Eintrag; nach dem Neuladen meldet ihn der COP-Sensor bei Bedarf neu.
+    ir.async_delete_issue(hass, DOMAIN, cop_issue_id(entry.entry_id))
 
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)

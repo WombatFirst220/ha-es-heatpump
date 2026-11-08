@@ -28,9 +28,19 @@ Antwort::
      "thermal_power": "sensor.es_hp_thermische_leistung",
      "energy_entity": "<Stromzaehler aus den Optionen oder null>",
      "power_entity": "<Strommess-Entity aus den Optionen oder null>",
-     "counters": {"el": ..., "el_heat": ..., "el_dhw": ..., "th": ...,
-                  "th_heat": ..., "th_dhw": ..., "starts": ..., "runtime": ...},
-     "outdoor": ..., "cop": ..., "flow": ...}
+     "counters": {"el": ..., "el_heat": ..., "el_dhw": ..., "el_standby": ...,
+                  "th": ..., "th_heat": ..., "th_dhw": ..., "starts": ...,
+                  "runtime": ...},
+     "binary": {"verdichter": ..., "abtauen": ..., "warmwasser": ...,
+                "takten": ...},
+     "outdoor": ..., "cop": ..., "flow": ..., "carnot": ...}
+
+``el_standby``, ``binary`` und ``carnot`` kamen mit v4.1.0 hinzu, ebenso
+``frequency`` (Verdichterfrequenz par20) und ``mode`` (Betriebsart): Aus deren
+Zustandsverlauf rekonstruiert die Karte einzelne Verdichterzyklen (Abschnitt
+"Takten / Verdichterzyklen")::
+
+     "frequency": "sensor.es_hp_frequenz_hz", "mode": "sensor.es_hp_betriebsart"
 
 Die IDs kommen ueber die ``unique_id`` aus der Entity-Registry, damit eine
 vom Nutzer umbenannte Entity gefunden wird; sonst gilt die Standard-ID.
@@ -46,12 +56,19 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
 from .backup import aenderungsverlauf
-from .const import DOMAIN
+from .const import CALC_BETRIEBSART, DOMAIN
 from .energy import analyse_konfiguration
 
 _LOGGER = logging.getLogger(__name__)
 
 _DATA_KEY = f"{DOMAIN}_websocket"
+
+# Verlaufsreihen fuer die Zyklen-Rekonstruktion der Karte (v4.1.0):
+# Schluessel der Antwort -> (unique_id-Endung, Standard-Slug)
+VERLAUF_REIHEN: dict[str, tuple[str, str]] = {
+    "frequency": ("par20", "frequenz_hz"),
+    "mode": (CALC_BETRIEBSART, "betriebsart"),
+}
 
 
 @callback
@@ -158,7 +175,11 @@ def ws_analysis_config(
 
     registry = er.async_get(hass)
 
-    def finde(unique_id: str) -> str | None:
-        return registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+    def finde(unique_id: str, plattform: str = "sensor") -> str | None:
+        return registry.async_get_entity_id(plattform, DOMAIN, unique_id)
 
-    connection.send_result(msg["id"], analyse_konfiguration(finde, benutzer, optionen))
+    antwort = analyse_konfiguration(finde, benutzer, optionen)
+    for schluessel, (endung, slug) in VERLAUF_REIHEN.items():
+        gefunden = finde(f"{DOMAIN}_{benutzer}_{endung}") if benutzer else None
+        antwort[schluessel] = gefunden or f"sensor.es_hp_{slug}"
+    connection.send_result(msg["id"], antwort)

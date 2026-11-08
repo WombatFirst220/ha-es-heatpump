@@ -24,9 +24,15 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .backup import ANLASS_AUTOMATISCH, ANLASS_VOR_SCHREIBEN, pruefe_stand, vergleiche
+from .backup import (
+    ANLASS_AUTOMATISCH,
+    ANLASS_VOR_SCHREIBEN,
+    aenderungen_fuer_ereignis,
+    pruefe_stand,
+    vergleiche,
+)
 from .backup_store import Sicherungsablage
-from .const import DOMAIN
+from .const import DOMAIN, EVENT_EINSTELLUNG_GEAENDERT
 from .coordinator import ESHeatpumpCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,6 +49,7 @@ class ESHeatpumpSettingsCoordinator(DataUpdateCoordinator[dict[str, float]]):
         scan_interval: int,
         backup_interval_h: int,
         version: str,
+        entry_id: str = "",
     ) -> None:
         super().__init__(
             hass,
@@ -57,6 +64,12 @@ class ESHeatpumpSettingsCoordinator(DataUpdateCoordinator[dict[str, float]]):
         # Nur zur Anzeige im Diagnosesensor - die Durchsetzung sitzt in den
         # Entities und den Diensten, nicht hier.
         self.schreiben_erlaubt = False
+        self._entry_id = entry_id
+        # Letzter vom Portal GELESENER gueltiger Stand - Bezug fuer das
+        # Ereignis "einstellung_geaendert". Bewusst nicht self.data: Das wird
+        # beim Schreiben aus Home Assistant optimistisch vorweggenommen, und
+        # dann fiele die Aenderung beim naechsten Abruf nicht mehr auf.
+        self._letzter_stand: dict[str, float] | None = None
 
     async def _async_update_data(self) -> dict[str, float]:
         try:
@@ -87,7 +100,31 @@ class ESHeatpumpSettingsCoordinator(DataUpdateCoordinator[dict[str, float]]):
         await self.api.async_lies_stammdaten_kopf()
 
         await self._pruefe_sicherung(werte)
+        self._melde_aenderungen(werte)
         return werte
+
+    def _melde_aenderungen(self, werte: dict[str, float]) -> None:
+        """Feuert ``es_heatpump_einstellung_geaendert`` bei jeder erkannten Aenderung (v4.1.0).
+
+        Nicht beim ersten Abruf nach dem Start (kein Bezug - das ist keine
+        Aenderung) und nie fuer Portal-Aussetzer: Die hat ``pruefe_stand``
+        oben bereits verworfen, bevor es hier ankommt. Gemeldet wird alles,
+        was sich gegenueber dem vorigen gueltigen Abruf unterscheidet - an der
+        Bedieneinheit, in der Portal-App oder aus Home Assistant heraus.
+        """
+        vorher = self._letzter_stand
+        self._letzter_stand = dict(werte)
+        aenderungen = aenderungen_fuer_ereignis(vorher, werte)
+        if not aenderungen:
+            return
+        self.hass.bus.async_fire(
+            EVENT_EINSTELLUNG_GEAENDERT,
+            {
+                "entry_id": self._entry_id,
+                "zeitpunkt": dt_util.now().isoformat(),
+                "aenderungen": aenderungen,
+            },
+        )
 
     async def _pruefe_sicherung(self, werte: dict[str, float]) -> None:
         """Legt eine Sicherung an, wenn es etwas zu sichern gibt.

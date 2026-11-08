@@ -184,6 +184,7 @@ def test_slugs_der_zaehler():
     slugs = [s for s, _, _ in E.ENERGIE_ZAEHLER]
     assert slugs == [
         "energie_elektrisch", "energie_elektrisch_heizen", "energie_elektrisch_warmwasser",
+        "energie_elektrisch_standby",
         "energie_thermisch", "energie_thermisch_heizen", "energie_thermisch_warmwasser",
     ]
 
@@ -276,17 +277,34 @@ def test_zaehlerstand_basis_nach_erstem_messpunkt():
 
 def test_analyse_konfiguration_registry_und_rueckfall():
     registry = {
-        "es_heatpump_hans@x.de_calc_energie_elektrisch": "sensor.wp_strom_zaehler",
-        "es_heatpump_hans@x.de_par24": "sensor.draussen",
+        ("sensor", "es_heatpump_hans@x.de_calc_energie_elektrisch"): "sensor.wp_strom_zaehler",
+        ("sensor", "es_heatpump_hans@x.de_par24"): "sensor.draussen",
+        ("binary_sensor", "es_heatpump_hans@x.de_takten"): "binary_sensor.wp_taktet",
+        # gleiche unique_id auf anderer Plattform darf nicht treffen
+        ("sensor", "es_heatpump_hans@x.de_verdichter"): "sensor.falsch",
     }
+
+    def finde(unique_id, plattform="sensor"):
+        return registry.get((plattform, unique_id))
+
     a = E.analyse_konfiguration(
-        registry.get, "hans@x.de",
+        finde, "hans@x.de",
         {"energy_entity": "sensor.shelly_energy", "power_entity": "", "flow_entity": "x"},
     )
     assert a["counters"]["el"] == "sensor.wp_strom_zaehler"
     assert a["counters"]["th_dhw"] == "sensor.es_hp_energie_thermisch_warmwasser"
     assert a["counters"]["runtime"] == "sensor.es_hp_verdichter_laufzeit"
-    assert set(a["counters"]) == {"el", "el_heat", "el_dhw", "th", "th_heat", "th_dhw", "starts", "runtime"}
+    assert set(a["counters"]) == {"el", "el_heat", "el_dhw", "el_standby", "th", "th_heat",
+                                  "th_dhw", "starts", "runtime"}
+    assert a["counters"]["el_standby"] == "sensor.es_hp_energie_elektrisch_standby"
+    # v4.1.0: Binaersensoren und Carnot-Guetegrad
+    assert a["binary"] == {
+        "verdichter": "binary_sensor.es_hp_verdichter",
+        "abtauen": "binary_sensor.es_hp_abtauen",
+        "warmwasser": "binary_sensor.es_hp_warmwasserbereitung",
+        "takten": "binary_sensor.wp_taktet",
+    }
+    assert a["carnot"] == "sensor.es_hp_carnot_guetegrad"
     assert a["outdoor"] == "sensor.draussen"
     assert a["electrical_power"] == "sensor.es_hp_leistung_elektrisch"
     assert a["thermal_power"] == "sensor.es_hp_thermische_leistung"
@@ -297,9 +315,10 @@ def test_analyse_konfiguration_registry_und_rueckfall():
     # Zaehler-Slugs passen zu den Entities der Integration
     assert set(E.ANALYSE_ZAEHLER.values()) >= {slug for slug, _, _ in E.ENERGIE_ZAEHLER}
     # Ohne Eintrag: nur Standard-IDs
-    leer = E.analyse_konfiguration(lambda _u: None, None, {})
+    leer = E.analyse_konfiguration(lambda _u, _p="sensor": None, None, {})
     assert leer["counters"]["el"] == "sensor.es_hp_energie_elektrisch"
     assert leer["energy_entity"] is None
+    assert leer["binary"]["takten"] == "binary_sensor.es_hp_takten"
 
 
 # ── VerdichterZaehler ────────────────────────────────────────────────────
@@ -407,3 +426,196 @@ def test_aenderungsverlauf_feld_entfernt():
     assert verlauf[0]["time"] == "2026-01-02T10:00:00+00:00"
     assert verlauf[0]["items"][0]["new"] is None
     assert verlauf[0]["items"][0]["text"].endswith("→ -")
+
+
+# ── Standby-Zaehler (v4.1.0) ─────────────────────────────────────────────
+
+@pytest.mark.parametrize("frequenz, erwartet", [
+    (0, True), (0.0, True), ("0", True), (-1, True),
+    (35, False), ("42.5", False), (None, False), ("x", False), (float("nan"), False),
+])
+def test_verdichter_steht(frequenz, erwartet):
+    assert E.verdichter_steht(frequenz) is erwartet
+
+
+def test_standby_bei_leistungsintegration():
+    """Links integriert: Standby gilt fuer das Intervall ab dem Messpunkt."""
+    z = E.EnergieZaehler(15 * 60, E.METHODE_LINKS)
+    z.messpunkt(0, 3600, E.HEIZEN, standby=False)       # Verdichter laeuft
+    z.messpunkt(60, 36, E.HEIZEN, standby=True)         # 60 s x 3600 W = 0,06 kWh
+    z.messpunkt(120, 36, None, standby=True)            # 60 s x 36 W
+    z.messpunkt(180, 3600, E.HEIZEN, standby=False)     # 60 s x 36 W
+    z.messpunkt(240, None)                              # 60 s x 3600 W, Kette endet
+    assert z.summen[E.GESAMT] == pytest.approx(0.12 + 2 * 0.0006)
+    assert z.summen[E.STANDBY] == pytest.approx(2 * 0.0006)
+    # Standby ist ein Querschnitt: Intervall 60..120 (Heizen) zaehlt auch dort
+    assert z.summen[E.HEIZEN] == pytest.approx(0.12 + 0.0006)
+
+
+def test_standby_bei_zaehlerstaenden():
+    z = E.EnergieZaehler(15 * 60)
+    f = E.ZaehlerstandFolger(z)
+    f.messpunkt(0, 100.0, None, True)
+    assert f.messpunkt(600, 100.01, None, True) == pytest.approx(0.01)
+    f.messpunkt(1200, 100.31, E.HEIZEN, False)
+    f.messpunkt(1800, 100.32, E.HEIZEN, True)
+    assert z.summen[E.GESAMT] == pytest.approx(0.32)
+    assert z.summen[E.STANDBY] == pytest.approx(0.02)
+    assert z.summen[E.HEIZEN] == pytest.approx(0.31)
+
+
+def test_standby_wiederherstellen():
+    z = E.EnergieZaehler(60)
+    z.uebernehme(E.STANDBY, "1.25")
+    assert z.summen[E.STANDBY] == pytest.approx(1.25)
+    assert z.summen[E.GESAMT] == 0.0
+
+
+def test_standby_zaehler_ist_elektrisch():
+    eintraege = {slug: (art, teil) for slug, art, teil in E.ENERGIE_ZAEHLER}
+    assert eintraege["energie_elektrisch_standby"] == (E.ART_ELEKTRISCH, E.STANDBY)
+
+
+# ── Takt-Erkennung (v4.1.0) ──────────────────────────────────────────────
+
+def _zyklen(v, t0, anzahl, lauf_s, pause_s, takt_s=60):
+    """``anzahl`` Zyklen Lauf/Pause im Abruftakt ``takt_s``; liefert das Ende."""
+    t = t0
+    for _ in range(anzahl):
+        ende = t + lauf_s
+        while t < ende:
+            v.messpunkt(t, 40)
+            t += takt_s
+        ende = t + pause_s
+        while t < ende:
+            v.messpunkt(t, 0)
+            t += takt_s
+    return t
+
+
+def test_takt_schwellen():
+    assert E.TAKT_MAX_STARTS_JE_STUNDE == 3
+    assert E.TAKT_MIN_LAUFZEIT_MIN == 10
+    assert E.TAKT_ZYKLEN == 3
+
+
+def test_takt_lange_zyklen_unauffaellig():
+    v = E.VerdichterZaehler()
+    v.messpunkt(0, 0)
+    t = _zyklen(v, 60, 3, 40 * 60, 20 * 60)
+    assert v.starts == 3
+    assert v.mittlere_laufzeit_min() == pytest.approx(40)
+    assert v.starts_seit(t) <= 1
+    assert v.taktet(t) is False
+
+
+def test_takt_viele_starts_je_stunde():
+    # 4 Starts in 48 min, je 11 min Lauf - das Laufzeit-Kriterium allein waere ok
+    v = E.VerdichterZaehler()
+    v.messpunkt(0, 0)
+    t = _zyklen(v, 60, 4, 11 * 60, 60)
+    assert v.starts == 4
+    assert v.starts_seit(t) == 4
+    assert v.mittlere_laufzeit_min() >= 10
+    assert v.taktet(t) is True
+    # Genau 3 Starts sind noch erlaubt
+    assert v.taktet(t, max_starts=4) is False
+    # Eine Stunde spaeter faellt alles aus dem Fenster
+    assert v.starts_seit(t + 3600) == 0
+    assert v.taktet(t + 3600) is False
+
+
+def test_takt_kurze_laufzeit():
+    v = E.VerdichterZaehler()
+    v.messpunkt(0, 0)
+    t = _zyklen(v, 60, 3, 5 * 60, 40 * 60)       # 3 x 5 min, weit auseinander
+    assert v.starts_seit(t) <= 2
+    assert v.mittlere_laufzeit_min() == pytest.approx(5)
+    assert v.taktet(t) is True
+    # Steht der Verdichter danach laenger als die Altersgrenze, ist es vorbei
+    assert v.taktet(t + E.TAKT_ZYKLEN_MAX_ALTER_S + 3600) is False
+
+
+def test_takt_braucht_drei_zyklen():
+    v = E.VerdichterZaehler()
+    v.messpunkt(0, 0)
+    t = _zyklen(v, 60, 2, 5 * 60, 40 * 60)
+    assert v.mittlere_laufzeit_min() is None
+    assert v.taktet(t) is False
+
+
+def test_takt_zyklus_ohne_bekannten_beginn_zaehlt_nicht():
+    v = E.VerdichterZaehler()
+    v.messpunkt(0, 40)            # erster Messpunkt: laeuft schon
+    v.messpunkt(60, 0)            # Stopp - Laenge unbekannt
+    assert v.mittlere_laufzeit_min(1) is None
+    v.messpunkt(120, 40)
+    v.messpunkt(180, 40)
+    v.messpunkt(240, None)        # Aussetzer: kein Stopp
+    v.messpunkt(300, 0)
+    assert v.mittlere_laufzeit_min(1) == pytest.approx(3)
+
+
+def test_takt_luecke_verwirft_zyklus():
+    v = E.VerdichterZaehler(10 * 60)
+    v.messpunkt(0, 0)
+    v.messpunkt(60, 40)
+    v.messpunkt(60 + 11 * 60, 40)     # Luecke im Lauf
+    v.messpunkt(60 + 12 * 60, 0)
+    assert v.mittlere_laufzeit_min(1) is None
+
+
+def test_takt_ringpuffer_begrenzt():
+    v = E.VerdichterZaehler()
+    v.messpunkt(0, 0)
+    _zyklen(v, 60, 50, 60, 60)
+    assert len(v._start_zeiten) <= 32 and len(v._zyklen_s) <= 10
+    assert v.starts == 50
+
+
+# ── Carnot-Guetegrad (v4.1.0) ────────────────────────────────────────────
+
+def test_cop_carnot_formel():
+    # Vorlauf 35, aussen 7: (37 + 273,15) / (37 - 1) = 8,615...
+    assert E.cop_carnot(35, 7) == pytest.approx(310.15 / 36)
+    assert E.CARNOT_OFFSET_KONDENSATION_K == 2.0
+    assert E.CARNOT_OFFSET_VERDAMPFUNG_K == -6.0
+
+
+@pytest.mark.parametrize("vor, aussen", [
+    (None, 5), (35, None), ("x", 5), (-99, 5), (35, -99.0), (float("inf"), 5),
+])
+def test_cop_carnot_ungueltig(vor, aussen):
+    assert E.cop_carnot(vor, aussen) is None
+
+
+def test_cop_carnot_aussen_waermer_als_vorlauf():
+    # Nenner (20 + 2) - (25 - 6) = 3 K: noch gerechnet
+    assert E.cop_carnot(20, 25) == pytest.approx(295.15 / 3)
+
+
+def test_cop_carnot_nenner_zu_klein():
+    # (T_vor + 2) - (T_aussen - 6) = 1 K -> None; 1,5 K -> gerechnet
+    assert E.cop_carnot(10, 17) is None
+    assert E.cop_carnot(10, 18) is None
+    assert E.cop_carnot(10.5, 17) == pytest.approx((12.5 + 273.15) / 1.5)
+
+
+def test_carnot_guetegrad():
+    guete, ideal = E.carnot_guetegrad(4.0, 35, 7, True)
+    assert ideal == pytest.approx(310.15 / 36)
+    assert guete == pytest.approx(4.0 / (310.15 / 36) * 100)
+    assert 40 < guete < 50
+
+
+@pytest.mark.parametrize("cop, laeuft", [
+    (4.0, False), (4.0, None), (0, True), (-1, True), (None, True), ("x", True),
+])
+def test_carnot_guetegrad_none(cop, laeuft):
+    guete, ideal = E.carnot_guetegrad(cop, 35, 7, laeuft)
+    assert guete is None
+    assert ideal == pytest.approx(310.15 / 36)
+
+
+def test_carnot_guetegrad_ohne_carnot():
+    assert E.carnot_guetegrad(4.0, 35, None, True) == (None, None)

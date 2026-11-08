@@ -29,6 +29,15 @@
         "data": {
           "password": "Wachtwoord"
         }
+      },
+      "reconfigure": {
+        "title": "ES Warmtepomp – Opnieuw configureren",
+        "description": "Wijzig de portaal-URL en de inloggegevens van deze vermelding (momenteel {username}). De aanmelding wordt gecontroleerd voordat iets wordt opgeslagen. Back-ups, energietellers en geschiedenis blijven behouden; wijzigt de gebruikersnaam, dan behouden entiteiten en apparaat hun entiteit-ID's.",
+        "data": {
+          "username": "Gebruikersnaam (e-mailadres)",
+          "password": "Wachtwoord",
+          "base_url": "Portaal-URL"
+        }
       }
     },
     "error": {
@@ -38,7 +47,9 @@
     },
     "abort": {
       "already_configured": "Deze warmtepomp is al geconfigureerd.",
-      "reauth_successful": "Inloggegevens bijgewerkt, de integratie wordt opnieuw gestart."
+      "reauth_successful": "Inloggegevens bijgewerkt, de integratie wordt opnieuw gestart.",
+      "reconfigure_successful": "Instellingen opgeslagen, de integratie wordt opnieuw gestart.",
+      "benutzer_bereits_eingerichtet": "Een andere ES Heatpump-vermelding gebruikt deze gebruikersnaam al. Verwijder die vermelding eerst of kies een andere gebruikersnaam."
     }
   },
   "options": {
@@ -151,9 +162,35 @@
     "origami_theme_missing": {
       "title": "Origami-thema niet geïnstalleerd",
       "description": "Het ES Heatpump-dashboard staat op het ontwerp \"Origami\", maar het thema \"{theme}\" is niet geïnstalleerd. Zolang dat zo is, toont Home Assistant het standaardthema.\n\nInstalleren: Marketplace/HACS → download de repository \"hazymorning/origami\" (categorie thema) en voer daarna de actie \"frontend.reload_themes\" uit onder Ontwikkelhulpmiddelen → Acties. Het lettertype Montserrat is optioneel, zie de Origami-README. Deze melding verdwijnt daarna vanzelf."
+    },
+    "cop_unplausibel": {
+      "title": "Onwaarschijnlijke COP – controleer het debiet",
+      "description": "De actuele COP lag tijdens bedrijf meerdere metingen achter elkaar onder 1 (laatste waarde: {cop}). Dat is fysiek onmogelijk – de warmtepomp zou minder warmte afgeven dan hij aan stroom opneemt.\n\nThermisch vermogen en COP worden berekend uit het ingestelde debiet (momenteel {volumenstrom} m³/h), en dat is vrijwel zeker te laag. Nominale waarde volgens het datablad: {richtwert}.\n\nCorrigeer dit in de opties van de integratie onder \"Meting en berekening → Volumestroom verwarmingscircuit\" (of kies uw model). Deze melding verdwijnt vanzelf zodra de COP weer plausibel is."
     }
   },
   "entity": {
+    "binary_sensor": {
+      "verdichter": {
+        "name": "Compressor"
+      },
+      "abtauen": {
+        "name": "Ontdooien"
+      },
+      "warmwasserbereitung": {
+        "name": "Warmwaterbereiding"
+      },
+      "takten": {
+        "name": "Compressor pendelt",
+        "state_attributes": {
+          "starts_letzte_stunde": {
+            "name": "Starts in het afgelopen uur"
+          },
+          "mittlere_laufzeit_min": {
+            "name": "Gemiddelde looptijd (min)"
+          }
+        }
+      }
+    },
     "button": {
       "konfiguration_sichern": {
         "name": "Configuratie nu back-uppen"
@@ -511,6 +548,17 @@
       },
       "verdichter_laufzeit": {
         "name": "Looptijd compressor"
+      },
+      "energie_elektrisch_standby": {
+        "name": "Elektrische energie stand-by"
+      },
+      "carnot_guetegrad": {
+        "name": "Carnot-rendement",
+        "state_attributes": {
+          "cop_carnot": {
+            "name": "Carnot-COP"
+          }
+        }
       }
     },
     "switch": {
@@ -570,6 +618,11 @@
       },
       "cfg_par85": {
         "name": "Netbeheerdersblokkering: Circulatiepomp P0 tijdens netbeheerdersblokkering"
+      }
+    },
+    "water_heater": {
+      "warmwasser": {
+        "name": "Warm water"
       }
     }
   },

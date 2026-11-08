@@ -16,7 +16,11 @@ entstehen hier durch Integration ueber die Zeit:
 * **thermisch** - die berechnete Waermeleistung (wie ``ThermLeistungSensor``)
   bei jedem Portalabruf, per Trapezregel.
 * **Verdichter** - Starts (Wechsel der Frequenz par20 von 0 auf > 0) und
-  Laufzeit (Zeit mit par20 > 0).
+  Laufzeit (Zeit mit par20 > 0). Seit v4.1.0 dazu ein Ringpuffer der letzten
+  Starts und Zykluslaengen fuer die Takt-Erkennung (``VerdichterZaehler.taktet``).
+* **Standby** (v4.1.0) - elektrische Energie, waehrend der Verdichter steht
+  (par20 == 0): Steuerung, Umwaelzpumpe, Kurbelwannenheizung. Ein Querschnitt
+  zur Aufteilung nach Betriebsart, kein weiterer Teil der Summe.
 
 Aufteilung nach Betriebsart: Massgeblich ist die Betriebsart zu Beginn des
 Intervalls. "Heizen" und "Entfrosten" zaehlen zum Heizen, die drei
@@ -32,15 +36,18 @@ testen (``tests/test_energy.py``). Die Anbindung steht in ``sensor.py``.
 from __future__ import annotations
 
 import math
+from collections import deque
 from typing import Any
 
 from .const import (
+    CALC_CARNOT,
     CALC_COP,
     CALC_ELEC_POWER,
     CALC_THERM_LEISTUNG,
     CONF_ENERGY_ENTITY,
     CONF_POWER_ENTITY,
     DOMAIN,
+    TEMP_SENTINEL,
     WATER_VOL_HEAT_CAPACITY_WH,
 )
 from .flow import active_flow_rate
@@ -49,7 +56,10 @@ from .flow import active_flow_rate
 GESAMT = "gesamt"
 HEIZEN = "heizen"
 WARMWASSER = "warmwasser"
-TEILE = (GESAMT, HEIZEN, WARMWASSER)
+# Querschnitt: elektrische Energie bei stehendem Verdichter (v4.1.0). Steht
+# zusaetzlich zu GESAMT und ggf. HEIZEN/WARMWASSER, ist also kein Summand.
+STANDBY = "standby"
+TEILE = (GESAMT, HEIZEN, WARMWASSER, STANDBY)
 
 # Maximale Luecke zwischen zwei Messpunkten, die noch integriert wird
 MAX_LUECKE_ELEKTRISCH_S = 15 * 60
@@ -66,6 +76,7 @@ ENERGIE_ZAEHLER = (
     ("energie_elektrisch", ART_ELEKTRISCH, GESAMT),
     ("energie_elektrisch_heizen", ART_ELEKTRISCH, HEIZEN),
     ("energie_elektrisch_warmwasser", ART_ELEKTRISCH, WARMWASSER),
+    ("energie_elektrisch_standby", ART_ELEKTRISCH, STANDBY),
     ("energie_thermisch", ART_THERMISCH, GESAMT),
     ("energie_thermisch_heizen", ART_THERMISCH, HEIZEN),
     ("energie_thermisch_warmwasser", ART_THERMISCH, WARMWASSER),
@@ -102,6 +113,21 @@ def kategorie_von(betriebsart: str | None) -> str | None:
     if betriebsart is None:
         return None
     return _KATEGORIE.get(betriebsart)
+
+
+def verdichter_steht(frequenz: Any) -> bool:
+    """True nur bei bekannter Verdichterfrequenz par20 <= 0.
+
+    Fehlt der Wert, gilt der Verdichter NICHT als stehend - ein Aussetzer im
+    Portal soll keine Energie in den Standby-Zaehler verschieben.
+    """
+    if frequenz is None:
+        return False
+    try:
+        wert = float(frequenz)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(wert) and wert <= 0
 
 
 def leistung_in_w(roh: Any, einheit: str | None = None) -> float | None:
@@ -176,6 +202,66 @@ def thermische_leistung_w(
     return fluss * spreizung * WATER_VOL_HEAT_CAPACITY_WH
 
 
+# ── Carnot-Guetegrad (v4.1.0) ────────────────────────────────────────────
+#
+# Offsets wie bei heatpumpmonitor.org (OpenEnergyMonitor, emoncms-App "My Heat
+# Pump", Kennzahl "Practical Carnot COP"): Die Kondensation liegt etwa 2 K
+# ueber dem Vorlauf, die Verdampfung etwa 6 K unter der Aussenluft.
+CARNOT_OFFSET_KONDENSATION_K = 2.0
+CARNOT_OFFSET_VERDAMPFUNG_K = -6.0
+# Kleinster Temperaturhub, fuer den der Carnot-COP noch gerechnet wird. Darunter
+# strebt er gegen unendlich und der Guetegrad gegen 0 - eine Zahl ohne Aussage.
+CARNOT_MIN_HUB_K = 1.0
+_KELVIN = 273.15
+
+
+def cop_carnot(t_vorlauf: Any, t_aussen: Any) -> float | None:
+    """Praktischer Carnot-COP aus Vorlauf- und Aussentemperatur (in °C).
+
+    COP_Carnot = (T_vor + 2 + 273,15) / ((T_vor + 2) - (T_aussen - 6))
+
+    ``None``, wenn ein Wert fehlt, kein gueltiger Messwert ist (-99) oder der
+    Nenner nicht groesser als ``CARNOT_MIN_HUB_K`` ist.
+    """
+    try:
+        vor = float(t_vorlauf)
+        aussen = float(t_aussen)
+    except (TypeError, ValueError):
+        return None
+    if not (math.isfinite(vor) and math.isfinite(aussen)):
+        return None
+    if vor <= TEMP_SENTINEL or aussen <= TEMP_SENTINEL:
+        return None
+    kondensation = vor + CARNOT_OFFSET_KONDENSATION_K
+    verdampfung = aussen + CARNOT_OFFSET_VERDAMPFUNG_K
+    hub = kondensation - verdampfung
+    if hub <= CARNOT_MIN_HUB_K:
+        return None
+    return (kondensation + _KELVIN) / hub
+
+
+def carnot_guetegrad(
+    cop: Any, t_vorlauf: Any, t_aussen: Any, verdichter_laeuft: bool | None
+) -> tuple[float | None, float | None]:
+    """``(Guetegrad in %, COP_Carnot)`` - Guetegrad = COP / COP_Carnot x 100.
+
+    Guetegrad ``None``, solange der Verdichter nicht laeuft, der COP fehlt
+    oder nicht positiv ist, oder der Carnot-COP nicht bestimmbar ist. Der
+    Carnot-COP selbst kommt auch ohne laufenden Verdichter zurueck (als
+    Attribut aufschlussreich).
+    """
+    ideal = cop_carnot(t_vorlauf, t_aussen)
+    if not verdichter_laeuft or ideal is None:
+        return None, ideal
+    try:
+        wert = float(cop)
+    except (TypeError, ValueError):
+        return None, ideal
+    if not math.isfinite(wert) or wert <= 0:
+        return None, ideal
+    return wert / ideal * 100.0, ideal
+
+
 class EnergieZaehler:
     """Integriert eine Leistung (W) zu Energie (kWh), aufgeteilt nach Betriebsart.
 
@@ -192,7 +278,8 @@ class EnergieZaehler:
         self.max_luecke_s = float(max_luecke_s)
         self.methode = methode
         self.summen: dict[str, float] = {t: 0.0 for t in TEILE}
-        self._letzt: tuple[float, float, str | None] | None = None
+        # (Zeit, Leistung W, Kategorie, Standby) des letzten Messpunkts
+        self._letzt: tuple[float, float, str | None, bool] | None = None
 
     def uebernehme(self, teil: str, kwh: float) -> None:
         """Wiederhergestellten Zaehlerstand addieren (nach einem Neustart).
@@ -210,38 +297,51 @@ class EnergieZaehler:
             self.summen[teil] += wert
 
     def messpunkt(
-        self, t: float, leistung_w: float | None, kategorie: str | None = None
+        self,
+        t: float,
+        leistung_w: float | None,
+        kategorie: str | None = None,
+        standby: bool = False,
     ) -> float:
-        """Neuer Messpunkt zur Zeit ``t`` (Sekunden). Liefert die addierten kWh."""
+        """Neuer Messpunkt zur Zeit ``t`` (Sekunden). Liefert die addierten kWh.
+
+        Wie die Kategorie gilt auch ``standby`` (Verdichter steht) fuer das
+        Intervall, das mit diesem Messpunkt beginnt.
+        """
         vorher = self._letzt
         if leistung_w is None:
             self._letzt = None
             if vorher is None or self.methode != METHODE_LINKS:
                 return 0.0
             return self._buche(vorher, t, vorher[1])
-        self._letzt = (t, max(0.0, float(leistung_w)), kategorie)
+        self._letzt = (t, max(0.0, float(leistung_w)), kategorie, bool(standby))
         if vorher is None:
             return 0.0
         ende = vorher[1] if self.methode == METHODE_LINKS else self._letzt[1]
         return self._buche(vorher, t, ende)
 
     def _buche(
-        self, start: tuple[float, float, str | None], t: float, ende_w: float
+        self, start: tuple[float, float, str | None, bool], t: float, ende_w: float
     ) -> float:
         dt = t - start[0]
         if dt <= 0 or dt > self.max_luecke_s:
             return 0.0
         mittel_w = (start[1] + ende_w) / 2.0
         kwh = mittel_w * dt / 3_600_000.0
-        return self.addiere(kwh, start[2])
+        return self.addiere(kwh, start[2], start[3])
 
-    def addiere(self, kwh: float, kategorie: str | None = None) -> float:
-        """Bucht ``kwh`` auf die Summe und ggf. den Teilzaehler der Kategorie."""
+    def addiere(
+        self, kwh: float, kategorie: str | None = None, standby: bool = False
+    ) -> float:
+        """Bucht ``kwh`` auf die Summe, ggf. den Teilzaehler der Kategorie und
+        - bei stehendem Verdichter - zusaetzlich auf den Standby-Zaehler."""
         if not (kwh > 0) or not math.isfinite(kwh):
             return 0.0
         self.summen[GESAMT] += kwh
         if kategorie in (HEIZEN, WARMWASSER):
             self.summen[kategorie] += kwh
+        if standby:
+            self.summen[STANDBY] += kwh
         return kwh
 
 
@@ -295,9 +395,17 @@ class ZaehlerstandFolger:
             self.basis_t = None
 
     def messpunkt(
-        self, t: float, stand_kwh: float | None, kategorie: str | None = None
+        self,
+        t: float,
+        stand_kwh: float | None,
+        kategorie: str | None = None,
+        standby: bool = False,
     ) -> float:
-        """Neuer Zaehlerstand zur Zeit ``t`` (Sekunden). Liefert die addierten kWh."""
+        """Neuer Zaehlerstand zur Zeit ``t`` (Sekunden). Liefert die addierten kWh.
+
+        Kategorie und ``standby`` gelten - wie bisher die Kategorie - fuer den
+        Zeitpunkt des Zuwachses.
+        """
         if stand_kwh is None:
             return 0.0
         vorher, vorher_t = self.basis, self.basis_t
@@ -313,7 +421,36 @@ class ZaehlerstandFolger:
             dt_h = max(0.0, t - vorher_t) / 3600.0
             if delta > self.max_leistung_w / 1000.0 * dt_h + _TOLERANZ_ZAEHLER_KWH:
                 return 0.0
-        return self.zaehler.addiere(delta, kategorie)
+        return self.zaehler.addiere(delta, kategorie, standby)
+
+
+# ── Takt-Erkennung (v4.1.0) ──────────────────────────────────────────────
+#
+# Hoechstens TAKT_MAX_STARTS_JE_STUNDE Starts in der letzten Stunde gelten als
+# unauffaellig. Begruendung fuer 3: Hersteller von Scroll- und
+# Rotationsverdichtern nennen ueblicherweise 3 (bis 6) Starts je Stunde als
+# Obergrenze, und die meisten Waermepumpenregler setzen das ueber eine
+# Wiedereinschaltsperre von rund 20 Minuten durch - mehr als drei Starts in
+# einer Stunde schafft eine Anlage mit intakter Sperre also gar nicht. Wer
+# trotzdem darueber liegt, hat eine Ursache, die sich zu suchen lohnt
+# (Heizkurve zu hoch, Hysterese zu klein, zu wenig Wasservolumen).
+TAKT_MAX_STARTS_JE_STUNDE = 3
+TAKT_FENSTER_S = 3600.0
+# Zweites Kriterium: mittlere Laufzeit der letzten Zyklen. Unter etwa 10
+# Minuten erreicht der Kreisprozess kaum seinen stationaeren Zustand, Oel und
+# Kaeltemittel verteilen sich nicht - Verschleiss ohne nennenswerten Ertrag.
+TAKT_MIN_LAUFZEIT_MIN = 10.0
+TAKT_ZYKLEN = 3
+# Das Laufzeit-Kriterium gilt nur, solange der juengste gewertete Zyklus vor
+# hoechstens TAKT_ZYKLEN_MAX_ALTER_S endete. Sonst bliebe der Binaersensor nach
+# drei kurzen Zyklen beliebig lange "an" - auch wenn der Verdichter danach
+# tagelang steht oder seit Stunden durchlaeuft, also gerade NICHT taktet.
+# Sechs Stunden decken eine Nacht mit langen Pausen zwischen kurzen Zyklen ab.
+TAKT_ZYKLEN_MAX_ALTER_S = 6 * 3600.0
+# Groesse der Ringpuffer. Starts: genug, um mehr als N Starts in einer Stunde
+# zu sehen, auch bei sehr kurzen Zyklen.
+_RING_STARTS = 32
+_RING_ZYKLEN = 10
 
 
 class VerdichterZaehler:
@@ -324,6 +461,13 @@ class VerdichterZaehler:
     sonst wuerde jeder Aussetzer im Portal als neuer Start gezaehlt. Der erste
     Messpunkt nach einem Neustart zaehlt nie als Start: Ob der Verdichter
     vorher stand, weiss man nicht.
+
+    Fuer die Takt-Erkennung (v4.1.0) merkt sich der Zaehler die Zeitpunkte der
+    letzten Starts und die Laenge der letzten abgeschlossenen Laufzyklen in
+    Ringpuffern. Diese ueberdauern einen Neustart nicht - nach einem Neustart
+    meldet ``taktet`` also fruehestens wieder, wenn genug Starts bzw. Zyklen
+    beobachtet wurden. Ein Zyklus, in den eine Luecke faellt oder dessen
+    Beginn man nicht gesehen hat, wird nicht gewertet.
     """
 
     def __init__(self, max_luecke_s: float = MAX_LUECKE_VERDICHTER_S) -> None:
@@ -332,6 +476,12 @@ class VerdichterZaehler:
         self.laufzeit_h = 0.0
         self._letzt_t: float | None = None
         self._letzt_laeuft: bool | None = None
+        # Ringpuffer fuer die Takt-Erkennung
+        self._start_zeiten: deque[float] = deque(maxlen=_RING_STARTS)
+        self._zyklen_s: deque[float] = deque(maxlen=_RING_ZYKLEN)
+        self._zyklus_start: float | None = None
+        # Ende des juengsten gewerteten Zyklus (Altersgrenze fuer ``taktet``)
+        self._letztes_zyklus_ende: float | None = None
 
     def uebernehme(self, starts: Any = None, laufzeit_h: Any = None) -> None:
         """Wiederhergestellte Staende addieren (siehe EnergieZaehler.uebernehme)."""
@@ -359,6 +509,9 @@ class VerdichterZaehler:
             if 0 < dt <= self.max_luecke_s:
                 self.laufzeit_h += dt / 3600.0
                 geaendert = True
+            else:
+                # Luecke mitten im Lauf: Die Zykluslaenge ist nicht bekannt
+                self._zyklus_start = None
 
         if laeuft is None:
             # Wert fehlt: Zeitpunkt fortschreiben, Zustand behalten
@@ -369,9 +522,52 @@ class VerdichterZaehler:
         if laeuft and self._letzt_laeuft is False:
             self.starts += 1
             geaendert = True
+            self._start_zeiten.append(float(t))
+            self._zyklus_start = float(t)
+        elif not laeuft and self._letzt_laeuft:
+            # Stopp: abgeschlossenen Zyklus merken, sofern sein Beginn bekannt ist
+            if self._zyklus_start is not None and t > self._zyklus_start:
+                self._zyklen_s.append(float(t) - self._zyklus_start)
+                self._letztes_zyklus_ende = float(t)
+            self._zyklus_start = None
         self._letzt_t = t
         self._letzt_laeuft = laeuft
         return geaendert
+
+    def starts_seit(self, t: float, fenster_s: float = TAKT_FENSTER_S) -> int:
+        """Anzahl der beobachteten Starts im Fenster ``(t - fenster_s, t]``."""
+        grenze = t - fenster_s
+        return sum(1 for s in self._start_zeiten if grenze < s <= t)
+
+    def mittlere_laufzeit_min(self, anzahl: int = TAKT_ZYKLEN) -> float | None:
+        """Mittlere Laenge der letzten ``anzahl`` Zyklen in Minuten.
+
+        ``None``, solange weniger als ``anzahl`` Zyklen beobachtet wurden.
+        """
+        if anzahl <= 0 or len(self._zyklen_s) < anzahl:
+            return None
+        letzte = list(self._zyklen_s)[-anzahl:]
+        return sum(letzte) / len(letzte) / 60.0
+
+    def taktet(
+        self,
+        t: float,
+        max_starts: int = TAKT_MAX_STARTS_JE_STUNDE,
+        min_laufzeit_min: float = TAKT_MIN_LAUFZEIT_MIN,
+    ) -> bool:
+        """True bei mehr als ``max_starts`` Starts in der letzten Stunde ODER
+        einer mittleren Laufzeit der letzten Zyklen unter ``min_laufzeit_min``.
+
+        Das Laufzeit-Kriterium zaehlt nur, solange der juengste Zyklus vor
+        hoechstens ``TAKT_ZYKLEN_MAX_ALTER_S`` endete.
+        """
+        if self.starts_seit(t) > max_starts:
+            return True
+        ende = self._letztes_zyklus_ende
+        if ende is None or t - ende > TAKT_ZYKLEN_MAX_ALTER_S:
+            return False
+        mittel = self.mittlere_laufzeit_min()
+        return mittel is not None and mittel < min_laufzeit_min
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -383,6 +579,7 @@ ANALYSE_ZAEHLER = {
     "el": "energie_elektrisch",
     "el_heat": "energie_elektrisch_heizen",
     "el_dhw": "energie_elektrisch_warmwasser",
+    "el_standby": "energie_elektrisch_standby",
     "th": "energie_thermisch",
     "th_heat": "energie_thermisch_heizen",
     "th_dhw": "energie_thermisch_warmwasser",
@@ -396,6 +593,15 @@ ANALYSE_REIHEN = {
     "outdoor": ("par24", "aussentemp_ta"),
     "cop": (CALC_COP, "aktueller_cop"),
     "flow": ("par4", "vorlauf_tuo"),
+    "carnot": (CALC_CARNOT, "carnot_guetegrad"),
+}
+# Binaersensoren (v4.1.0): Schluessel der Karte -> Slug (unique_id-Endung und
+# Entity-ID binary_sensor.es_hp_<slug>)
+ANALYSE_BINAER = {
+    "verdichter": "verdichter",
+    "abtauen": "abtauen",
+    "warmwasser": "warmwasserbereitung",
+    "takten": "takten",
 }
 
 
@@ -404,21 +610,25 @@ def analyse_konfiguration(
 ) -> dict[str, Any]:
     """Antwort von ``es_heatpump/analysis_config``.
 
-    ``finde(unique_id)`` liefert die Entity-ID aus der Entity-Registry oder
-    ``None``. Die unique_ids lauten ``es_heatpump_<benutzer>_<endung>`` (siehe
-    sensor.py); hat der Nutzer eine Entity umbenannt, wird sie so trotzdem
-    gefunden. Sonst gilt die Standard-ID ``sensor.es_hp_<slug>``.
+    ``finde(unique_id, plattform)`` liefert die Entity-ID aus der
+    Entity-Registry oder ``None``. Die unique_ids lauten
+    ``es_heatpump_<benutzer>_<endung>`` (siehe sensor.py, binary_sensor.py);
+    hat der Nutzer eine Entity umbenannt, wird sie so trotzdem gefunden. Sonst
+    gilt die Standard-ID ``<plattform>.es_hp_<slug>``.
     """
-    def eid(endung: str, slug: str) -> str:
+    def eid(endung: str, slug: str, plattform: str = "sensor") -> str:
         if benutzer:
-            gefunden = finde(f"{DOMAIN}_{benutzer}_{endung}")
+            gefunden = finde(f"{DOMAIN}_{benutzer}_{endung}", plattform)
             if gefunden:
                 return gefunden
-        return f"sensor.es_hp_{slug}"
+        return f"{plattform}.es_hp_{slug}"
 
     antwort: dict[str, Any] = {k: eid(*v) for k, v in ANALYSE_REIHEN.items()}
     antwort["counters"] = {
         k: eid(f"calc_{slug}", slug) for k, slug in ANALYSE_ZAEHLER.items()
+    }
+    antwort["binary"] = {
+        k: eid(slug, slug, "binary_sensor") for k, slug in ANALYSE_BINAER.items()
     }
     antwort["energy_entity"] = optionen.get(CONF_ENERGY_ENTITY) or None
     antwort["power_entity"] = optionen.get(CONF_POWER_ENTITY) or None

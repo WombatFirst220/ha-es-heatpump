@@ -72,7 +72,8 @@ def _code_schluessel():
     for slug, _, _ in E.ENERGIE_ZAEHLER:
         erwartet.add(("sensor", slug))
     # Feste _attr_translation_key = "..." aus den Plattform-Dateien
-    for plattform in ("sensor", "button", "number", "select", "switch"):
+    for plattform in ("sensor", "binary_sensor", "button", "number", "select",
+                      "switch", "water_heater"):
         quelle = (_ROOT / f"{plattform}.py").read_text(encoding="utf-8")
         for key in re.findall(r'_attr_translation_key\s*=\s*"([^"]+)"', quelle):
             erwartet.add((plattform, key))
@@ -129,7 +130,10 @@ def test_feste_translation_keys_werden_gefunden():
     for k in ("spreizung", "thermische_leistung", "aktueller_cop", "leistung_elektrisch",
               "betriebsart", "anlagendaten", "konfigurationssicherungen",
               "konfiguration_sichern", "energie_elektrisch", "energie_thermisch_warmwasser",
-              "verdichter_starts", "verdichter_laufzeit"):
+              "verdichter_starts", "verdichter_laufzeit",
+              # v4.1.0
+              "energie_elektrisch_standby", "carnot_guetegrad", "verdichter",
+              "abtauen", "warmwasserbereitung", "takten", "warmwasser"):
         assert k in keys, k
 
 
@@ -251,3 +255,37 @@ def test_erneute_anmeldung_uebersetzt():
         assert schritt["data"]["password"], pfad.name
         assert _platzhalter(schritt["description"]) == {"username"}, pfad.name
         assert config["abort"]["reauth_successful"], pfad.name
+
+
+def test_neue_plattformen_v410():
+    """binary_sensor und water_heater (v4.1.0): Plattform registriert, Keys je Plattform."""
+    assert "binary_sensor" in C.PLATFORMS and "water_heater" in C.PLATFORMS
+    erwartet = _code_schluessel()
+    for p, k in (("binary_sensor", "verdichter"), ("binary_sensor", "abtauen"),
+                 ("binary_sensor", "warmwasserbereitung"), ("binary_sensor", "takten"),
+                 ("water_heater", "warmwasser"), ("sensor", "carnot_guetegrad"),
+                 ("sensor", "energie_elektrisch_standby")):
+        assert (p, k) in erwartet, (p, k)
+
+
+def test_reconfigure_und_reparaturhinweis_uebersetzt():
+    """Teil B von v4.1.0: Reconfigure-Dialog und Hinweis cop_unplausibel (alle Sprachen)."""
+    quelle = (_ROOT / "config_flow.py").read_text(encoding="utf-8")
+    assert 'step_id="reconfigure"' in quelle
+    assert 'reason="reconfigure_successful"' in quelle
+    assert 'reason="benutzer_bereits_eingerichtet"' in quelle
+    sensor = (_ROOT / "sensor.py").read_text(encoding="utf-8")
+    assert "translation_key=ISSUE_COP_UNPLAUSIBEL" in sensor
+    for pfad in list(_PFLICHT.values()) + [
+        _ROOT / "translations" / f"{s}.json" for s in _WEITERE
+    ]:
+        daten = _json(pfad)
+        schritt = daten["config"]["step"]["reconfigure"]
+        assert schritt["title"] and schritt["description"], pfad.name
+        assert set(schritt["data"]) == {"username", "password", "base_url"}, pfad.name
+        assert _platzhalter(schritt["description"]) == {"username"}, pfad.name
+        assert daten["config"]["abort"]["reconfigure_successful"], pfad.name
+        assert daten["config"]["abort"]["benutzer_bereits_eingerichtet"], pfad.name
+        issue = daten["issues"]["cop_unplausibel"]
+        assert issue["title"], pfad.name
+        assert _platzhalter(issue["description"]) == {"cop", "volumenstrom", "richtwert"}, pfad.name
