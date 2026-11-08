@@ -20,10 +20,11 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .backup import ANLASS_AUTOMATISCH, ANLASS_VOR_SCHREIBEN, vergleiche
+from .backup import ANLASS_AUTOMATISCH, ANLASS_VOR_SCHREIBEN, pruefe_stand, vergleiche
 from .backup_store import Sicherungsablage
 from .const import DOMAIN
 from .coordinator import ESHeatpumpCoordinator
@@ -60,10 +61,27 @@ class ESHeatpumpSettingsCoordinator(DataUpdateCoordinator[dict[str, float]]):
     async def _async_update_data(self) -> dict[str, float]:
         try:
             werte = await self.api.async_lies_konfiguration()
-        except UpdateFailed:
+        except (UpdateFailed, ConfigEntryAuthFailed):
+            # Abgelehnte Zugangsdaten nicht in UpdateFailed verpacken - sonst
+            # startet Home Assistant keine erneute Anmeldung.
             raise
         except Exception as err:  # noqa: BLE001
             raise UpdateFailed(f"Konfiguration nicht lesbar: {err}") from err
+
+        # Portal-Aussetzer (fast alle Werte 0) gar nicht erst uebernehmen: Die
+        # Entities behalten den vorherigen Stand, es entsteht keine Sicherung
+        # und keine "Aenderung erkannt"; der naechste Abruf holt den echten.
+        await self.ablage.async_laden()
+        bezug = self.data or (
+            self.ablage.neueste_gueltige.pars if self.ablage.neueste_gueltige else None
+        )
+        fehler = pruefe_stand(werte, bezug)
+        if fehler:
+            _LOGGER.warning(
+                "ES Heatpump: Portal lieferte einen unplausiblen Konfigurationsstand "
+                "(%s) - verworfen, es gilt weiter der vorherige Stand", fehler,
+            )
+            raise UpdateFailed(f"Unplausibler Konfigurationsstand vom Portal: {fehler}")
 
         # Stammdaten-Kopf einmalig nachladen (Installateur, Artikelnummer)
         await self.api.async_lies_stammdaten_kopf()
@@ -84,7 +102,9 @@ class ESHeatpumpSettingsCoordinator(DataUpdateCoordinator[dict[str, float]]):
           Datum ablesen kann, dass wirklich nichts passiert ist.
         """
         await self.ablage.async_laden()
-        neueste = self.ablage.neueste
+        # Vergleich gegen den letzten gueltigen Stand - ein frueher
+        # gespeicherter Aussetzer ist kein Massstab
+        neueste = self.ablage.neueste_gueltige
         stammdaten = self.api.stammdaten.als_dict()
 
         if neueste is None:

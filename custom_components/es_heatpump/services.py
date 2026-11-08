@@ -31,7 +31,7 @@ from homeassistant.core import (
     ServiceResponse,
     SupportsResponse,
 )
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from .backup import ANLASS_MANUELL
@@ -229,7 +229,8 @@ async def async_registriere_dienste(hass: HomeAssistant) -> None:
                 probelauf=probelauf,
                 version=daten.get("version", ""),
             )
-        except LookupError as err:
+        except (LookupError, ValueError) as err:
+            # ValueError: Ziel ist ein gespeicherter Portal-Aussetzer (v4.0.1)
             raise HomeAssistantError(str(err)) from err
         if not probelauf:
             await koord.async_request_refresh()
@@ -291,7 +292,7 @@ async def async_registriere_dienste(hass: HomeAssistant) -> None:
         try:
             wert = eintrag.validate(call.data[ATTR_VALUE])
         except ValueError as err:
-            raise HomeAssistantError(str(err)) from err
+            raise ServiceValidationError(str(err)) from err
         await koord.async_setze(par, wert)
         return {"parameter": par, "name": eintrag.name, "wert": wert}
 

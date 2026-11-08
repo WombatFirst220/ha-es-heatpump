@@ -108,7 +108,13 @@ def test_origami_nutzt_nur_bekannte_entities():
 
 def test_mode_map_deckt_alle_betriebsarten_ab():
     # "unknown" = HAs eigener Zustand, wenn die Betriebsart nicht bestimmbar ist
-    assert set(_layout.MODE_MAP) == set(_const.BETRIEBSART_STATE_OPTIONS) | {"unknown"}
+    # dazu die deutschen Zustaende bis v3.x, die noch in der Historie stehen
+    alt = set(_const.BETRIEBSART_STATE_KEYS)
+    assert set(_layout.ALTE_BETRIEBSARTEN) == alt
+    assert set(_layout.MODE_MAP) == set(_const.BETRIEBSART_STATE_OPTIONS) | {"unknown"} | alt
+    # Alter und neuer Zustand landen im selben Modus der Karte
+    for alt_wert, neu in _const.BETRIEBSART_STATE_KEYS.items():
+        assert _layout.MODE_MAP[alt_wert] == _layout.MODE_MAP[neu or "unknown"], alt_wert
     erlaubt = {"off", "heating", "dhw", "cooling", "defrost", "idle"}
     assert set(_layout.MODE_MAP.values()) <= erlaubt
 
@@ -177,10 +183,8 @@ def test_auswertung_im_standard_dashboard():
         assert view["icon"] == "mdi:chart-box-outline"
         karten = list(_alle_karten(view["cards"]))
         assert sum(k["type"] == _layout.ANALYSIS_CARD_TYPE for k in karten) == 1
-        graphen = [k for k in karten if k["type"] == "statistics-graph"]
-        assert graphen and {g["period"] for g in graphen} >= {"month"}
-        ids = {e["entity"] for g in graphen for e in g["entities"]}
-        assert ids <= _ENERGIE_SENSOREN, ids - _ENERGIE_SENSOREN
+        # Keine statistics-graph-Rueckfallkarten mehr (v4.0.1)
+        assert not [k for k in karten if k["type"] == "statistics-graph"]
 
 
 def test_auswertung_im_origami_dashboard():
@@ -194,7 +198,7 @@ def test_auswertung_im_origami_dashboard():
         abschnitt = next(s for s in view["sections"]
                          if any(c["type"] == _layout.ANALYSIS_CARD_TYPE for c in s["cards"]))
         assert abschnitt["column_span"] == view["max_columns"]
-        assert any(k["type"] == "statistics-graph" and k["period"] == "month" for k in karten)
+        assert not [k for k in karten if k["type"] == "statistics-graph"]
 
 
 def test_repo_kopie_des_dashboards_hat_gleiche_ansichten():
@@ -211,3 +215,22 @@ def test_auswertungskarte_wird_mitgeliefert():
     assert "es_heatpump/settings_changes" in quelle
     for slug in _ENERGIE_SENSOREN:
         assert f'"{slug}"' in quelle, slug
+    # v4.0.1: Quellen per analysis_config, Rueckfall auf die Leistungsmittel
+    assert "es_heatpump/analysis_config" in quelle
+    for eid in ("sensor.es_hp_leistung_elektrisch", "sensor.es_hp_thermische_leistung"):
+        assert f'"{eid}"' in quelle, eid
+    ws = (_ROOT / "websocket_api.py").read_text(encoding="utf-8")
+    assert 'f"{DOMAIN}/analysis_config"' in ws
+    assert "async_register_command(hass, ws_analysis_config)" in ws
+
+
+def test_stromzaehler_option_in_formularen():
+    """energy_entity steht im Options-Abschnitt "messung" und ist leerbar (v4.0.1)."""
+    quelle = (_ROOT / "config_flow.py").read_text(encoding="utf-8")
+    assert "entity(CONF_ENERGY_ENTITY, device_class=\"energy\")" in quelle
+    assert "CONF_ENERGY_ENTITY, CONF_MODE_SOURCE" in quelle      # _ENTITY_KEYS
+    for pfad in [_ROOT / "strings.json", *sorted((_ROOT / "translations").glob("*.json"))]:
+        d = json.loads(pfad.read_text(encoding="utf-8"))
+        assert d["config"]["step"]["user"]["data"]["energy_entity"], pfad.name
+        sek = d["options"]["step"]["init"]["sections"]["messung"]
+        assert sek["data"]["energy_entity"] and sek["data_description"]["energy_entity"], pfad.name

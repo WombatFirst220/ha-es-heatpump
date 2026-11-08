@@ -9,17 +9,49 @@
  *   - recorder/statistics_during_period (Langzeitstatistik von Home Assistant)
  *   - es_heatpump/settings_changes (Einstellungsaenderungen aus der
  *     Sicherungsablage der Integration)
+ *   - es_heatpump/analysis_config (Entity-IDs, ab v4.0.1; fehlt der Befehl,
+ *     gelten die Standard-IDs)
+ *
+ * Quellenwahl je Balken (v4.0.1): Die Energiezaehler der Integration gibt es
+ * erst seit dem Update auf v4.0.0. Deckt ihre Statistik einen Balken nicht
+ * vollstaendig ab (erster Statistik-Zeitpunkt nach Balkenbeginn), kommt der
+ * Strom aus dem konfigurierten Stromzaehler (change) oder - geschaetzt - aus
+ * dem Mittel der elektrischen Leistung x abgedeckte Stunden, die Waerme aus
+ * dem Mittel der thermischen Leistung. Dafuer wird immer die
+ * Stundenstatistik summiert (fehlende Stunden = keine Daten, nie
+ * hochgerechnet); bei mehr als ~62 Tagen nur bis zum Ende des Monats, in dem
+ * die Zaehler beginnen. Heizen/Warmwasser, Starts und Laufzeit gibt es nur aus
+ * den Zaehlern.
+ *
+ * Arbeitszahl (v4.0.1): nur aus Stunden mit Strom UND Waerme (bei den
+ * Zaehlern der Integration aus dem ganzen Balken); Tage mit AZ < 1 bei
+ * nennenswertem Strom sind physikalisch unmoeglich und zaehlen nicht (hohler
+ * Punkt, Hinweis). Vorzeitraum-Deltas nur bei vergleichbarer Datenabdeckung.
  *
  * Statistiken werden nur bei Zeitraumwechsel und alle 10 Minuten neu geladen,
  * nicht bei jedem hass-Update.
  */
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.2.0";
 const REFRESH_MS = 10 * 60 * 1000;
 const MIN_EL_KWH = 0.05;          // Arbeitszahl je Balken erst ab dieser Strommenge
 const AZ_AXIS_MAX = 8;            // Arbeitszahl-Achse wird hier gekappt
 const TEMP_HINT_K = 3;            // Aussentemperatur-Unterschied fuer den Hinweis
 const DAY_MS = 86400000;
+const HOUR_MS = 3600000;
+const HOURLY_MAX_DAYS = 62;       // bis zu dieser Spanne Leistungsmittel fuer den ganzen Zeitraum
+// Plausibilitaet der Arbeitszahl: Ein Tag mit mindestens 0,5 kWh Strom (je
+// Tag-Aequivalent, bei weniger Stunden anteilig) und weniger Waerme als Strom
+// ist physikalisch unmoeglich - eine Waermepumpe gibt immer mehr Waerme ab, als
+// sie Strom aufnimmt. Darunter liegt reiner Bereitschaftsbetrieb (~15 W), dort
+// ist AZ < 1 normal. Ursache war bisher ein zu niedrig eingestellter
+// Volumenstrom (Waerme zu klein berechnet).
+const IMPLAUSIBLE_EL_DAY = 0.5;
+const IMPLAUSIBLE_AZ = 1;
+// Vorzeitraum-Delta nur, wenn dessen Datenabdeckung mindestens 80 % der
+// Abdeckung des aktuellen Zeitraums erreicht (sonst vergleicht man z. B. ein
+// halbes mit einem ganzen Jahr).
+const PREV_COVERAGE_MIN = 0.8;
 
 const DEFAULT_ENTITIES = {
   el: "sensor.es_hp_energie_elektrisch",
@@ -33,9 +65,15 @@ const DEFAULT_ENTITIES = {
   outdoor: "sensor.es_hp_aussentemp_ta",
   cop: "sensor.es_hp_aktueller_cop",
   flow: "sensor.es_hp_vorlauf_tuo",
+  el_power: "sensor.es_hp_leistung_elektrisch",
+  th_power: "sensor.es_hp_thermische_leistung",
+  meter: null,                    // Stromzaehler (kWh) aus den Optionen
 };
 const SUM_KEYS = ["el", "el_heat", "el_dhw", "th", "th_heat", "th_dhw", "starts", "runtime"];
 const MEAN_KEYS = ["outdoor", "cop", "flow"];
+const POWER_KEYS = ["el_power", "th_power"];
+// Antwort von es_heatpump/analysis_config -> Schluessel der Karte
+const WS_KEYS = { outdoor: "outdoor", cop: "cop", flow: "flow", el_power: "electrical_power", th_power: "thermal_power", meter: "energy_entity" };
 const VIEWS = ["day", "week", "month", "year", "all"];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -51,8 +89,13 @@ const I18N = {
     err_changes: "Einstellungsänderungen sind nicht verfügbar",
     missing_entity: "Die Energiezähler ({id}) sind noch nicht vorhanden. Bitte die Integration aktualisieren und Home Assistant neu starten.",
     no_data_yet: "Noch keine Daten — die Zähler laufen, die ersten Statistiken erscheinen spätestens nach einer Stunde.",
-    no_data_range: "Keine Daten in diesem Zeitraum — die Zähler laufen seit {since}.",
-    partial_data: "Die Zähler laufen seit {since}; frühere Zeiträume sind leer.",
+    no_data_range: "Keine Daten in diesem Zeitraum — die ersten Werte stammen vom {since}.",
+    history_note: "Vor {since} (Start der Zähler der Integration) stammen die Werte aus der vorhandenen Statistik — {sources}. Diese Balken sind nicht nach Heizen/Warmwasser aufgeteilt, Starts und Laufzeit fehlen dort. Schraffiert = aus dem Leistungsmittel geschätzt.",
+    history_note_nocounter: "Die Zähler der Integration haben noch keine Statistik; die Werte stammen aus der vorhandenen Statistik — {sources}. Ohne Aufteilung nach Heizen/Warmwasser, ohne Starts und Laufzeit. Schraffiert = aus dem Leistungsmittel geschätzt.",
+    src: "Quelle", src_counter: "Zähler der Integration", src_meter: "Stromzähler", src_meter_shelly: "Shelly-Zähler", src_mean: "aus Leistungsmittel",
+    unsplit: "nicht aufgeteilt", estimated: "geschätzt",
+    only_since: "nur ab {since}", only_counters: "Erst seit Start der Zähler ({since}) verfügbar.",
+    hint_estimated: "Ein Teil der Werte stammt aus der Statistik vor den Zählern der Integration ({sources}); Starts und Laufzeit fehlen dort.",
     el: "Strom", th: "Wärme", az: "Arbeitszahl", temp: "Außentemp.",
     heat: "Heizen", dhw: "Warmwasser", rest: "Sonstiges",
     k_el: "Strom", k_th: "Wärme", k_az: "Arbeitszahl", k_az_heat: "AZ Heizen", k_az_dhw: "AZ Warmwasser",
@@ -74,6 +117,14 @@ const I18N = {
     hint_nodata: "Für diesen Zeitraum liegen keine Tageswerte vor.",
     hint_change_day: "Der Tag der Änderung selbst wird nicht mitgezählt.",
     show: "Anzeigen",
+    az_partial: "nur Zeiten mit Strom + Wärme",
+    az_partial_title: "Die Arbeitszahl wird nur aus Zeiten gebildet, in denen Strom und Wärme vorliegen ({p} % der Zeit mit Strom); unplausible Zeiten (AZ < 1) zählen nicht.",
+    az_bad: "AZ unplausibel (nicht gezählt)",
+    az_paired: "AZ aus {h} von {m} h",
+    implausible_note: "Arbeitszahl < 1 ist physikalisch unmöglich – vermutlich war der Volumenstrom damals zu niedrig eingestellt; diese Zeiträume zählen nicht zur Arbeitszahl ({from} – {to}, {n} Tage). Strom und Wärme bleiben sichtbar, die Punkte sind hohl gezeichnet.",
+    prev_incomplete: "Vorzeitraum unvollständig — Δ nur bei mindestens {p} % der Datenabdeckung",
+    prev_incomplete_tile: "Vorzeitraum unvollständig ({p} % der Abdeckung)",
+    hint_implausible: "Tage mit Arbeitszahl < 1 (physikalisch unmöglich, vermutlich zu niedriger Volumenstrom) zählen nicht zur Arbeitszahl.",
     reason: {
       "manuell": "Manuelle Sicherung", "automatisch": "Automatische Sicherung",
       "vor-schreibzugriff": "Vor Schreibzugriff", "vor-wiederherstellung": "Vor Wiederherstellung",
@@ -90,8 +141,13 @@ const I18N = {
     err_changes: "Settings changes are not available",
     missing_entity: "The energy counters ({id}) do not exist yet. Please update the integration and restart Home Assistant.",
     no_data_yet: "No data yet — the counters are running, the first statistics appear within an hour.",
-    no_data_range: "No data in this period — the counters have been running since {since}.",
-    partial_data: "The counters have been running since {since}; earlier periods are empty.",
+    no_data_range: "No data in this period — the first values date from {since}.",
+    history_note: "Before {since} (start of the integration's counters) the values come from the existing statistics — {sources}. These bars are not split into heating/hot water, and starts and runtime are missing there. Hatched = estimated from the average power.",
+    history_note_nocounter: "The integration's counters have no statistics yet; the values come from the existing statistics — {sources}. Not split into heating/hot water, no starts and runtime. Hatched = estimated from the average power.",
+    src: "Source", src_counter: "Integration counter", src_meter: "Energy meter", src_meter_shelly: "Shelly meter", src_mean: "from average power",
+    unsplit: "not split", estimated: "estimated",
+    only_since: "only since {since}", only_counters: "Only available since the counters started ({since}).",
+    hint_estimated: "Some values come from the statistics before the integration's counters ({sources}); starts and runtime are missing there.",
     el: "Electricity", th: "Heat", az: "SPF", temp: "Outdoor temp.",
     heat: "Heating", dhw: "Hot water", rest: "Other",
     k_el: "Electricity", k_th: "Heat", k_az: "SPF", k_az_heat: "SPF heating", k_az_dhw: "SPF hot water",
@@ -113,6 +169,14 @@ const I18N = {
     hint_nodata: "No daily values for this period.",
     hint_change_day: "The day of the change itself is not counted.",
     show: "Show",
+    az_partial: "only times with both",
+    az_partial_title: "The SPF only uses times with both electricity and heat data ({p} % of the time with electricity); implausible times (SPF < 1) are excluded.",
+    az_bad: "SPF implausible (excluded)",
+    az_paired: "SPF from {h} of {m} h",
+    implausible_note: "An SPF below 1 is physically impossible – the flow rate was probably set too low at the time; these periods are excluded from the SPF ({from} – {to}, {n} days). Electricity and heat stay visible, the points are drawn hollow.",
+    prev_incomplete: "Previous period incomplete — Δ only with at least {p} % of the data coverage",
+    prev_incomplete_tile: "Previous period incomplete ({p} % coverage)",
+    hint_implausible: "Days with an SPF below 1 (physically impossible, probably flow rate set too low) are excluded from the SPF.",
     reason: {
       "manuell": "Manual backup", "automatisch": "Automatic backup",
       "vor-schreibzugriff": "Before write access", "vor-wiederherstellung": "Before restore",
@@ -165,6 +229,18 @@ function rowTime(row) {
   const s = Number(row.start), e = Number(row.end);
   return Number.isFinite(e) && e > s ? s + (e - s) / 2 : s;
 }
+// Eimer [start, end) im Raster der Statistik von from bis to; der letzte wird
+// bei to abgeschnitten (Vorzeitraum gleicher Dauer).
+function makeBuckets(period, from, to) {
+  const starts = [], ends = [];
+  const step = (d) => (period === "hour" ? new Date(d.getTime() + HOUR_MS) : period === "day" ? addDays(d, 1) : addMonths(d, 1));
+  for (let t = new Date(from); t < to; t = step(t)) {
+    starts.push(t);
+    const n = step(t);
+    ends.push(n < to ? n : new Date(to));
+  }
+  return { starts, ends };
+}
 function ratio(a, b, min = 0) {
   return isNum(a) && isNum(b) && b > min ? a / b : null;
 }
@@ -195,7 +271,10 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
     this._showAllChanges = false;
     this._compare = null;           // {change, days, loading, result, error}
     this._compareDays = 7;
-    this._since = undefined;        // erster Statistik-Zeitpunkt (Date|null)
+    this._since = undefined;        // Start der Zaehler der Integration (Date|null)
+    this._sinceAny = null;          // erster Statistik-Zeitpunkt irgendeiner Quelle
+    this._first = undefined;        // erster Statistik-Zeitpunkt je Quelle (ms|null)
+    this._wsCfg = undefined;        // Antwort von es_heatpump/analysis_config
     this._tip = null;               // {index, sticky}
     this._width = 0;
     this._token = 0;
@@ -213,7 +292,9 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
   setConfig(config) {
     const c = config || {};
     this._config = c;
-    this._entities = { ...DEFAULT_ENTITIES, ...(c.entities && typeof c.entities === "object" ? c.entities : {}) };
+    this._wsCfg = undefined;
+    this._first = undefined;
+    this._mergeEntities();
     const base = Number(c.heating_base_temp);
     this._base = Number.isFinite(base) ? base : 15;
     if (c.default_view && VIEWS.includes(c.default_view)) this._view = c.default_view;
@@ -304,7 +385,8 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
         for (let i = 0; i < 12; i++) buckets.push(new Date(anchor.getFullYear(), i, 1));
         break;
       case "all": {
-        const firstYear = this._since ? this._since.getFullYear() : now.getFullYear();
+        const first = this._sinceAny || this._since;
+        const firstYear = first ? first.getFullYear() : now.getFullYear();
         start = new Date(Math.min(firstYear, now.getFullYear()), 0, 1);
         end = new Date(now.getFullYear() + 1, 0, 1); period = "month";
         for (let y = start.getFullYear(); y <= now.getFullYear(); y++) buckets.push(new Date(y, 0, 1));
@@ -351,7 +433,18 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
     return [...new Set(keys.map((k) => this._entities[k]).filter(Boolean))];
   }
 
-  _stats(start, end, ids, period, types = ["change", "mean", "min", "max"]) {
+  /** Entity-IDs: Standard < Antwort von analysis_config < Kartenkonfiguration. */
+  _mergeEntities() {
+    const ws = this._wsCfg && typeof this._wsCfg === "object" ? this._wsCfg : {};
+    const fromWs = {};
+    const counters = ws.counters && typeof ws.counters === "object" ? ws.counters : {};
+    for (const k of SUM_KEYS) if (typeof counters[k] === "string" && counters[k]) fromWs[k] = counters[k];
+    for (const [k, wk] of Object.entries(WS_KEYS)) if (typeof ws[wk] === "string" && ws[wk]) fromWs[k] = ws[wk];
+    const own = this._config?.entities && typeof this._config.entities === "object" ? this._config.entities : {};
+    this._entities = { ...DEFAULT_ENTITIES, ...fromWs, ...own };
+  }
+
+  _stats(start, end, ids, period, types = ["change", "mean"]) {
     return this._hass.callWS({
       type: "recorder/statistics_during_period",
       start_time: start.toISOString(),
@@ -359,8 +452,60 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
       statistic_ids: ids,
       period,
       types,
-      units: { energy: "kWh" },
+      // Leistung in kW: Mittel x Stunden ergibt direkt kWh
+      units: { energy: "kWh", power: "kW" },
     });
+  }
+
+  async _loadAnalysisConfig() {
+    try {
+      const msg = { type: "es_heatpump/analysis_config" };
+      if (this._config?.entry_id) msg.entry_id = this._config.entry_id;
+      this._wsCfg = (await this._hass.callWS(msg)) || null;
+    } catch (e) {
+      // Aeltere Integration ohne den Befehl: Standard-IDs
+      this._wsCfg = null;
+    }
+    this._mergeEntities();
+  }
+
+  /**
+   * Statistik fuer [from, to): Zaehler, Stromzaehler und Mittelwerte im Raster
+   * der Balken, die Leistungsmittel immer stundengenau, die
+   * Aussentemperatur je Tag (Heizgradtage).
+   *
+   * Leistungsmittel nie aus der Tagesstatistik: Deren Mittel x 24 h rechnet
+   * fehlende Stunden (HA aus, Sensor nicht verfuegbar) hoch. Bei langen
+   * Zeitraeumen (Jahr, Gesamt) werden die Stundenwerte nur bis zum Ende des
+   * Monats geholt, in dem beide Zaehler beginnen - danach liefern die Zaehler,
+   * und die Stundenstatistik ueber Jahre waere unnoetig gross.
+   *
+   * Der Stromzaehler kommt (seit v4.0.1) zusaetzlich stundengenau mit: Die
+   * Arbeitszahl wird nur aus Stunden gebildet, in denen Strom UND Waerme
+   * vorliegen - Monatszeilen des Stromzaehlers reichen dafuer nicht, wenn die
+   * Leistungsmittel erst mitten im Monat beginnen.
+   */
+  async _fetch(from, to, period) {
+    const e = this._entities;
+    const ids = this._ids([...SUM_KEYS, "meter", ...MEAN_KEYS]);
+    const pIds = this._ids([...POWER_KEYS, "meter"]);
+    let pTo = to;
+    const f = this._first || {};
+    if (to - from > HOURLY_MAX_DAYS * DAY_MS + 2 * HOUR_MS && this._firstOk && isNum(f.el) && isNum(f.th)) {
+      const m = new Date(Math.max(f.el, f.th));
+      const ende = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+      if (ende < pTo) pTo = ende;
+    }
+    const [stats, power, temps] = await Promise.all([
+      ids.length ? this._stats(from, to, ids, period) : Promise.resolve({}),
+      pIds.length && pTo > from ? this._stats(from, pTo, pIds, "hour", e.meter ? ["change", "mean"] : ["mean"]) : Promise.resolve({}),
+      e.outdoor ? this._stats(from, to, [e.outdoor], "day", ["mean"]) : Promise.resolve({}),
+    ]);
+    return {
+      stats: stats || {},
+      power: power || {},
+      temps: (temps || {})[e.outdoor] || [],
+    };
   }
 
   async _reload(silent = false) {
@@ -368,18 +513,14 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
     const token = ++this._token;
     if (!silent) { this._loading = true; this._error = null; this._render(); }
     try {
-      if (this._since === undefined) await this._loadSince();
+      if (this._wsCfg === undefined) await this._loadAnalysisConfig();
+      // Beginn der Quellen; solange die Zaehler noch keine Statistik haben,
+      // bei jeder Aktualisierung neu (sie entsteht erst zur vollen Stunde)
+      if (this._first === undefined || (silent && !(isNum(this._first.el) && isNum(this._first.th)))) await this._loadFirsts();
       const r = this._range();
-      const ids = this._ids([...SUM_KEYS, ...MEAN_KEYS]);
-      const qStart = r.prevStart || r.start;
-      const [stats, temps] = await Promise.all([
-        this._stats(qStart, r.end, ids, r.period),
-        this._entities.outdoor
-          ? this._stats(qStart, r.end, [this._entities.outdoor], "day", ["mean"])
-          : Promise.resolve({}),
-      ]);
+      const data = await this._fetch(r.prevStart || r.start, r.end, r.period);
       if (token !== this._token) return;
-      this._data = { range: r, stats: stats || {}, temps: (temps || {})[this._entities.outdoor] || [] };
+      this._data = { range: r, ...data };
       this._error = null;
     } catch (err) {
       if (token !== this._token) return;
@@ -390,18 +531,46 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
     this._loadChanges(token);
   }
 
-  async _loadSince() {
-    // Ohne Strommessung gibt es keinen elektrischen Zaehler - dann zaehlt der
-    // thermische. Massgeblich ist der frueheste Beginn beider.
-    const ids = this._ids(["el", "th"]);
+  /**
+   * Erster Statistik-Zeitpunkt je Quelle. Monatszeilen beginnen immer am
+   * Monatsersten; fuer die Zaehler der Integration wird deshalb in der
+   * Stundenstatistik des ersten Monats nachgesehen - die Quellenwahl je Balken
+   * braucht den Beginn auf die Stunde genau.
+   */
+  async _loadFirsts() {
+    const keys = ["el", "th", "starts", "meter", "el_power", "th_power"];
+    const first = {};
+    let ok = true;
     try {
-      if (!ids.length) { this._since = null; return; }
-      const res = await this._stats(new Date(2010, 0, 1), new Date(Date.now() + DAY_MS), ids, "month", ["change"]);
-      const firsts = ids.map((id) => ((res && res[id]) || [])[0]).filter(Boolean).map((row) => Number(row.start));
-      this._since = firsts.length ? new Date(Math.min(...firsts)) : null;
+      const ids = this._ids(keys);
+      const res = ids.length ? (await this._stats(new Date(2010, 0, 1), new Date(Date.now() + DAY_MS), ids, "month")) || {} : {};
+      const at = {};
+      for (const id of ids) {
+        const row = (res[id] || []).find((x) => isNum(x.change) || isNum(x.mean));
+        if (row) at[id] = Number(row.start);
+      }
+      const exact = this._ids(["el", "th", "starts"]).filter((id) => at[id] !== undefined);
+      const byMonth = {};
+      for (const id of exact) (byMonth[at[id]] = byMonth[at[id]] || []).push(id);
+      for (const [m, list] of Object.entries(byMonth)) {
+        const from = new Date(Number(m));
+        const hres = (await this._stats(from, addDays(addMonths(from, 1), 2), list, "hour", ["change"])) || {};
+        for (const id of list) {
+          const row = (hres[id] || []).find((x) => isNum(x.change));
+          if (row) at[id] = Number(row.start);
+        }
+      }
+      for (const k of keys) first[k] = this._entities[k] && at[this._entities[k]] !== undefined ? at[this._entities[k]] : null;
     } catch (e) {
-      this._since = null;
+      ok = false;
+      for (const k of keys) first[k] = null;
     }
+    this._first = first;
+    this._firstOk = ok;
+    const cs = [first.el, first.th].filter(isNum);
+    this._since = cs.length ? new Date(Math.min(...cs)) : null;
+    const all = Object.values(first).filter(isNum);
+    this._sinceAny = all.length ? new Date(Math.min(...all)) : this._since;
   }
 
   async _loadChanges(token) {
@@ -430,66 +599,303 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
     return runtimeFactor(st?.attributes?.unit_of_measurement);
   }
 
-  /** Summen/Mittel je Eimer aus Statistikzeilen; rows: {id: [{start, change, mean, min, max}]} */
-  _aggregate(stats, starts, ends) {
+  /**
+   * Deckt die Statistik des Zaehlers `key` den Eimer ab dem Zeitpunkt s ab?
+   * Streng "vor": Die erste Statistikstunde ist meist nur teilweise gezaehlt
+   * (Update um 13:17 -> Stunde 13:00 hat nur 43 Minuten); fuer diese Stunde
+   * bzw. diesen Tag gilt deshalb noch die Ersatzquelle.
+   */
+  _covers(key, s) {
+    if (!this._firstOk) return true;          // unbekannt: wie bis v4.0.0
+    const f = this._first?.[key];
+    return isNum(f) && f < s;
+  }
+
+  /**
+   * Werte je Eimer mit Quelle. data: Ergebnis von _fetch; starts/ends: Date[].
+   * Je Eimer: el/th (kWh) mit el_src/th_src ("counter" | "meter" | "mean"),
+   * Teilzaehler nur bei "counter", starts/runtime nur bei voller Abdeckung,
+   * Mittelwerte als Summe/Anzahl (<key>_s, <key>_n) und Mittel.
+   *
+   * Arbeitszahl (seit v4.0.1, siehe _pairAz): az_el/az_th sind Strom und
+   * Waerme nur aus Teilzeitraeumen mit BEIDEN Werten und ohne unplausible
+   * Tage; bad_el/bad_th der unplausible Rest. cov_<k> ist die Datenabdeckung
+   * in Stunden je Quelle (fuer den Vorzeitraum-Vergleich).
+   */
+  _series(data, starts, ends) {
     const n = starts.length;
-    const out = starts.map(() => ({}));
     const s0 = starts.map((d) => d.getTime());
     const e0 = ends.map((d) => d.getTime());
-    const rf = this._runtimeFactor();
-    for (const key of [...SUM_KEYS, ...MEAN_KEYS]) {
-      const rows = stats[this._entities[key]] || [];
-      const isSum = SUM_KEYS.includes(key);
+    const now = Date.now();
+    const e = this._entities;
+    const st = data.stats || {};
+    const P = data.power || {};
+    // Stunden einer Statistikzeile, beim laufenden Zeitraum bis jetzt
+    const rowHours = (row) => {
+      const a = Number(row.start), b = Math.min(Number(row.end), now);
+      return Number.isFinite(b) && b > a ? (b - a) / HOUR_MS : 0;
+    };
+    const bin = (rows, f) => {
+      const sum = new Array(n).fill(0), cnt = new Array(n).fill(0), hrs = new Array(n).fill(0);
       let j = 0;
-      for (const row of rows) {
+      for (const row of rows || []) {
         const t = rowTime(row);
         while (j < n && t >= e0[j]) j++;
         if (j >= n) break;
         if (t < s0[j]) continue;
-        const b = out[j];
-        if (isSum) {
-          if (isNum(row.change)) b[key] = (b[key] || 0) + row.change * (key === "runtime" ? rf : 1);
-        } else if (isNum(row.mean)) {
-          b[`${key}_s`] = (b[`${key}_s`] || 0) + row.mean;
-          b[`${key}_n`] = (b[`${key}_n`] || 0) + 1;
-          b[key] = b[`${key}_s`] / b[`${key}_n`];
-        }
+        const v = f(row);
+        if (!isNum(v)) continue;
+        sum[j] += v; cnt[j]++; hrs[j] += rowHours(row);
       }
-    }
-    return out;
+      return { sum, cnt, hrs };
+    };
+    const rf = this._runtimeFactor();
+    const change = (id, fac = 1) => bin(id ? st[id] : [], (r) => (isNum(r.change) ? r.change * fac : null));
+    const C = {};
+    for (const k of SUM_KEYS) C[k] = change(e[k], k === "runtime" ? rf : 1);
+    const M = e.meter ? change(e.meter) : null;
+    // Stromzaehler stundengenau (aus der Stundenabfrage), nur fuer die Abdeckung
+    const MH = e.meter ? bin(P[e.meter], (r) => (isNum(r.change) ? r.change : null)) : null;
+    // Stundenmittel in kW x 1 h = kWh
+    const power = (id) => bin(id ? P[id] : [], (r) => (isNum(r.mean) ? Math.max(0, r.mean) : null));
+    const PE = power(e.el_power), PT = power(e.th_power);
+    const MEANS = {};
+    for (const k of MEAN_KEYS) MEANS[k] = bin(e[k] ? st[e[k]] : [], (r) => (isNum(r.mean) ? r.mean : null));
+
+    const bars = starts.map((_, j) => {
+      const b = {};
+      const cov = (k, fk = k) => this._covers(fk, s0[j]) && C[k].cnt[j] > 0;
+      if (cov("el")) {
+        b.el = C.el.sum[j]; b.el_src = "counter"; b.cov_el = C.el.hrs[j];
+        for (const k of ["el_heat", "el_dhw"]) if (C[k].cnt[j]) b[k] = C[k].sum[j];
+      } else if (M && M.cnt[j]) {
+        b.el = M.sum[j]; b.el_src = "meter"; b.cov_el = MH && MH.cnt[j] ? MH.cnt[j] : M.hrs[j];
+        b.el_hourly = MH ? MH.cnt[j] : 0;
+      } else if (PE.cnt[j]) {
+        b.el = PE.sum[j]; b.el_src = "mean"; b.cov_el = PE.cnt[j]; b.el_hourly = PE.cnt[j];
+      }
+      if (cov("th")) {
+        b.th = C.th.sum[j]; b.th_src = "counter"; b.cov_th = C.th.hrs[j];
+        for (const k of ["th_heat", "th_dhw"]) if (C[k].cnt[j]) b[k] = C[k].sum[j];
+      } else if (PT.cnt[j]) {
+        b.th = PT.sum[j]; b.th_src = "mean"; b.cov_th = PT.cnt[j];
+      }
+      if (cov("starts")) { b.starts = C.starts.sum[j]; b.cov_starts = C.starts.hrs[j]; }
+      if (cov("runtime", "starts")) b.runtime = C.runtime.sum[j];
+      for (const k of MEAN_KEYS) {
+        if (!MEANS[k].cnt[j]) continue;
+        b[`${k}_s`] = MEANS[k].sum[j]; b[`${k}_n`] = MEANS[k].cnt[j];
+        b[k] = b[`${k}_s`] / b[`${k}_n`];
+        b[`cov_${k}`] = MEANS[k].hrs[j];
+      }
+      return b;
+    });
+    this._pairAz(data, bars, s0, e0);
+    return bars;
   }
 
-  /** Kennzahlen fuer [from, to) aus Zeilen beliebiger Aufloesung plus Tagesmitteln der Aussentemperatur. */
-  _totals(stats, temps, from, to) {
+  /**
+   * Strom und Waerme je Kalendertag aus den Stundenwerten (Stromzaehler, sonst
+   * Mittel der elektrischen Leistung; Waerme aus dem Mittel der thermischen
+   * Leistung), nur Stunden mit beiden Werten. Ergebnis je Datensatz einmal
+   * berechnet: Map Tagesbeginn -> {el, th, h, bad}.
+   */
+  _dayCheck(data) {
+    if (data._days) return data._days;
+    const e = this._entities, P = data.power || {};
+    const map = (rows, f) => {
+      const m = new Map();
+      for (const r of rows || []) { const v = f(r); if (isNum(v)) m.set(Number(r.start), v); }
+      return m;
+    };
+    const meter = e.meter ? map(P[e.meter], (r) => (isNum(r.change) ? r.change : null)) : new Map();
+    const pe = map(P[e.el_power], (r) => (isNum(r.mean) ? Math.max(0, r.mean) : null));
+    const days = new Map();
+    for (const r of (e.th_power && P[e.th_power]) || []) {
+      if (!isNum(r.mean)) continue;
+      const t = Number(r.start);
+      const el = meter.has(t) ? meter.get(t) : pe.get(t);
+      if (!isNum(el)) continue;
+      const d = startOfDay(t).getTime();
+      const x = days.get(d) || { el: 0, th: 0, h: 0 };
+      x.el += el; x.th += Math.max(0, r.mean); x.h++;
+      days.set(d, x);
+    }
+    for (const x of days.values()) x.bad = this._implausible(x.el, x.th, x.h);
+    data._days = { days, meter, pe };
+    return data._days;
+  }
+
+  /** AZ < 1 bei nennenswertem Strom (anteilig je Tag-Aequivalent) ist unmoeglich. */
+  _implausible(el, th, hours) {
+    return isNum(el) && isNum(th) && el >= MIN_EL_KWH && el >= IMPLAUSIBLE_EL_DAY * (hours / 24)
+      && th < IMPLAUSIBLE_AZ * el;
+  }
+
+  /**
+   * Arbeitszahl je Eimer nur aus Teilzeitraeumen mit Strom UND Waerme, auf der
+   * feinsten verfuegbaren Ebene:
+   *   - Strom aus Stromzaehler/Leistungsmittel und Waerme aus Leistungsmittel:
+   *     Stunde fuer Stunde (beide Quellen liegen stundengenau vor);
+   *   - sonst (Zaehler der Integration, oder keine Stundenwerte): der ganze
+   *     Eimer, sofern beide Werte vorliegen - die Zaehler laufen gemeinsam.
+   * Unplausible Tage (siehe _implausible) gehen nicht in az_el/az_th ein,
+   * sondern in bad_el/bad_th. cov_az: Stunden mit beiden Werten.
+   */
+  _pairAz(data, bars, s0, e0) {
+    const n = bars.length;
+    if (!n) return;
+    const now = Date.now();
+    const { days, meter, pe } = this._dayCheck(data);
+    const thRows = (this._entities.th_power && (data.power || {})[this._entities.th_power]) || [];
+    const hourly = bars.map((b) => isNum(b.el) && isNum(b.th) && b.th_src === "mean" && b.el_hourly > 0);
+    for (const b of bars) { b.az_el = null; b.az_th = null; b.bad_el = 0; b.bad_th = 0; b.cov_az = 0; b.cov_ok = 0; b.bad_days = 0; b.bad_from = null; b.bad_to = null; }
+    const seen = bars.map(() => new Set());
+    let j = 0;
+    for (const r of thRows) {
+      const t = Number(r.start);
+      while (j < n && t >= e0[j]) j++;
+      if (j >= n) break;
+      if (t < s0[j] || !hourly[j] || !isNum(r.mean)) continue;
+      const b = bars[j];
+      const el = (b.el_src === "meter" ? meter : pe).get(t);
+      if (!isNum(el)) continue;
+      const th = Math.max(0, r.mean);
+      const d = startOfDay(t).getTime();
+      b.cov_az++;
+      if (days.get(d)?.bad) {
+        b.bad_el += el; b.bad_th += th;
+        if (!seen[j].has(d)) {
+          seen[j].add(d); b.bad_days++;
+          if (b.bad_from === null || d < b.bad_from) b.bad_from = d;
+          if (b.bad_to === null || d > b.bad_to) b.bad_to = d;
+        }
+      } else {
+        b.az_el = (b.az_el || 0) + el; b.az_th = (b.az_th || 0) + th; b.cov_ok++;
+      }
+    }
+    bars.forEach((b, i) => {
+      // Stundenweise gepaart (auch: keine einzige gemeinsame Stunde)
+      if (!isNum(b.el) || !isNum(b.th) || hourly[i]) return;
+      // Ganzer Eimer als ein Teilzeitraum
+      const end = Math.min(e0[i], now);
+      const hours = Math.max(0, (end - s0[i]) / HOUR_MS);
+      b.cov_az = Math.min(isNum(b.cov_el) ? b.cov_el : hours, isNum(b.cov_th) ? b.cov_th : hours);
+      if (this._implausible(b.el, b.th, Math.max(1, b.cov_az))) {
+        b.bad_el = b.el; b.bad_th = b.th; b.bad_whole = true;
+        b.bad_days = Math.max(1, Math.round(b.cov_az / 24));
+        b.bad_from = startOfDay(s0[i]).getTime(); b.bad_to = startOfDay(end - 1).getTime();
+      } else { b.az_el = b.el; b.az_th = b.th; b.cov_ok = b.cov_az; }
+    });
+    for (const b of bars) {
+      // Punkt im Diagramm erst ab nennenswertem Betrieb: reine Bereitschaft
+      // (z. B. Anlage im Sommer aus) haette AZ ~0 und waere nichtssagend. In
+      // die Summen der Kennzahlen gehen auch diese Stunden ein.
+      const ok = isNum(b.az_el) && b.az_el >= IMPLAUSIBLE_EL_DAY * (b.cov_ok / 24);
+      b.az = ok ? ratio(b.az_th, b.az_el, MIN_EL_KWH) : null;
+      b.az_bad = b.bad_el > 0 ? ratio(b.bad_th, b.bad_el, MIN_EL_KWH) : null;
+    }
+  }
+
+  _hdd(temps, from, to, info = null) {
     const f = from.getTime(), t = to.getTime();
-    const tot = this._aggregate(stats, [from], [to])[0];
-    let hdd = 0, hddDays = 0;
-    for (const row of temps) {
+    let hdd = 0, days = 0;
+    for (const row of temps || []) {
       const s = rowTime(row);
       if (s < f || s >= t || !isNum(row.mean)) continue;
-      hddDays++;
+      days++;
       if (row.mean < this._base) hdd += this._base - row.mean;
     }
-    tot.hdd = hddDays ? hdd : null;
-    // Ohne Gesamtzaehler: Summe der Teilzaehler
-    if (!isNum(tot.el) && (isNum(tot.el_heat) || isNum(tot.el_dhw))) tot.el = (tot.el_heat || 0) + (tot.el_dhw || 0);
-    if (!isNum(tot.th) && (isNum(tot.th_heat) || isNum(tot.th_dhw))) tot.th = (tot.th_heat || 0) + (tot.th_dhw || 0);
+    if (info) info.cov_hdd = days;
+    return days ? hdd : null;
+  }
+
+  /** Summen ueber Eimer (aus _series). */
+  _sum(bars) {
+    const t = { srcEl: new Set(), srcTh: new Set(), n_data: 0, n_el: 0, n_th: 0, n_starts: 0, n_runtime: 0,
+      bad_days: 0, bad_from: null, bad_to: null };
+    const add = (k, v) => { t[k] = (t[k] || 0) + v; };
+    for (const b of bars) {
+      if (isNum(b.el)) { add("el", b.el); t.n_el++; t.srcEl.add(b.el_src); }
+      if (isNum(b.th)) { add("th", b.th); t.n_th++; t.srcTh.add(b.th_src); }
+      if (isNum(b.el) || isNum(b.th)) t.n_data++;
+      // Arbeitszahl nur aus Teilzeitraeumen mit Strom UND Waerme, ohne
+      // unplausible Tage (siehe _pairAz)
+      if (isNum(b.az_el) && isNum(b.az_th)) { add("az_el", b.az_el); add("az_th", b.az_th); }
+      if (b.bad_el > 0) {
+        add("bad_el", b.bad_el); add("bad_th", b.bad_th); t.bad_days += b.bad_days || 0;
+        if (isNum(b.bad_from) && (t.bad_from === null || b.bad_from < t.bad_from)) t.bad_from = b.bad_from;
+        if (isNum(b.bad_to) && (t.bad_to === null || b.bad_to > t.bad_to)) t.bad_to = b.bad_to;
+      }
+      // Datenabdeckung in Stunden je Quelle (Vorzeitraum-Vergleich)
+      for (const k of ["el", "th", "az", "starts", ...MEAN_KEYS]) if (isNum(b[`cov_${k}`])) add(`cov_${k}`, b[`cov_${k}`]);
+      if (b.th_src === "counter") {
+        add("th_split", b.th); add("th_heat", b.th_heat || 0); add("th_dhw", b.th_dhw || 0); add("n_th_split", 1);
+      }
+      if (b.el_src === "counter") {
+        add("el_split", b.el); add("el_heat", b.el_heat || 0); add("el_dhw", b.el_dhw || 0); add("n_el_split", 1);
+      }
+      if (b.el_src === "counter" && b.th_src === "counter" && !(b.bad_el > 0)) {
+        add("cov_split", b.cov_az || 0);
+        add("azh_el", b.el_heat || 0); add("azh_th", b.th_heat || 0);
+        add("azd_el", b.el_dhw || 0); add("azd_th", b.th_dhw || 0);
+      }
+      if (isNum(b.starts)) { add("starts", b.starts); t.n_starts++; }
+      if (isNum(b.runtime)) { add("runtime", b.runtime); t.n_runtime++; }
+      for (const k of MEAN_KEYS) if (b[`${k}_n`]) { add(`${k}_s`, b[`${k}_s`]); add(`${k}_n`, b[`${k}_n`]); }
+    }
+    for (const k of MEAN_KEYS) if (t[`${k}_n`]) t[k] = t[`${k}_s`] / t[`${k}_n`];
+    t.estimated = t.srcEl.has("mean") || t.srcTh.has("mean");
+    t.historic = [...t.srcEl, ...t.srcTh].some((x) => x !== "counter");
+    // Aufteilung, Starts und Laufzeit nur fuer einen Teil der Eimer mit Daten
+    t.split_partial = (t.n_th_split || 0) > 0 && (t.n_th_split || 0) < t.n_th;
+    t.counters_partial = t.n_starts > 0 && t.n_starts < t.n_data;
+    t.counters_none = t.n_starts === 0 && t.n_data > 0;
+    return t;
+  }
+
+  /** Kennzahlen fuer [from, to) im Raster period. */
+  _totals(data, from, to, period) {
+    const { starts, ends } = makeBuckets(period, from, to);
+    const tot = this._sum(this._series(data, starts, ends));
+    tot.hdd = this._hdd(data.temps, from, to, tot);
     return tot;
   }
 
   _kpis(tot) {
     return {
       el: tot.el, th: tot.th,
-      az: ratio(tot.th, tot.el, MIN_EL_KWH),
-      az_heat: ratio(tot.th_heat, tot.el_heat, MIN_EL_KWH),
-      az_dhw: ratio(tot.th_dhw, tot.el_dhw, MIN_EL_KWH),
-      dhw_share: isNum(tot.th_dhw) && isNum(tot.th) && tot.th > 0 ? (100 * tot.th_dhw) / tot.th : null,
+      az: ratio(tot.az_th, tot.az_el, MIN_EL_KWH),
+      az_heat: ratio(tot.azh_th, tot.azh_el, MIN_EL_KWH),
+      az_dhw: ratio(tot.azd_th, tot.azd_el, MIN_EL_KWH),
+      dhw_share: isNum(tot.th_dhw) && isNum(tot.th_split) && tot.th_split > 0 ? (100 * tot.th_dhw) / tot.th_split : null,
       starts: tot.starts, runtime: tot.runtime,
       run_per_start: isNum(tot.runtime) && isNum(tot.starts) && tot.starts > 0 ? (60 * tot.runtime) / tot.starts : null,
       outdoor: tot.outdoor, hdd: tot.hdd,
       kwh_hdd: isNum(tot.hdd) && tot.hdd >= 1 ? ratio(tot.el, tot.hdd) : null,
       flow: tot.flow, cop: tot.cop,
     };
+  }
+
+  /** Text der Quelle fuer Tooltip und Hinweise. */
+  _srcLabel(src) {
+    if (src === "counter") return this._t("src_counter");
+    if (src === "mean") return this._t("src_mean");
+    if (src === "meter") {
+      const id = this._entities.meter || "";
+      const name = String(this._hass?.states?.[id]?.attributes?.friendly_name || id);
+      return /shelly/i.test(name) || /shelly/i.test(id) ? this._t("src_meter_shelly") : this._t("src_meter");
+    }
+    return "";
+  }
+
+  _srcList(tot) {
+    const parts = [];
+    const el = [...tot.srcEl].filter((x) => x !== "counter").map((x) => this._srcLabel(x));
+    const th = [...tot.srcTh].filter((x) => x !== "counter").map((x) => this._srcLabel(x));
+    if (el.length) parts.push(`${this._t("el")}: ${el.join(" / ")}`);
+    if (th.length) parts.push(`${this._t("th")}: ${th.join(" / ")}`);
+    return parts.join(", ");
   }
 
   // ── Ereignisse ───────────────────────────────────────────────────────────
@@ -589,20 +995,18 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
       const day0 = startOfDay(change._t);
       const bStart = addDays(day0, -days), bEnd = day0;
       const aStart = addDays(day0, 1), aEnd = addDays(aStart, days);
-      const ids = this._ids([...SUM_KEYS, ...MEAN_KEYS]);
-      const stats = (await this._stats(bStart, aEnd, ids, "day")) || {};
+      // Dieselbe Quellenwahl wie im Diagramm, je Tag
+      const data = await this._fetch(bStart, aEnd, "day");
       if (token !== this._cmpToken) return;
       const now = Date.now();
       // Nur vollstaendige Tage: der laufende Tag zaehlt nicht
-      const full = {};
-      for (const [id, rows] of Object.entries(stats)) full[id] = rows.filter((row) => Number(row.end) <= now);
-      const temps = full[this._entities.outdoor] || [];
+      const temps = data.temps.filter((row) => Number(row.end) <= now);
       const side = (from, to) => {
-        const tot = this._totals(full, temps, from, to);
-        const inSide = (row) => { const rt = rowTime(row); return rt >= from.getTime() && rt < to.getTime(); };
-        const elRows = (full[this._entities.el] || []).filter((row) => inSide(row) && isNum(row.change));
-        const nDays = elRows.length || (full[this._entities.th] || []).filter((row) => inSide(row) && isNum(row.change)).length;
-        return { tot, days: nDays };
+        const { starts, ends } = makeBuckets("day", from, to);
+        const full = starts.map((st, i) => [st, ends[i]]).filter(([, en]) => en.getTime() <= now);
+        const tot = this._sum(this._series(data, full.map((x) => x[0]), full.map((x) => x[1])));
+        tot.hdd = this._hdd(temps, from, to, tot);
+        return { tot, days: tot.n_data };
       };
       const before = side(bStart, bEnd);
       const after = side(aStart, aEnd);
@@ -662,45 +1066,67 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
   }
 
   _renderMain() {
-    const { range: r, stats, temps } = this._data;
+    const r = this._data.range;
     const now = new Date();
-    const bars = this._aggregate(stats, r.buckets, r.ends);
-    const hasAny = bars.some((b) => isNum(b.el) || isNum(b.th) || isNum(b.el_heat) || isNum(b.th_heat));
-    let notice = "";
-    if (!hasAny) {
-      if (!this._hass.states[this._entities.el]) notice = this._t("missing_entity", { id: this._entities.el });
-      else if (this._since) notice = this._t("no_data_range", { since: this._date(this._since, { day: "numeric", month: "short", year: "numeric" }) });
-      else notice = this._t("no_data_yet");
-    } else if (this._since && this._since > r.start && r.view !== "all") {
-      notice = this._t("partial_data", { since: this._date(this._since, { day: "numeric", month: "short", year: "numeric" }) });
-    }
+    const bars = this._series(this._data, r.buckets, r.ends);
+    const hasAny = bars.some((b) => isNum(b.el) || isNum(b.th));
+    const dateOpts = { day: "numeric", month: "short", year: "numeric" };
     // Kennzahlen: aktueller Zeitraum bis jetzt vs. Vorzeitraum gleicher Laenge
     const curEnd = r.end > now ? now : r.end;
-    const cur = this._kpis(this._totals(stats, temps, r.start, r.end));
-    let prev = null;
+    const curTot = this._sum(bars);
+    curTot.hdd = this._hdd(this._data.temps, r.start, r.end, curTot);
+    const cur = this._kpis(curTot);
+    let prev = null, prevTot = null;
     if (r.prevStart) {
       const prevEnd = new Date(Math.min(r.start.getTime(), r.prevStart.getTime() + (curEnd - r.start)));
-      prev = this._kpis(this._totals(stats, temps, r.prevStart, prevEnd));
+      prevTot = this._totals(this._data, r.prevStart, prevEnd, r.period);
+      prev = this._kpis(prevTot);
+    }
+    let notice = "";
+    if (!hasAny) {
+      const any = this._sinceAny || this._since;
+      if (!any && !this._hass.states[this._entities.el] && !this._hass.states[this._entities.th]) {
+        this._bars = bars;
+        this._geom = null;
+        return `<div class="msg info">${esc(this._t("missing_entity", { id: this._entities.el }))}</div>`;
+      }
+      // "Noch keine Daten" nur, wenn wirklich keine Quelle Statistik hat
+      notice = any ? this._t("no_data_range", { since: this._date(any, dateOpts) }) : this._t("no_data_yet");
+    } else if (curTot.historic) {
+      const sources = this._srcList(curTot);
+      notice = this._since
+        ? this._t("history_note", { since: this._date(this._since, dateOpts), sources })
+        : this._t("history_note_nocounter", { sources });
     }
     this._bars = bars;
-    if (!hasAny && !this._hass.states[this._entities.el]) {
-      this._geom = null;
-      return `<div class="msg info">${esc(notice)}</div>`;
+    // Unplausible Arbeitszahl (AZ < 1) im angezeigten Zeitraum
+    let bad = "";
+    if (curTot.bad_days > 0 && isNum(curTot.bad_from)) {
+      bad = this._t("implausible_note", {
+        from: this._date(new Date(curTot.bad_from), dateOpts), to: this._date(new Date(curTot.bad_to), dateOpts), n: curTot.bad_days,
+      });
     }
     return `
       ${notice ? `<div class="msg info">${esc(notice)}</div>` : ""}
-      ${this._renderLegend()}
+      ${this._renderLegend(bars)}
       <div class="chart">${this._renderChart(r, bars)}<div class="tip" hidden></div></div>
-      ${this._renderKpis(cur, prev)}`;
+      ${bad ? `<div class="msg warn">${esc(bad)}</div>` : ""}
+      ${this._renderKpis(cur, prev, curTot, prevTot)}`;
   }
 
-  _renderLegend() {
+  _renderLegend(bars = []) {
     const items = [
       ["el", this._t("el"), "c-elh"], ["th", this._t("th"), "c-thh"],
       ["az", this._t("az"), "c-az"], ["temp", this._t("temp"), "c-temp"],
     ];
-    const sub = `<span class="sub"><i class="sw c-elh"></i>${esc(this._t("heat"))} <i class="sw c-eld"></i>${esc(this._t("dhw"))} <i class="sw c-elr"></i>${esc(this._t("rest"))}</span>`;
-    return `<div class="legend">${items.map(([k, label, cls]) => `<button class="chip ${this._hidden.has(k) ? "off" : ""}" data-action="toggle" data-series="${k}" aria-pressed="${!this._hidden.has(k)}"><i class="sw ${cls} ${k === "az" || k === "temp" ? "line" : ""}"></i>${esc(label)}</button>`).join("")}${sub}</div>`;
+    const split = bars.some((b) => b.el_src === "counter" || b.th_src === "counter");
+    const unsplit = bars.some((b) => (isNum(b.el) && b.el_src !== "counter") || (isNum(b.th) && b.th_src !== "counter"));
+    const est = bars.some((b) => b.el_src === "mean" || b.th_src === "mean");
+    let sub = "";
+    if (split || !unsplit) sub += `<i class="sw c-elh"></i>${esc(this._t("heat"))} <i class="sw c-eld"></i>${esc(this._t("dhw"))} <i class="sw c-elr"></i>${esc(this._t("rest"))}`;
+    if (unsplit) sub += ` <i class="sw c-elu"></i><i class="sw c-thu"></i>${esc(this._t("unsplit"))}`;
+    if (est) sub += ` <i class="sw hatch"></i>${esc(this._t("estimated"))}`;
+    return `<div class="legend">${items.map(([k, label, cls]) => `<button class="chip ${this._hidden.has(k) ? "off" : ""}" data-action="toggle" data-series="${k}" aria-pressed="${!this._hidden.has(k)}"><i class="sw ${cls} ${k === "az" || k === "temp" ? "line" : ""}"></i>${esc(label)}</button>`).join("")}<span class="sub">${sub}</span></div>`;
   }
 
   _renderChart(r, bars) {
@@ -715,18 +1141,22 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
     const showEl = !this._hidden.has("el"), showTh = !this._hidden.has("th");
     const showAz = !this._hidden.has("az"), showTemp = !this._hidden.has("temp");
 
-    const parts = bars.map((b) => {
-      const elH = isNum(b.el_heat) ? b.el_heat : 0, elD = isNum(b.el_dhw) ? b.el_dhw : 0;
-      const elT = isNum(b.el) ? b.el : elH + elD;
-      const thH = isNum(b.th_heat) ? b.th_heat : 0, thD = isNum(b.th_dhw) ? b.th_dhw : 0;
-      const thT = isNum(b.th) ? b.th : thH + thD;
-      return {
-        el: [elH, elD, Math.max(0, elT - elH - elD)], elT,
-        th: [thH, thD, Math.max(0, thT - thH - thD)], thT,
-        az: isNum(b.el) || isNum(b.el_heat) ? ratio(thT, elT, MIN_EL_KWH) : null,
-        temp: isNum(b.outdoor) ? b.outdoor : null,
-      };
-    });
+    // Je Balken: Stapel [Wert, Klasse]; ohne Zaehler der Integration ein
+    // einziger Block "nicht aufgeteilt", geschaetzte Werte schraffiert.
+    const stack = (b, k) => {
+      const tot = isNum(b[k]) ? b[k] : 0;
+      if (b[`${k}_src`] !== "counter") return [[tot, `c-${k}u`]];
+      const h = isNum(b[`${k}_heat`]) ? b[`${k}_heat`] : 0, d = isNum(b[`${k}_dhw`]) ? b[`${k}_dhw`] : 0;
+      return [[h, `c-${k}h`], [d, `c-${k}d`], [Math.max(0, tot - h - d), `c-${k}r`]];
+    };
+    const parts = bars.map((b) => ({
+      el: stack(b, "el"), elT: isNum(b.el) ? b.el : 0, elEst: b.el_src === "mean",
+      th: stack(b, "th"), thT: isNum(b.th) ? b.th : 0, thEst: b.th_src === "mean",
+      az: isNum(b.az) ? b.az : null,
+      // nur unplausible Teilzeitraeume: hohler Punkt ohne Linie
+      azBad: !isNum(b.az) && isNum(b.az_bad) ? b.az_bad : null,
+      temp: isNum(b.outdoor) ? b.outdoor : null,
+    }));
     const maxY = niceMax(Math.max(0, ...parts.map((p) => Math.max(showEl ? p.elT : 0, showTh ? p.thT : 0))));
     const y = (v) => top + ph - (v / maxY) * ph;
     const azMax = Math.min(AZ_AXIS_MAX, Math.max(4, Math.ceil(Math.max(0, ...parts.map((p) => p.az || 0)))));
@@ -753,7 +1183,7 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
     // Balken
     const both = showEl && showTh;
     const bw = Math.max(1.5, Math.min(28, (both ? gw * 0.36 : gw * 0.6)));
-    const cls = { el: ["c-elh", "c-eld", "c-elr"], th: ["c-thh", "c-thd", "c-thr"] };
+    s += `<defs><pattern id="esa-hatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)"><rect class="hatch-line" x="0" y="0" width="2" height="5"/></pattern></defs>`;
     parts.forEach((p, i) => {
       const cx = left + gw * (i + 0.5);
       const stacks = [];
@@ -761,10 +1191,13 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
       if (showTh) stacks.push(["th", both ? cx + 1 : cx - bw / 2]);
       for (const [k, x] of stacks) {
         let acc = 0;
-        p[k].forEach((v, j) => {
+        const est = p[`${k}Est`];
+        p[k].forEach(([v, klass]) => {
           if (!(v > 0)) return;
           const y1 = y(acc + v), y0 = y(acc);
-          s += `<rect class="${cls[k][j]}" x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, y0 - y1).toFixed(1)}" rx="1"/>`;
+          const geo = `x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, y0 - y1).toFixed(1)}" rx="1"`;
+          s += `<rect class="${klass}${est ? " est" : ""}" ${geo}/>`;
+          if (est) s += `<rect class="hatch" ${geo}/>`;
           acc += v;
         });
       }
@@ -783,9 +1216,16 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
       return d ? `<path class="${klass} ln" d="${d}"/>${dots}` : "";
     };
     if (showTemp) s += line(parts.map((p) => p.temp), yT, "c-temp");
-    if (showAz) s += line(parts.map((p) => p.az), yAz, "c-az");
+    if (showAz) {
+      s += line(parts.map((p) => p.az), yAz, "c-az");
+      parts.forEach((p, i) => {
+        if (!isNum(p.azBad)) return;
+        const cx = left + gw * (i + 0.5);
+        s += `<circle class="c-az bad" cx="${cx.toFixed(1)}" cy="${yAz(p.azBad).toFixed(1)}" r="${n <= 14 ? 3.5 : 2.5}"/>`;
+      });
+    }
     // X-Beschriftung
-    const step = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(pw / (r.view === "week" ? 44 : 30)))));
+    const step = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(pw / (r.view === "week" ? (narrow ? 22 : 44) : 30)))));
     r.buckets.forEach((b, i) => {
       if (i % step !== 0) return;
       const cx = left + gw * (i + 0.5);
@@ -855,22 +1295,35 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
     }
     if (!this._tip || !g || !r || !this._bars?.[this._tip.index]) { tip.hidden = true; return; }
     const i = this._tip.index, b = this._bars[i];
-    const az = ratio(isNum(b.th) ? b.th : (b.th_heat || 0) + (b.th_dhw || 0), isNum(b.el) ? b.el : (b.el_heat || 0) + (b.el_dhw || 0), MIN_EL_KWH);
+    const az = isNum(b.az) ? b.az : null;
     const row = (label, v, unit, d = 1, cls = "") => (isNum(v) ? `<tr><td>${cls ? `<i class="sw ${cls}"></i>` : ""}${esc(label)}</td><td>${this._num(v, d)}${unit ? ` ${unit}` : ""}</td></tr>` : "");
+    const srcRow = (k) => (isNum(b[k]) ? `<tr class="src"><td>${esc(this._t("src"))} ${esc(this._t(k))}</td><td>${esc(this._srcLabel(b[`${k}_src`]))}</td></tr>` : "");
+    const pre = (k) => (b[`${k}_src`] === "mean" ? "≈ " : "");
     const canDrill = { all: 1, year: 1, month: 1, week: 1 }[r.view];
     tip.innerHTML = `<div class="tt">${esc(this._bucketLabel(r.view, r.buckets[i]))}</div><table>
       ${row(`${this._t("el")} ${this._t("heat")}`, b.el_heat, "kWh", 2, "c-elh")}
       ${row(`${this._t("el")} ${this._t("dhw")}`, b.el_dhw, "kWh", 2, "c-eld")}
-      ${row(`${this._t("el")}`, b.el, "kWh", 2)}
+      ${row(`${pre("el")}${this._t("el")}`, b.el, "kWh", 2, b.el_src === "counter" ? "" : "c-elu")}
       ${row(`${this._t("th")} ${this._t("heat")}`, b.th_heat, "kWh", 2, "c-thh")}
       ${row(`${this._t("th")} ${this._t("dhw")}`, b.th_dhw, "kWh", 2, "c-thd")}
-      ${row(`${this._t("th")}`, b.th, "kWh", 2)}
+      ${row(`${pre("th")}${this._t("th")}`, b.th, "kWh", 2, b.th_src === "counter" ? "" : "c-thu")}
       ${row(this._t("az"), az, "", 2, "c-az")}
+      ${b.bad_el > 0 ? row(this._t("az_bad"), isNum(b.az_bad) ? b.az_bad : 0, "", 2) : ""}
       ${row(this._t("temp"), b.outdoor, "°C", 1, "c-temp")}
       ${row(this._t("k_starts"), b.starts, "", 0)}
       ${row(this._t("k_runtime"), b.runtime, "h", 1)}
-    </table>${this._tip.sticky && canDrill ? `<button class="link" data-action="drill" data-index="${i}">${esc(this._t("show"))} ›</button>` : ""}`;
+      ${srcRow("el")}${srcRow("th")}
+      ${this._pairedRow(b)}
+    </table>${b.bad_el > 0 ? `<div class="dim warnt">${esc(this._t("hint_implausible"))}</div>` : ""}${this._tip.sticky && canDrill ? `<button class="link" data-action="drill" data-index="${i}">${esc(this._t("show"))} ›</button>` : ""}`;
     this._placeTip(tip, g.left + g.gw * (i + 0.5));
+  }
+
+  /** Tooltip-Zeile: Arbeitszahl nur aus einem Teil der Stunden gebildet. */
+  _pairedRow(b) {
+    if (!isNum(b.el) || !isNum(b.th) || !(b.cov_az > 0)) return "";
+    const m = Math.max(b.cov_el || 0, b.cov_th || 0);
+    if (!(m > 0) || b.cov_az >= 0.98 * m) return "";
+    return `<tr class="src"><td colspan="2">${esc(this._t("az_paired", { h: this._num(b.cov_az, 0), m: this._num(m, 0) }))}</td></tr>`;
   }
 
   _changeTipHtml(c) {
@@ -907,7 +1360,31 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
     return `${name}: ${it?.old ?? "–"} → ${it?.new ?? "–"}`;
   }
 
-  _renderKpis(cur, prev) {
+  /**
+   * Reicht die Datenabdeckung des Vorzeitraums fuer ein Delta der Kennzahl k?
+   * Abdeckung = Stunden (Heizgradtage: Tage) mit Daten der jeweiligen Quelle;
+   * der Vorzeitraum braucht mindestens PREV_COVERAGE_MIN davon im Vergleich
+   * zum aktuellen Zeitraum. Liefert null (ok), sonst den Anteil in %.
+   */
+  _prevCoverage(k, tot, prevTot) {
+    if (!tot || !prevTot) return null;
+    const keys = {
+      el: ["el"], th: ["th"], az: ["az"], az_heat: ["split"], az_dhw: ["split"], dhw_share: ["split"],
+      starts: ["starts"], runtime: ["starts"], run_per_start: ["starts"],
+      outdoor: ["outdoor"], hdd: ["hdd"], kwh_hdd: ["el", "hdd"], flow: ["flow"], cop: ["cop"],
+    }[k];
+    if (!keys) return null;
+    let worst = null;
+    for (const c of keys) {
+      const a = tot[`cov_${c}`], p = prevTot[`cov_${c}`];
+      if (!isNum(a) || a <= 0) continue;
+      const q = isNum(p) ? p / a : 0;
+      if (q < PREV_COVERAGE_MIN && (worst === null || q < worst)) worst = q;
+    }
+    return worst === null ? null : Math.round(100 * worst);
+  }
+
+  _renderKpis(cur, prev, tot = null, prevTot = null) {
     // [Schluessel, Label, Einheit, Nachkommastellen, Richtung (+1 hoeher besser, -1 niedriger besser, 0 neutral), Delta absolut (K)?]
     const defs = [
       ["el", "k_el", "kWh", 1, -1], ["th", "k_th", "kWh", 1, 0],
@@ -919,10 +1396,30 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
       ["kwh_hdd", "k_kwh_hdd", "kWh/Kd", 2, -1], ["flow", "k_flow", "°C", 1, 0, true],
     ];
     if (!isNum(cur.az) && isNum(cur.cop)) defs.push(["cop", "k_cop", "", 2, 0]);
+    // Aufteilung, Starts und Laufzeit gibt es nur aus den Zaehlern
+    const since = this._since ? this._date(this._since, { day: "numeric", month: "short" }) : "";
+    const splitKeys = ["az_heat", "az_dhw", "dhw_share"], counterKeys = ["starts", "runtime", "run_per_start"];
+    const note = (k) => {
+      if (!tot || !this._since) return "";
+      if (splitKeys.includes(k) && tot.split_partial) return this._t("only_since", { since });
+      if (counterKeys.includes(k) && tot.counters_partial) return this._t("only_since", { since });
+      return "";
+    };
+    let incomplete = false;
+    // Arbeitszahl nur aus einem Teil der Zeit mit Strom (Waerme fehlt oder unplausibel)
+    const azPart = tot && isNum(cur.az) && isNum(tot.cov_el) && tot.cov_el > 0 && (tot.cov_az || 0) < 0.95 * tot.cov_el
+      ? Math.round((100 * (tot.cov_az || 0)) / tot.cov_el) : null;
     const tiles = defs.map(([k, label, unit, d, dir, abs]) => {
       const v = cur[k], p = prev ? prev[k] : null;
+      const nt = note(k) || (k === "az" && (azPart !== null || (tot && tot.bad_days > 0)) ? this._t("az_partial") : "");
+      const missing = tot && !isNum(v) && ((counterKeys.includes(k) && tot.counters_none) || (splitKeys.includes(k) && tot.n_data > 0 && !tot.n_th_split));
+      const est = tot && tot.estimated && ["el", "th", "az", "kwh_hdd"].includes(k) && isNum(v)
+        && ((k === "el" && tot.srcEl.has("mean")) || (k === "th" && tot.srcTh.has("mean")) || (k === "az") || (k === "kwh_hdd" && tot.srcEl.has("mean")));
       let delta = "";
-      if (isNum(v) && isNum(p)) {
+      const pc = isNum(v) && isNum(p) ? this._prevCoverage(k, tot, prevTot) : null;
+      // Vorzeitraum mit zu wenig Daten: kein Delta (Fussnote, Hinweis am Wert)
+      if (pc !== null) incomplete = true;
+      else if (isNum(v) && isNum(p)) {
         let txt = null, val = 0;
         if (abs) { val = v - p; txt = `${signed(val, this._num(Math.abs(val), 1))} K`; }
         else if (Math.abs(p) > 1e-9) { val = ((v - p) / Math.abs(p)) * 100; txt = `${signed(val, this._num(Math.abs(val), 0))} %`; }
@@ -931,11 +1428,15 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
           delta = `<span class="delta ${good}" title="${esc(this._t("vs_prev"))}: ${esc(this._num(p, d))}${unit ? ` ${esc(unit)}` : ""}">${txt}</span>`;
         }
       }
-      const title = k === "hdd" || k === "kwh_hdd" ? ` title="${esc(this._t("hdd_hint", { base: this._num(this._base, 0) }))}"` : "";
-      return `<div class="kpi ${isNum(v) ? "" : "empty"}"${title}><div class="kl">${esc(this._t(label))}</div>
-        <div class="kv">${this._num(v, d)}${unit && isNum(v) ? `<span class="ku">${esc(unit)}</span>` : ""}</div>${delta}</div>`;
+      let title = k === "hdd" || k === "kwh_hdd" ? this._t("hdd_hint", { base: this._num(this._base, 0) }) : "";
+      if (k === "az" && nt) title = this._t("az_partial_title", { p: azPart !== null ? azPart : 100 });
+      if (pc !== null) title = [title, this._t("prev_incomplete_tile", { p: pc })].filter(Boolean).join(" · ");
+      if (missing) title = this._since ? this._t("only_counters", { since: this._date(this._since, { day: "numeric", month: "short", year: "numeric" }) }) : "";
+      return `<div class="kpi ${isNum(v) ? "" : "empty"}"${title ? ` title="${esc(title)}"` : ""}><div class="kl">${esc(this._t(label))}</div>
+        <div class="kv">${est ? "≈ " : ""}${this._num(v, d)}${unit && isNum(v) ? `<span class="ku">${esc(unit)}</span>` : ""}</div>${delta}${nt ? `<div class="kn">${esc(nt)}</div>` : ""}</div>`;
     }).join("");
-    return `<div class="kpis">${tiles}</div><div class="foot">${esc(prev ? this._t("vs_prev") : this._t("vs_prev_none"))} · ${esc(this._t("hdd_hint", { base: this._num(this._base, 0) }))}</div>`;
+    const inc = incomplete ? ` · ${esc(this._t("prev_incomplete", { p: Math.round(100 * PREV_COVERAGE_MIN) }))}` : "";
+    return `<div class="kpis">${tiles}</div><div class="foot">${esc(prev ? this._t("vs_prev") : this._t("vs_prev_none"))}${inc} · ${esc(this._t("hdd_hint", { base: this._num(this._base, 0) }))}</div>`;
   }
 
   _renderChanges() {
@@ -975,10 +1476,10 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
         const k = this._kpis(t);
         return {
           az: k.az,
-          el_day: d && isNum(t.el) ? t.el / d : null,
-          th_day: d && isNum(t.th) ? t.th / d : null,
+          el_day: t.n_el && isNum(t.el) ? t.el / t.n_el : null,
+          th_day: t.n_th && isNum(t.th) ? t.th / t.n_th : null,
           kwh_hdd: k.kwh_hdd,
-          starts_day: d && isNum(t.starts) ? t.starts / d : null,
+          starts_day: t.n_starts && isNum(t.starts) ? t.starts / t.n_starts : null,
           run_per_start: k.run_per_start,
           outdoor: t.outdoor,
           flow: t.flow,
@@ -1013,6 +1514,11 @@ class EsHeatpumpAnalysisCard extends HTMLElement {
         hints.push(this._t("hint_temp", { d: this._num(Math.abs(a.outdoor - b.outdoor), 1) }));
       }
       if (c.others) hints.push(this._t("hint_overlap", { n: c.others }));
+      if (c.before.tot.bad_days > 0 || c.after.tot.bad_days > 0) hints.push(this._t("hint_implausible"));
+      if (c.before.tot.historic || c.after.tot.historic) {
+        const srcs = [this._srcList(c.before.tot), this._srcList(c.after.tot)].filter(Boolean);
+        hints.push(this._t("hint_estimated", { sources: [...new Set(srcs)].join("; ") }));
+      }
       hints.push(this._t("hint_change_day"));
       body = `<table class="cmp"><thead><tr><th></th><th>${esc(this._t("before"))}</th><th>${esc(this._t("after"))}</th><th>${esc(this._t("delta"))}</th></tr></thead><tbody>${rows}</tbody></table>
         <ul class="hints">${hints.map((h, i) => `<li class="${i === hints.length - 1 ? "dim" : "warn"}">${esc(h)}</li>`).join("")}</ul>`;
@@ -1035,6 +1541,8 @@ const STYLE = `
   --esa-thh: var(--deep-orange-color, #ff5722);
   --esa-thd: var(--amber-color, #ffc107);
   --esa-thr: var(--brown-color, #795548);
+  --esa-elu: #90a4ae;              /* Strom, nicht aufgeteilt (Historie) */
+  --esa-thu: #bcaaa4;              /* Waerme, nicht aufgeteilt (Historie) */
   --esa-az: var(--success-color, #43a047);
   --esa-temp: var(--purple-color, #9c27b0);
   --esa-good: var(--success-color, #43a047);
@@ -1068,12 +1576,19 @@ button:focus-visible, .marker:focus-visible { outline: 2px solid var(--primary-c
 i.c-elh { background: var(--esa-elh); } i.c-eld { background: var(--esa-eld); } i.c-elr { background: var(--esa-elr); }
 i.c-thh { background: var(--esa-thh); } i.c-thd { background: var(--esa-thd); } i.c-thr { background: var(--esa-thr); }
 i.c-az { background: var(--esa-az); } i.c-temp { background: var(--esa-temp); }
+i.c-elu { background: var(--esa-elu); } i.c-thu { background: var(--esa-thu); }
+i.hatch { background: repeating-linear-gradient(45deg, var(--esa-elu) 0 2px, transparent 2px 4px); opacity: 0.8; }
 .chart { position: relative; margin: 2px -4px 0; touch-action: pan-y; }
 svg { display: block; overflow: visible; }
 rect.c-elh { fill: var(--esa-elh); } rect.c-eld { fill: var(--esa-eld); } rect.c-elr { fill: var(--esa-elr); }
 rect.c-thh { fill: var(--esa-thh); } rect.c-thd { fill: var(--esa-thd); } rect.c-thr { fill: var(--esa-thr); }
+rect.c-elu { fill: var(--esa-elu); } rect.c-thu { fill: var(--esa-thu); }
+rect.est { fill-opacity: 0.55; }
+rect.hatch { fill: url(#esa-hatch); pointer-events: none; }
+.hatch-line { fill: var(--card-background-color, var(--ha-card-background, #fff)); fill-opacity: 0.55; }
 .ln { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 path.c-az { stroke: var(--esa-az); } circle.c-az { fill: var(--esa-az); }
+circle.c-az.bad { fill: var(--card-background-color, var(--ha-card-background, #fff)); stroke: var(--esa-az); stroke-width: 1.5; stroke-dasharray: 2 1.5; }
 path.c-temp { stroke: var(--esa-temp); stroke-dasharray: 4 3; } circle.c-temp { fill: var(--esa-temp); }
 .grid { stroke: var(--divider-color, rgba(127,127,127,0.25)); stroke-width: 1; }
 .ax { fill: var(--secondary-text-color); font-size: 10px; }
@@ -1103,9 +1618,13 @@ path.c-temp { stroke: var(--esa-temp); stroke-dasharray: 4 3; } circle.c-temp { 
 .ku { font-size: 11px; font-weight: 400; color: var(--secondary-text-color); margin-left: 3px; }
 .delta { font-size: 11px; color: var(--secondary-text-color); }
 .delta.good { color: var(--esa-good); } .delta.bad { color: var(--esa-bad); }
+.kn { font-size: 10px; color: var(--secondary-text-color); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tip tr.src td { color: var(--secondary-text-color); font-size: 11px; }
 .foot { font-size: 11px; color: var(--secondary-text-color); margin: 6px 2px 0; }
 .msg { padding: 12px 8px; color: var(--primary-text-color); font-size: 14px; }
 .msg.err { color: var(--error-color, #db4437); }
+.msg.warn { border-left: 3px solid var(--esa-warn); background: var(--secondary-background-color); border-radius: 8px; margin: 6px 0 0; padding: 6px 10px; font-size: 12px; }
+.tip .warnt { margin-top: 4px; color: var(--esa-warn); font-size: 11px; }
 .msg.info { background: var(--secondary-background-color); border-radius: 8px; margin: 6px 0; padding: 8px 10px; font-size: 13px; }
 .dim, .msg.dim { color: var(--secondary-text-color); font-size: 12px; }
 .section { margin-top: 14px; border-top: 1px solid var(--divider-color); padding-top: 10px; }

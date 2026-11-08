@@ -124,6 +124,107 @@ def neue_id(zeitpunkt: datetime.datetime) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────
+# Plausibilitaet eines Standes (Portal-Aussetzer)
+# ─────────────────────────────────────────────────────────────────────────
+#
+# Das Portal liefert gelegentlich einen setdata-Stand, in dem fast alle Werte 0
+# sind (beobachtet am 20.10.2026 01:43: Softwareversion 218 -> 0,
+# Datenbankversion 115 -> 0 und 56 weitere Einstellungen auf 0, eine
+# Viertelstunde spaeter wieder alles wie vorher). Die Anlage hat dabei nichts
+# verstellt - es ist ein Lesefehler. Wird so ein Stand gesichert, entstehen
+# zwei "Aenderungen" mit je 58 Posten, und eine Wiederherstellung aus dieser
+# Sicherung wuerde die Anlage tatsaechlich auf 0 setzen.
+
+# Systeminformationen, die eine laufende Anlage nie auf 0 stellt: Software-
+# und Datenbankversion der Bedieneinheit. Faellt eine davon von einem Wert
+# auf 0, war es das Portal.
+SYSTEMFELDER = ("par2", "par3")
+
+# Gleichzeitig auf 0 springende Katalogwerte: Ein echter Eingriff aendert
+# einige wenige Werte, eine Wiederherstellung bis zu 70 - aber auf ihre
+# frueheren Werte, nicht alle auf 0, und ein Werksreset setzt Werkswerte.
+# Ab 10 Werten, die vorher ungleich 0 waren, und mindestens der Haelfte davon
+# gilt der Stand als Aussetzer. 10 schuetzt kleine Staende (Tests, kuenftig
+# kleinere Kataloge) vor Fehlalarm; die Haelfte liegt weit ueber jedem
+# denkbaren Bedieneingriff und weit unter dem beobachteten Aussetzer (100 %).
+NULLSPRUNG_MIN = 10
+NULLSPRUNG_ANTEIL = 0.5
+
+
+def pruefe_stand(
+    neu: dict[str, Any], vorher: dict[str, Any] | None = None
+) -> str | None:
+    """Erkennt einen unbrauchbaren Konfigurationsstand (Portal-Aussetzer).
+
+    Rueckgabe: ``None``, wenn der Stand plausibel ist, sonst der Grund als
+    Text (fuer Log und Fehlermeldung).
+
+    Regeln (``vorher`` ist der letzte gueltige Stand, falls bekannt):
+
+    1. Ein Systemfeld (``SYSTEMFELDER``) war vorher ungleich 0 und ist jetzt 0
+       oder fehlt.
+    2. Von den Katalogwerten, die vorher ungleich 0 waren, stehen jetzt
+       mindestens ``NULLSPRUNG_ANTEIL`` (und mindestens ``NULLSPRUNG_MIN``)
+       auf 0.
+    3. Ohne Vorstand: Alle Katalogwerte sind 0 (mindestens
+       ``NULLSPRUNG_MIN`` vorhanden) - so sieht keine laufende Anlage aus.
+    """
+    # Ein leerer Stand wird schon beim Abruf abgelehnt (keine parXX-Felder)
+    # und nie gesichert; hier zaehlt nur, was ein Aussetzer sein kann.
+    neu_z = {k: _zahl(v) for k, v in neu.items()}
+    if vorher:
+        alt_z = {k: _zahl(v) for k, v in vorher.items()}
+        for par in SYSTEMFELDER:
+            a, b = alt_z.get(par), neu_z.get(par)
+            if isinstance(a, (int, float)) and a != 0 and (b is None or b == 0):
+                name = SETTINGS[par].name if par in SETTINGS else par
+                return f"{name} ({par}) {a} → {b if b is not None else 'fehlt'}"
+        vorher_gesetzt = [
+            p for p in SETTINGS
+            if isinstance(alt_z.get(p), (int, float)) and alt_z.get(p) != 0 and p in neu_z
+        ]
+        auf_null = [p for p in vorher_gesetzt if neu_z.get(p) == 0]
+        if (
+            len(auf_null) >= NULLSPRUNG_MIN
+            and len(auf_null) >= NULLSPRUNG_ANTEIL * len(vorher_gesetzt)
+        ):
+            return (
+                f"{len(auf_null)} von {len(vorher_gesetzt)} gesetzten "
+                "Einstellungen gleichzeitig auf 0"
+            )
+        return None
+    katalog = [neu_z[p] for p in SETTINGS if p in neu_z]
+    if len(katalog) >= NULLSPRUNG_MIN and all(v == 0 for v in katalog):
+        return f"alle {len(katalog)} Einstellungen sind 0"
+    return None
+
+
+def aussetzer(sicherungen: Iterable["Sicherung"]) -> dict[str, str]:
+    """Gespeicherte Portal-Aussetzer: Kennung -> Grund.
+
+    Jeder Stand wird gegen den davor liegenden *gueltigen* geprueft - ein
+    Aussetzer darf nicht zum Massstab fuer den naechsten werden.
+    """
+    ergebnis: dict[str, str] = {}
+    letzte: Sicherung | None = None
+    for s in sorted(sicherungen, key=_zeit_sortierung):
+        fehler = pruefe_stand(s.pars, letzte.pars if letzte else None)
+        if fehler is None:
+            letzte = s
+        else:
+            ergebnis[s.id] = fehler
+    return ergebnis
+
+
+def letzte_gueltige(sicherungen: Iterable["Sicherung"]) -> "Sicherung | None":
+    """Juengste Sicherung, die kein Portal-Aussetzer ist."""
+    liste = list(sicherungen)
+    schlecht = aussetzer(liste)
+    gueltig = [s for s in liste if s.id not in schlecht]
+    return max(gueltig, key=_zeit_sortierung) if gueltig else None
+
+
+# ─────────────────────────────────────────────────────────────────────────
 # Vergleich
 # ─────────────────────────────────────────────────────────────────────────
 
@@ -219,6 +320,10 @@ def aenderungsverlauf(
     Zeitpunkt und Anlass der *juengeren* Sicherung - dort ist die Aenderung
     erstmals zu sehen. Paare ohne Abweichung fallen weg.
 
+    Gespeicherte Portal-Aussetzer (siehe ``pruefe_stand``) werden
+    uebersprungen; der naechste Stand wird dann mit dem letzten *gueltigen*
+    verglichen. So verschwinden Paare wie "alles auf 0" / "alles zurueck".
+
     ``nur_bekannte``: Die rund 230 Felder ohne Katalogeintrag sind ueberwiegend
     Messwerte und Zaehlerstaende, die sich zwischen zwei Sicherungen praktisch
     immer aendern. Sie mitzuzaehlen, machte aus jeder Sicherung eine
@@ -226,8 +331,15 @@ def aenderungsverlauf(
     """
     reihe = sorted(sicherungen, key=_zeit_sortierung)
     ergebnis: list[dict[str, Any]] = []
-    for alt, neu in zip(reihe, reihe[1:]):
+    alt: Sicherung | None = None
+    for neu in reihe:
+        if pruefe_stand(neu.pars, alt.pars if alt else None) is not None:
+            continue
+        if alt is None:
+            alt = neu
+            continue
         if alt.pruefsumme and alt.pruefsumme == neu.pruefsumme:
+            alt = neu
             continue
         posten = []
         for a in vergleiche(alt.pars, neu.pars):
@@ -248,6 +360,7 @@ def aenderungsverlauf(
                 "reason": neu.anlass,
                 "items": posten,
             })
+        alt = neu
     return ergebnis
 
 

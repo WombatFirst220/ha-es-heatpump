@@ -10,6 +10,7 @@
           "base_url": "Portal URL",
           "scan_interval": "Update interval (seconds)",
           "power_entity": "Electrical-power sensor (optional, used for COP calculation)",
+          "energy_entity": "Electricity meter of the heat pump (kWh, optional — more accurate than the power sensor)",
           "flow_rate": "Heating-loop flow rate (m³/h)",
           "flow_rate_dhw": "DHW-loop flow rate (m³/h)",
           "mode_source_entity": "Operating-mode source entity (no longer needed since v2.4.0 — the unit reports its mode in par1)",
@@ -21,6 +22,13 @@
           "backup_interval_h": "Automatic backup interval (hours) — a change is always backed up immediately, this is the idle heartbeat",
           "backup_keep": "Number of backups to keep (0 = unlimited). Backups taken before a write or a restore are never deleted."
         }
+      },
+      "reauth_confirm": {
+        "title": "ES Heat Pump – Sign in again",
+        "description": "The myheatpump.com portal rejected the stored credentials for {username}. Enter the current password to resume.",
+        "data": {
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -29,7 +37,8 @@
       "unknown": "Unknown error — please check the Home Assistant logs."
     },
     "abort": {
-      "already_configured": "This heat pump is already configured."
+      "already_configured": "This heat pump is already configured.",
+      "reauth_successful": "Credentials updated, the integration is restarting."
     }
   },
   "options": {
@@ -41,6 +50,7 @@
           "flow_rate": "Heating-loop flow rate",
           "flow_rate_dhw": "DHW-loop flow rate",
           "power_entity": "Power sensor",
+          "energy_entity": "Heat pump electricity meter (kWh)",
           "flow_entity": "Flow sensor",
           "dhw_margin_k": "DHW detection threshold",
           "mode_source_entity": "Operating-mode source",
@@ -57,6 +67,7 @@
           "model": "Selecting it fills in the datasheet nominal flow rate.",
           "flow_rate": "Thermal output and COP are calculated from it. A COP below 1 means the value is too low.",
           "power_entity": "Electrical power of the heat pump, e.g. a Shelly. Required for the COP.",
+          "energy_entity": "Optional. Energy meter of the heat pump, e.g. the Shelly energy counter. More accurate than integrating the power, and the analysis also uses its history from before the update.",
           "flow_entity": "Optional. Overrides the constants; recommended if the circulation pump modulates.",
           "dhw_margin_k": "Kelvin above the heating setpoint from which the flow counts as domestic hot water.",
           "mode_source_entity": "No longer needed since v2.4.0, the unit reports its mode itself.",
@@ -75,6 +86,7 @@
               "flow_rate": "Heating-loop flow rate",
               "flow_rate_dhw": "DHW-loop flow rate",
               "power_entity": "Power sensor",
+              "energy_entity": "Heat pump electricity meter (kWh)",
               "flow_entity": "Flow sensor",
               "dhw_margin_k": "DHW detection threshold",
               "mode_source_entity": "Operating-mode source"
@@ -83,6 +95,7 @@
               "model": "Selecting it fills in the datasheet nominal flow rate.",
               "flow_rate": "Thermal output and COP are calculated from it. A COP below 1 means the value is too low.",
               "power_entity": "Electrical power of the heat pump, e.g. a Shelly. Required for the COP.",
+              "energy_entity": "Optional. Energy meter of the heat pump, e.g. the Shelly energy counter. More accurate than integrating the power, and the analysis also uses its history from before the update.",
               "flow_entity": "Optional. Overrides the constants; recommended if the circulation pump modulates.",
               "dhw_margin_k": "Kelvin above the heating setpoint from which the flow counts as domestic hot water.",
               "mode_source_entity": "No longer needed since v2.4.0, the unit reports its mode itself."
@@ -566,6 +579,12 @@
     },
     "konfiguration_unbekannt": {
       "message": "The current configuration is not known right now, nothing was backed up. Try again after the next successful poll."
+    },
+    "ungueltiger_wert": {
+      "message": "{name} was not changed: {fehler}"
+    },
+    "ungueltige_auswahl": {
+      "message": "\"{option}\" is not a valid choice for {name}."
     }
   },
   "services": {

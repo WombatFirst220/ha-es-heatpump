@@ -6,7 +6,9 @@ Liefert die Auswertungskarte ``custom:es-heatpump-analysis-card`` mit (v4.0.0).
 Die Karte (``www/es-heatpump-analysis-card.js``) ist Teil der Integration,
 kommt ohne Build-Schritt und ohne Fremdbibliotheken aus und liest die
 Langzeitstatistik von Home Assistant (``recorder/statistics_during_period``)
-sowie die Einstellungsaenderungen (``es_heatpump/settings_changes``).
+sowie die Einstellungsaenderungen (``es_heatpump/settings_changes``). Welche
+Entities sie liest, fragt sie seit v4.0.1 per ``es_heatpump/analysis_config``
+ab (Zaehler, Stromzaehler, Leistungen fuer die Zeit vor den Zaehlern).
 
 Ausgeliefert wird sie ueber denselben statischen Pfad wie die Hydraulik-Karte
 (``/es_heatpump_static``, ganz ``www/``); der Pfad wird je HA-Lauf nur einmal

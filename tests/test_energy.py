@@ -188,6 +188,120 @@ def test_slugs_der_zaehler():
     ]
 
 
+# ── ZaehlerstandFolger (Stromzaehler statt Leistung, v4.0.1) ─────────────
+
+@pytest.mark.parametrize("roh, einheit, erwartet", [
+    ("12.5", "kWh", 12.5),
+    ("12500", "Wh", 12.5),
+    ("0.0125", "MWh", 12.5),
+    ("12.5", None, 12.5),
+    ("12.5", "KWH", 12.5),
+    ("12.5", "W", None),           # keine Energieeinheit
+    ("unavailable", "kWh", None),
+    ("unknown", "kWh", None),
+    ("", "kWh", None),
+    ("nan", "kWh", None),
+])
+def test_energie_in_kwh(roh, einheit, erwartet):
+    wert = E.energie_in_kwh(roh, einheit)
+    assert wert == (pytest.approx(erwartet) if erwartet is not None else None)
+
+
+def test_zaehlerstand_deltas_nach_betriebsart():
+    z = E.EnergieZaehler(15 * 60)
+    f = E.ZaehlerstandFolger(z)
+    assert f.messpunkt(0, 1000.0, E.HEIZEN) == 0.0          # erster Stand = Basis
+    assert f.messpunkt(600, 1000.4, E.HEIZEN) == pytest.approx(0.4)
+    assert f.messpunkt(900, 1000.5, E.WARMWASSER) == pytest.approx(0.1)
+    assert f.messpunkt(1200, 1000.7, None) == pytest.approx(0.2)
+    assert z.summen[E.GESAMT] == pytest.approx(0.7)
+    assert z.summen[E.HEIZEN] == pytest.approx(0.4)
+    assert z.summen[E.WARMWASSER] == pytest.approx(0.1)
+
+
+def test_zaehlerstand_unavailable_wird_ignoriert():
+    z = E.EnergieZaehler(15 * 60)
+    f = E.ZaehlerstandFolger(z)
+    f.messpunkt(0, 50.0, E.HEIZEN)
+    assert f.messpunkt(60, None, E.HEIZEN) == 0.0
+    # Der Zuwachs ueber den Ausfall hinweg zaehlt - der Zaehler lief weiter
+    assert f.messpunkt(3600, 51.0, E.HEIZEN) == pytest.approx(1.0)
+    assert z.summen[E.HEIZEN] == pytest.approx(1.0)
+
+
+def test_zaehlerstand_reset_und_gleichstand():
+    z = E.EnergieZaehler(15 * 60)
+    f = E.ZaehlerstandFolger(z)
+    f.messpunkt(0, 500.0)
+    assert f.messpunkt(60, 500.0) == 0.0
+    assert f.messpunkt(120, 0.2) == 0.0       # Reset: verwerfen, neue Basis
+    assert f.basis == pytest.approx(0.2)
+    assert f.messpunkt(3600, 0.9) == pytest.approx(0.7)
+    assert z.summen[E.GESAMT] == pytest.approx(0.7)
+
+
+def test_zaehlerstand_unglaubwuerdiger_sprung():
+    z = E.EnergieZaehler(15 * 60)
+    f = E.ZaehlerstandFolger(z)
+    f.messpunkt(0, 10.0)
+    # 1000 kWh in einer Minute: Zaehlertausch, kein Verbrauch
+    assert f.messpunkt(60, 1010.0) == 0.0
+    assert f.basis == pytest.approx(1010.0)
+    assert f.messpunkt(120, 1010.05) == pytest.approx(0.05)
+
+
+def test_zaehlerstand_basis_wiederherstellen():
+    z = E.EnergieZaehler(15 * 60)
+    f = E.ZaehlerstandFolger(z)
+    f.setze_basis("abc")
+    assert f.basis is None
+    f.setze_basis("100.0", 0)
+    f.setze_basis("999.0", 0)                  # zweite Basis wird nicht uebernommen
+    assert f.basis == pytest.approx(100.0)
+    # Verbrauch waehrend des Neustarts zaehlt
+    assert f.messpunkt(300, 100.3, E.HEIZEN) == pytest.approx(0.3)
+
+
+def test_zaehlerstand_basis_nach_erstem_messpunkt():
+    # Beobachtung startet vor der Wiederherstellung: der erste Live-Stand wird
+    # von der gespeicherten Basis ersetzt, solange nichts gebucht ist.
+    z = E.EnergieZaehler(15 * 60)
+    f = E.ZaehlerstandFolger(z)
+    f.messpunkt(300, 100.3, E.HEIZEN)
+    f.setze_basis(100.0, 0)
+    assert f.messpunkt(360, 100.4, E.HEIZEN) == pytest.approx(0.4)
+    f.setze_basis(50.0, 0)                     # nach einer Buchung wirkungslos
+    assert f.basis == pytest.approx(100.4)
+
+
+def test_analyse_konfiguration_registry_und_rueckfall():
+    registry = {
+        "es_heatpump_hans@x.de_calc_energie_elektrisch": "sensor.wp_strom_zaehler",
+        "es_heatpump_hans@x.de_par24": "sensor.draussen",
+    }
+    a = E.analyse_konfiguration(
+        registry.get, "hans@x.de",
+        {"energy_entity": "sensor.shelly_energy", "power_entity": "", "flow_entity": "x"},
+    )
+    assert a["counters"]["el"] == "sensor.wp_strom_zaehler"
+    assert a["counters"]["th_dhw"] == "sensor.es_hp_energie_thermisch_warmwasser"
+    assert a["counters"]["runtime"] == "sensor.es_hp_verdichter_laufzeit"
+    assert set(a["counters"]) == {"el", "el_heat", "el_dhw", "th", "th_heat", "th_dhw", "starts", "runtime"}
+    assert a["outdoor"] == "sensor.draussen"
+    assert a["electrical_power"] == "sensor.es_hp_leistung_elektrisch"
+    assert a["thermal_power"] == "sensor.es_hp_thermische_leistung"
+    assert a["cop"] == "sensor.es_hp_aktueller_cop"
+    assert a["flow"] == "sensor.es_hp_vorlauf_tuo"
+    assert a["energy_entity"] == "sensor.shelly_energy"
+    assert a["power_entity"] is None
+    # Zaehler-Slugs passen zu den Entities der Integration
+    assert set(E.ANALYSE_ZAEHLER.values()) >= {slug for slug, _, _ in E.ENERGIE_ZAEHLER}
+    # Ohne Eintrag: nur Standard-IDs
+    leer = E.analyse_konfiguration(lambda _u: None, None, {})
+    assert leer["counters"]["el"] == "sensor.es_hp_energie_elektrisch"
+    assert leer["energy_entity"] is None
+
+
 # ── VerdichterZaehler ────────────────────────────────────────────────────
 
 def test_verdichter_starts_und_laufzeit():

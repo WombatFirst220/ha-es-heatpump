@@ -7,6 +7,7 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import CONF_ENABLE_WRITES, DEFAULT_ENABLE_WRITES, DOMAIN
@@ -15,6 +16,9 @@ from .entity import ESHeatpumpSettingEntity
 from .settings import KIND_SELECT, SETTINGS
 
 _LOGGER = logging.getLogger(__name__)
+
+# Schreibzugriffe nacheinander - das Portal nimmt je Aufruf genau einen Wert.
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -66,7 +70,13 @@ class ESHeatpumpSelect(ESHeatpumpSettingEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         if option not in self._nach_zahl:
-            raise ValueError(
-                f"{option!r} ist keine gültige Auswahl für {self.setting.name}"
+            raise ServiceValidationError(
+                f"{option!r} ist keine gültige Auswahl für {self.setting.name}",
+                translation_domain=DOMAIN,
+                translation_key="ungueltige_auswahl",
+                translation_placeholders={
+                    "name": self._anzeigename(),
+                    "option": str(option),
+                },
             )
         await self._async_setze(self._nach_zahl[option])

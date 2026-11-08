@@ -29,6 +29,22 @@ ANALYSIS_CARD_TYPE = "custom:es-heatpump-analysis-card"
 # Umschaltventil dann zum Speicher steht.  Schlüssel sind seit GitHub-Issue #6
 # die Zustands-Schlüssel der Entity (const.BETRIEBSART_STATE_KEYS), nicht mehr
 # die deutschen Texte.
+#
+# Zusaetzlich die deutschen Zustaende bis v3.x (ALTE_BETRIEBSARTEN, v4.0.1):
+# Die 24-h-Zeitleiste der Karte liest die Historie der Entity, und die enthaelt
+# nach dem Update noch die alten Werte.  Ohne sie zeigte die Zeitleiste fuer
+# die Zeit vor dem Update keine Betriebsart.
+ALTE_BETRIEBSARTEN: dict[str, str] = {
+    "Aus": "off",
+    "Heizen": "heating",
+    "Brauchwasser": "dhw",
+    "Brauchwasser + Heizen": "dhw",
+    "Kuehlen": "cooling",
+    "Brauchwasser + Kuehlen": "dhw",
+    "Entfrosten": "defrost",
+    "Unbekannt": "idle",
+}
+
 MODE_MAP: dict[str, str] = {
     "off": "off",
     "heating": "heating",
@@ -38,6 +54,7 @@ MODE_MAP: dict[str, str] = {
     "dhw_cooling": "dhw",
     "defrost": "defrost",
     "unknown": "idle",
+    **ALTE_BETRIEBSARTEN,
 }
 
 
@@ -256,11 +273,9 @@ def origami_ansichten(hydraulik: bool) -> list[dict[str, Any]]:
     ]
 
     # Auswertung: Die Karte braucht die volle Breite, deshalb spannt ihr
-    # Abschnitt alle Spalten.  Darunter Statistik-Diagramme als Rueckfall.
-    energie_reihen = [
-        {"entity": "sensor.es_hp_energie_elektrisch", "name": "Strom"},
-        {"entity": "sensor.es_hp_energie_thermisch", "name": "Wärme"},
-    ]
+    # Abschnitt alle Spalten.  Die Statistik-Diagramme "Energie je Tag/Monat"
+    # darunter sind seit v4.0.1 entfernt - sie kannten nur die neuen Zaehler
+    # und zeigten nach dem Update nur "Keine Statistik gefunden".
     auswertung = [
         {
             **_abschnitt(
@@ -269,22 +284,6 @@ def origami_ansichten(hydraulik: bool) -> list[dict[str, Any]]:
             ),
             "column_span": 3,
         },
-        _abschnitt(
-            _kopf("Energie je Tag"),
-            {
-                "type": "statistics-graph", "title": "Letzte 30 Tage",
-                "entities": energie_reihen, "chart_type": "bar", "period": "day",
-                "days_to_show": 30, "stat_types": ["change"], "grid_options": VOLL,
-            },
-        ),
-        _abschnitt(
-            _kopf("Energie je Monat"),
-            {
-                "type": "statistics-graph", "title": "Letzte 12 Monate",
-                "entities": energie_reihen, "chart_type": "bar", "period": "month",
-                "days_to_show": 365, "stat_types": ["change"], "grid_options": VOLL,
-            },
-        ),
     ]
 
     def ansicht(titel: str, pfad: str, icon: str, abschnitte: list) -> dict[str, Any]:

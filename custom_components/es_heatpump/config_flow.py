@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -48,6 +49,7 @@ from .const import (
     CONF_FLOW_ENTITY,
     CONF_MODEL,
     CONF_POWER_ENTITY,
+    CONF_ENERGY_ENTITY,
     CONF_SCAN_INTERVAL,
     DEFAULT_BASE_URL,
     DEFAULT_FLOW_RATE,
@@ -114,9 +116,42 @@ def _base_url_selector() -> SelectSelector:
             custom_value=True,
         )
     )
-from .coordinator import ESHeatpumpCoordinator
+from .coordinator import ESHeatpumpCoordinator, eigene_clientsession
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def _async_pruefe_zugang(
+    hass, benutzer: str, passwort: str, base_url: str
+) -> str | None:
+    """Prueft Zugangsdaten gegen das Portal; liefert den Fehlerschluessel.
+
+    Eigene, danach wieder geloeste HTTP-Sitzung: Bis v4.0.0 lief die Pruefung
+    ueber die von ganz Home Assistant geteilte Sitzung und ueberschrieb dabei
+    die JSESSIONID eines bereits laufenden Eintrags.
+    """
+    session = eigene_clientsession(hass, auto_cleanup=False)
+    try:
+        coordinator = ESHeatpumpCoordinator(
+            hass=hass,
+            username=benutzer,
+            password=passwort,
+            base_url=base_url or DEFAULT_BASE_URL,
+            scan_interval=DEFAULT_SCAN_INTERVAL,
+            session=session,
+        )
+        await coordinator.async_validate_credentials()
+    except ConfigEntryAuthFailed:
+        return "invalid_auth"
+    except UpdateFailed:
+        return "cannot_connect"
+    except Exception:  # noqa: BLE001
+        _LOGGER.exception("Unexpected error during ES Heatpump setup")
+        return "unknown"
+    finally:
+        # detach() statt close(): Der Connector gehoert Home Assistant.
+        session.detach()
+    return None
 
 
 class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -133,25 +168,14 @@ class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(user_input[CONF_USERNAME].lower())
             self._abort_if_unique_id_configured()
 
-            coordinator = ESHeatpumpCoordinator(
-                hass=self.hass,
-                username=user_input[CONF_USERNAME],
-                password=user_input[CONF_PASSWORD],
-                base_url=user_input.get(CONF_BASE_URL, DEFAULT_BASE_URL),
-                scan_interval=user_input.get(
-                    CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
-                ),
+            fehler = await _async_pruefe_zugang(
+                self.hass,
+                user_input[CONF_USERNAME],
+                user_input[CONF_PASSWORD],
+                user_input.get(CONF_BASE_URL, DEFAULT_BASE_URL),
             )
-
-            try:
-                await coordinator.async_validate_credentials()
-            except ConfigEntryAuthFailed:
-                errors["base"] = "invalid_auth"
-            except UpdateFailed:
-                errors["base"] = "cannot_connect"
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("Unexpected error during ES Heatpump setup")
-                errors["base"] = "unknown"
+            if fehler:
+                errors["base"] = fehler
             else:
                 return self.async_create_entry(
                     title=f"ES Heatpump ({user_input[CONF_USERNAME]})",
@@ -170,6 +194,9 @@ class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): vol.All(int, vol.Range(min=10, max=3600)),
                 vol.Optional(CONF_POWER_ENTITY): EntitySelector(
                     EntitySelectorConfig(domain="sensor", device_class="power")
+                ),
+                vol.Optional(CONF_ENERGY_ENTITY): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", device_class="energy")
                 ),
                 vol.Optional(CONF_MODE_SOURCE): EntitySelector(
                     EntitySelectorConfig(domain="sensor")
@@ -193,6 +220,70 @@ class ESHeatpumpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=schema,
+            errors=errors,
+        )
+
+    # ── Erneute Anmeldung (v4.0.1) ───────────────────────────────────────
+    # Lehnt das Portal die Zugangsdaten ab, wirft der Koordinator
+    # ConfigEntryAuthFailed; Home Assistant startet dann diesen Schritt. Bis
+    # v4.0.0 fehlte er - die Integration blieb nach einer Passwortaenderung
+    # im Portal dauerhaft tot. Der Benutzername bleibt fest (er ist die
+    # unique_id des Eintrags), nur das Passwort wird neu abgefragt.
+
+    def _reauth_eintrag(self) -> config_entries.ConfigEntry | None:
+        holen = getattr(self, "_get_reauth_entry", None)   # ab HA 2024.11
+        if holen is not None:
+            try:
+                return holen()
+            except Exception:  # noqa: BLE001
+                pass
+        return self.hass.config_entries.async_get_entry(
+            self.context.get("entry_id", "")
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> config_entries.FlowResult:
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.FlowResult:
+        errors: dict[str, str] = {}
+        eintrag = self._reauth_eintrag()
+        if eintrag is None:  # pragma: no cover - Eintrag inzwischen geloescht
+            return self.async_abort(reason="reauth_successful")
+        benutzer = eintrag.data[CONF_USERNAME]
+
+        if user_input is not None:
+            basis = eintrag.options.get(
+                CONF_BASE_URL, eintrag.data.get(CONF_BASE_URL, DEFAULT_BASE_URL)
+            ) or DEFAULT_BASE_URL
+            fehler = await _async_pruefe_zugang(
+                self.hass, benutzer, user_input[CONF_PASSWORD], basis
+            )
+            if fehler:
+                errors["base"] = fehler
+            else:
+                neu = {**eintrag.data, CONF_PASSWORD: user_input[CONF_PASSWORD]}
+                aktualisieren = getattr(self, "async_update_reload_and_abort", None)
+                # Bis HA 2024.x laedt async_update_reload_and_abort nur bei
+                # geaenderten Daten neu - bei unveraendertem Passwort (das
+                # Portal hatte es nur voruebergehend abgelehnt) haendisch.
+                if aktualisieren is not None and neu != dict(eintrag.data):
+                    return aktualisieren(
+                        eintrag, data=neu, reason="reauth_successful"
+                    )
+                self.hass.config_entries.async_update_entry(eintrag, data=neu)
+                self.hass.async_create_task(
+                    self.hass.config_entries.async_reload(eintrag.entry_id)
+                )
+                return self.async_abort(reason="reauth_successful")
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
+            description_placeholders={"username": benutzer},
             errors=errors,
         )
 
@@ -221,7 +312,7 @@ OPTION_SECTIONS: list[tuple[str, bool]] = [
     (SEC_VERBINDUNG, True),
 ]
 
-_ENTITY_KEYS = (CONF_POWER_ENTITY, CONF_MODE_SOURCE, CONF_FLOW_ENTITY)
+_ENTITY_KEYS = (CONF_POWER_ENTITY, CONF_ENERGY_ENTITY, CONF_MODE_SOURCE, CONF_FLOW_ENTITY)
 
 
 def _flatten(user_input: dict[str, Any]) -> dict[str, Any]:
@@ -302,6 +393,7 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
                               default=w(CONF_FLOW_RATE_DHW, DEFAULT_FLOW_RATE_DHW)),
                  _flow_rate_selector()),
                 entity(CONF_POWER_ENTITY, device_class="power"),
+                entity(CONF_ENERGY_ENTITY, device_class="energy"),
                 entity(CONF_FLOW_ENTITY),
                 (vol.Optional(CONF_DHW_MARGIN_K,
                               default=w(CONF_DHW_MARGIN_K, DEFAULT_DHW_MARGIN_K)),

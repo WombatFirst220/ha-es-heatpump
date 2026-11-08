@@ -10,6 +10,7 @@
           "base_url": "Portal-URL",
           "scan_interval": "Uppdateringsintervall (sekunder)",
           "power_entity": "Effektsensor (valfri, används för COP-beräkning)",
+          "energy_entity": "Värmepumpens elmätare (kWh, valfri — noggrannare än effektsensorn)",
           "flow_rate": "Flöde värmekrets (m³/h)",
           "flow_rate_dhw": "Flöde varmvattenkrets (m³/h)",
           "mode_source_entity": "Källa för driftläge (onödig sedan v2.4.0 – enheten rapporterar läget i par1)",
@@ -21,6 +22,13 @@
           "backup_interval_h": "Intervall för automatisk säkerhetskopia (timmar) – en ändring säkerhetskopieras alltid direkt, detta är bara viloläget",
           "backup_keep": "Antal säkerhetskopior att behålla (0 = obegränsat). Säkerhetskopior tagna före en skrivning eller återställning raderas aldrig."
         }
+      },
+      "reauth_confirm": {
+        "title": "ES Värmepump – logga in igen",
+        "description": "Portalen myheatpump.com avvisade de sparade inloggningsuppgifterna för {username}. Ange det aktuella lösenordet för att fortsätta.",
+        "data": {
+          "password": "Lösenord"
+        }
       }
     },
     "error": {
@@ -29,7 +37,8 @@
       "unknown": "Okänt fel — kontrollera Home Assistant-loggarna."
     },
     "abort": {
-      "already_configured": "Denna värmepump är redan konfigurerad."
+      "already_configured": "Denna värmepump är redan konfigurerad.",
+      "reauth_successful": "Inloggningsuppgifterna har uppdaterats, integrationen startas om."
     }
   },
   "options": {
@@ -41,6 +50,7 @@
           "flow_rate": "Flöde värmekrets",
           "flow_rate_dhw": "Flöde varmvattenkrets",
           "power_entity": "Effektsensor",
+          "energy_entity": "Värmepumpens elmätare (kWh)",
           "flow_entity": "Flödessensor",
           "dhw_margin_k": "Tröskel för varmvatten",
           "mode_source_entity": "Källa för driftläge",
@@ -57,6 +67,7 @@
           "model": "Valet fyller i det nominella flödet från databladet.",
           "flow_rate": "Termisk effekt och COP beräknas utifrån det. En COP under 1 betyder att värdet är för lågt.",
           "power_entity": "Värmepumpens elektriska effekt, t.ex. från en Shelly. Krävs för COP.",
+          "energy_entity": "Valfri. Värmepumpens energimätare, t.ex. mätarställningen från en Shelly. Noggrannare än att integrera effekten; analysen använder även dess historik från före uppdateringen.",
           "flow_entity": "Valfritt. Ersätter konstanterna; rekommenderas om cirkulationspumpen modulerar.",
           "dhw_margin_k": "Kelvin över värmebörvärdet från vilket framledningen räknas som varmvatten.",
           "mode_source_entity": "Behövs inte längre sedan v2.4.0, enheten rapporterar själv sitt läge.",
@@ -75,6 +86,7 @@
               "flow_rate": "Flöde värmekrets",
               "flow_rate_dhw": "Flöde varmvattenkrets",
               "power_entity": "Effektsensor",
+              "energy_entity": "Värmepumpens elmätare (kWh)",
               "flow_entity": "Flödessensor",
               "dhw_margin_k": "Tröskel för varmvatten",
               "mode_source_entity": "Källa för driftläge"
@@ -83,6 +95,7 @@
               "model": "Valet fyller i det nominella flödet från databladet.",
               "flow_rate": "Termisk effekt och COP beräknas utifrån det. En COP under 1 betyder att värdet är för lågt.",
               "power_entity": "Värmepumpens elektriska effekt, t.ex. från en Shelly. Krävs för COP.",
+              "energy_entity": "Valfri. Värmepumpens energimätare, t.ex. mätarställningen från en Shelly. Noggrannare än att integrera effekten; analysen använder även dess historik från före uppdateringen.",
               "flow_entity": "Valfritt. Ersätter konstanterna; rekommenderas om cirkulationspumpen modulerar.",
               "dhw_margin_k": "Kelvin över värmebörvärdet från vilket framledningen räknas som varmvatten.",
               "mode_source_entity": "Behövs inte längre sedan v2.4.0, enheten rapporterar själv sitt läge."
@@ -566,6 +579,12 @@
     },
     "konfiguration_unbekannt": {
       "message": "Den aktuella konfigurationen är inte känd just nu, inget säkerhetskopierades. Försök igen efter nästa lyckade hämtning."
+    },
+    "ungueltiger_wert": {
+      "message": "{name} ändrades inte: {fehler}"
+    },
+    "ungueltige_auswahl": {
+      "message": "\"{option}\" är inte ett giltigt val för {name}."
     }
   },
   "services": {

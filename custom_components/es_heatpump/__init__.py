@@ -83,15 +83,21 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up ES Heatpump from a config entry."""
+    # Optionen vor Einrichtungsdaten - fuer ALLE Einstellungen, die der
+    # Optionsdialog anbietet. Bis v4.0.0 las base_url nur entry.data; eine im
+    # Abschnitt "Verbindung" geaenderte Portal-URL blieb wirkungslos.
+    def _option(schluessel, standard):
+        return entry.options.get(schluessel, entry.data.get(schluessel, standard))
+
+    # Die HTTP-Sitzung (eigener Cookie-Speicher) legt der Koordinator selbst
+    # an; da das hier im Kontext des Eintrags geschieht, loest Home Assistant
+    # sie beim Entladen automatisch wieder.
     coordinator = ESHeatpumpCoordinator(
         hass=hass,
         username=entry.data[CONF_USERNAME],
         password=entry.data[CONF_PASSWORD],
-        base_url=entry.data.get(CONF_BASE_URL, DEFAULT_BASE_URL),
-        scan_interval=entry.options.get(
-            CONF_SCAN_INTERVAL,
-            entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
-        ),
+        base_url=_option(CONF_BASE_URL, DEFAULT_BASE_URL) or DEFAULT_BASE_URL,
+        scan_interval=int(_option(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)),
     )
 
     await coordinator.async_config_entry_first_refresh()
@@ -99,8 +105,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # ── Konfigurationszugriff und Sicherungen (v3.0.0) ───────────────────
     # Eigener, langsamer Takt: Einstellungen aendern sich im Monatsrhythmus,
     # Messwerte im Sekundenrhythmus.
-    def _option(schluessel, standard):
-        return entry.options.get(schluessel, entry.data.get(schluessel, standard))
 
     ablage = Sicherungsablage(
         hass, entry.entry_id,

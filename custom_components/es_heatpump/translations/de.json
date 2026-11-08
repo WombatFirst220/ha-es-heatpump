@@ -10,6 +10,7 @@
           "base_url": "Portal-URL",
           "scan_interval": "Aktualisierungsintervall (Sekunden)",
           "power_entity": "Stromsensor (optional, für COP-Berechnung)",
+          "energy_entity": "Stromzähler der Wärmepumpe (kWh, optional — genauer als der Stromsensor)",
           "flow_rate": "Volumenstrom Heizkreislauf (m³/h)",
           "flow_rate_dhw": "Volumenstrom Brauchwasserkreis (m³/h)",
           "mode_source_entity": "Entity für die Betriebsart (seit v2.4.0 nicht mehr nötig — die Anlage meldet sie in par1)",
@@ -21,6 +22,13 @@
           "backup_interval_h": "Abstand automatischer Sicherungen (Stunden) — eine Änderung wird immer sofort gesichert, dies ist nur der Leerlauftakt",
           "backup_keep": "Anzahl aufbewahrter Sicherungen (0 = unbegrenzt). Sicherungen vor einem Schreibzugriff oder einer Wiederherstellung werden nie gelöscht."
         }
+      },
+      "reauth_confirm": {
+        "title": "ES Wärmepumpe – erneut anmelden",
+        "description": "Das Portal myheatpump.com hat die gespeicherten Zugangsdaten für {username} abgelehnt. Gib das aktuelle Passwort ein, um fortzufahren.",
+        "data": {
+          "password": "Passwort"
+        }
       }
     },
     "error": {
@@ -29,7 +37,8 @@
       "unknown": "Unbekannter Fehler – bitte die Home-Assistant-Logs prüfen."
     },
     "abort": {
-      "already_configured": "Diese Wärmepumpe ist bereits eingerichtet."
+      "already_configured": "Diese Wärmepumpe ist bereits eingerichtet.",
+      "reauth_successful": "Zugangsdaten aktualisiert, die Integration startet neu."
     }
   },
   "options": {
@@ -41,6 +50,7 @@
           "flow_rate": "Volumenstrom Heizkreis",
           "flow_rate_dhw": "Volumenstrom Brauchwasserkreis",
           "power_entity": "Stromsensor",
+          "energy_entity": "Stromzähler der Wärmepumpe (kWh)",
           "flow_entity": "Volumenstrom-Sensor",
           "dhw_margin_k": "Schwelle Brauchwasser-Erkennung",
           "mode_source_entity": "Betriebsart-Quelle",
@@ -57,6 +67,7 @@
           "model": "Die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt.",
           "flow_rate": "Thermische Leistung und COP werden daraus berechnet. Ein COP unter 1 heißt: Wert zu niedrig.",
           "power_entity": "Elektrische Leistung der Wärmepumpe, z. B. Shelly. Nötig für den COP.",
+          "energy_entity": "Optional. Energiezähler der Wärmepumpe, z. B. der Zählerstand eines Shelly. Genauer als die Integration der Leistung; die Auswertung nutzt auch seine Historie vor dem Update.",
           "flow_entity": "Optional. Hat Vorrang vor den Konstanten, empfohlen bei geregelter Umwälzpumpe.",
           "dhw_margin_k": "Kelvin über dem Heizen-Sollwert, ab denen der Vorlauf als Brauchwasser gilt.",
           "mode_source_entity": "Seit v2.4.0 nicht mehr nötig, die Anlage meldet die Betriebsart selbst.",
@@ -75,6 +86,7 @@
               "flow_rate": "Volumenstrom Heizkreis",
               "flow_rate_dhw": "Volumenstrom Brauchwasserkreis",
               "power_entity": "Stromsensor",
+              "energy_entity": "Stromzähler der Wärmepumpe (kWh)",
               "flow_entity": "Volumenstrom-Sensor",
               "dhw_margin_k": "Schwelle Brauchwasser-Erkennung",
               "mode_source_entity": "Betriebsart-Quelle"
@@ -83,6 +95,7 @@
               "model": "Die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt.",
               "flow_rate": "Thermische Leistung und COP werden daraus berechnet. Ein COP unter 1 heißt: Wert zu niedrig.",
               "power_entity": "Elektrische Leistung der Wärmepumpe, z. B. Shelly. Nötig für den COP.",
+              "energy_entity": "Optional. Energiezähler der Wärmepumpe, z. B. der Zählerstand eines Shelly. Genauer als die Integration der Leistung; die Auswertung nutzt auch seine Historie vor dem Update.",
               "flow_entity": "Optional. Hat Vorrang vor den Konstanten, empfohlen bei geregelter Umwälzpumpe.",
               "dhw_margin_k": "Kelvin über dem Heizen-Sollwert, ab denen der Vorlauf als Brauchwasser gilt.",
               "mode_source_entity": "Seit v2.4.0 nicht mehr nötig, die Anlage meldet die Betriebsart selbst."
@@ -566,6 +579,12 @@
     },
     "konfiguration_unbekannt": {
       "message": "Der Konfigurationsstand ist gerade nicht bekannt – es wurde nichts gesichert. Nach dem nächsten erfolgreichen Abruf erneut versuchen."
+    },
+    "ungueltiger_wert": {
+      "message": "{name} wurde nicht geändert: {fehler}"
+    },
+    "ungueltige_auswahl": {
+      "message": "„{option}“ ist keine gültige Auswahl für {name}."
     }
   },
   "services": {

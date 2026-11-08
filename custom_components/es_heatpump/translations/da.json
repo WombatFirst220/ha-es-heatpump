@@ -10,6 +10,7 @@
           "base_url": "Portal-URL",
           "scan_interval": "Opdateringsinterval (sekunder)",
           "power_entity": "Effektsensor (valgfri, til COP-beregning)",
+          "energy_entity": "Varmepumpens elmåler (kWh, valgfri — mere præcis end effektsensoren)",
           "flow_rate": "Flow varmekredsløb (m³/t)",
           "flow_rate_dhw": "Flow varmtvandskredsløb (m³/t)",
           "mode_source_entity": "Kilde til driftstilstand (unødvendig siden v2.4.0 – enheden melder tilstanden i par1)",
@@ -21,6 +22,13 @@
           "backup_interval_h": "Interval for automatisk sikkerhedskopi (timer) – en ændring sikkerhedskopieres altid med det samme, dette er kun hvilepulsen",
           "backup_keep": "Antal sikkerhedskopier, der gemmes (0 = ubegrænset). Sikkerhedskopier fra før en skrivning eller gendannelse slettes aldrig."
         }
+      },
+      "reauth_confirm": {
+        "title": "ES Varmepumpe – log ind igen",
+        "description": "Portalen myheatpump.com afviste de gemte loginoplysninger for {username}. Indtast den aktuelle adgangskode for at fortsætte.",
+        "data": {
+          "password": "Adgangskode"
+        }
       }
     },
     "error": {
@@ -29,7 +37,8 @@
       "unknown": "Ukendt fejl — tjek Home Assistant-loggene."
     },
     "abort": {
-      "already_configured": "Denne varmepumpe er allerede konfigureret."
+      "already_configured": "Denne varmepumpe er allerede konfigureret.",
+      "reauth_successful": "Loginoplysninger opdateret, integrationen genstarter."
     }
   },
   "options": {
@@ -41,6 +50,7 @@
           "flow_rate": "Flow varmekreds",
           "flow_rate_dhw": "Flow brugsvandskreds",
           "power_entity": "Effektsensor",
+          "energy_entity": "Varmepumpens elmåler (kWh)",
           "flow_entity": "Flowsensor",
           "dhw_margin_k": "Tærskel for brugsvand",
           "mode_source_entity": "Kilde til driftstilstand",
@@ -57,6 +67,7 @@
           "model": "Valget udfylder det nominelle flow fra databladet.",
           "flow_rate": "Termisk effekt og COP beregnes ud fra den. En COP under 1 betyder, at værdien er for lav.",
           "power_entity": "Varmepumpens elektriske effekt, f.eks. fra en Shelly. Kræves til COP.",
+          "energy_entity": "Valgfri. Varmepumpens energimåler, f.eks. tællerstanden fra en Shelly. Mere præcis end integration af effekten; analysen bruger også dens historik fra før opdateringen.",
           "flow_entity": "Valgfri. Har forrang over konstanterne; anbefales ved modulerende cirkulationspumpe.",
           "dhw_margin_k": "Kelvin over varmesætpunktet, hvorfra fremløbet regnes som varmt brugsvand.",
           "mode_source_entity": "Ikke længere nødvendig siden v2.4.0, enheden melder selv sin tilstand.",
@@ -75,6 +86,7 @@
               "flow_rate": "Flow varmekreds",
               "flow_rate_dhw": "Flow brugsvandskreds",
               "power_entity": "Effektsensor",
+              "energy_entity": "Varmepumpens elmåler (kWh)",
               "flow_entity": "Flowsensor",
               "dhw_margin_k": "Tærskel for brugsvand",
               "mode_source_entity": "Kilde til driftstilstand"
@@ -83,6 +95,7 @@
               "model": "Valget udfylder det nominelle flow fra databladet.",
               "flow_rate": "Termisk effekt og COP beregnes ud fra den. En COP under 1 betyder, at værdien er for lav.",
               "power_entity": "Varmepumpens elektriske effekt, f.eks. fra en Shelly. Kræves til COP.",
+              "energy_entity": "Valgfri. Varmepumpens energimåler, f.eks. tællerstanden fra en Shelly. Mere præcis end integration af effekten; analysen bruger også dens historik fra før opdateringen.",
               "flow_entity": "Valgfri. Har forrang over konstanterne; anbefales ved modulerende cirkulationspumpe.",
               "dhw_margin_k": "Kelvin over varmesætpunktet, hvorfra fremløbet regnes som varmt brugsvand.",
               "mode_source_entity": "Ikke længere nødvendig siden v2.4.0, enheden melder selv sin tilstand."
@@ -566,6 +579,12 @@
     },
     "konfiguration_unbekannt": {
       "message": "Den aktuelle konfiguration kendes ikke i øjeblikket, intet blev sikkerhedskopieret. Prøv igen efter næste vellykkede hentning."
+    },
+    "ungueltiger_wert": {
+      "message": "{name} blev ikke ændret: {fehler}"
+    },
+    "ungueltige_auswahl": {
+      "message": "\"{option}\" er ikke et gyldigt valg for {name}."
     }
   },
   "services": {

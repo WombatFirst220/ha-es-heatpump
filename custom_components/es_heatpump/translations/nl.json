@@ -10,6 +10,7 @@
           "base_url": "Portaal-URL",
           "scan_interval": "Update-interval (seconden)",
           "power_entity": "Vermogenssensor (optioneel, voor COP-berekening)",
+          "energy_entity": "Stroommeter van de warmtepomp (kWh, optioneel — nauwkeuriger dan de vermogenssensor)",
           "flow_rate": "Volumestroom verwarmingscircuit (m³/u)",
           "flow_rate_dhw": "Volumestroom warmwatercircuit (m³/u)",
           "mode_source_entity": "Bron voor bedrijfsmodus (sinds v2.4.0 overbodig – het toestel meldt de modus in par1)",
@@ -21,6 +22,13 @@
           "backup_interval_h": "Interval automatische back-up (uren) – een wijziging wordt altijd direct geback-upt, dit is alleen de hartslag in rust",
           "backup_keep": "Aantal te bewaren back-ups (0 = onbeperkt). Back-ups van vóór een schrijfactie of herstel worden nooit verwijderd."
         }
+      },
+      "reauth_confirm": {
+        "title": "ES Warmtepomp – opnieuw aanmelden",
+        "description": "Het portaal myheatpump.com heeft de opgeslagen inloggegevens voor {username} geweigerd. Voer het huidige wachtwoord in om verder te gaan.",
+        "data": {
+          "password": "Wachtwoord"
+        }
       }
     },
     "error": {
@@ -29,7 +37,8 @@
       "unknown": "Onbekende fout — bekijk de Home Assistant logs."
     },
     "abort": {
-      "already_configured": "Deze warmtepomp is al geconfigureerd."
+      "already_configured": "Deze warmtepomp is al geconfigureerd.",
+      "reauth_successful": "Inloggegevens bijgewerkt, de integratie wordt opnieuw gestart."
     }
   },
   "options": {
@@ -41,6 +50,7 @@
           "flow_rate": "Volumestroom verwarmingscircuit",
           "flow_rate_dhw": "Volumestroom warmwatercircuit",
           "power_entity": "Vermogenssensor",
+          "energy_entity": "Stroommeter van de warmtepomp (kWh)",
           "flow_entity": "Debietsensor",
           "dhw_margin_k": "Drempel warmtapwater",
           "mode_source_entity": "Bron voor bedrijfsmodus",
@@ -57,6 +67,7 @@
           "model": "De keuze vult het nominale debiet uit het datablad in.",
           "flow_rate": "Thermisch vermogen en COP worden hiermee berekend. Een COP onder 1 betekent dat de waarde te laag is.",
           "power_entity": "Elektrisch vermogen van de warmtepomp, bijv. een Shelly. Vereist voor de COP.",
+          "energy_entity": "Optioneel. Energiemeter van de warmtepomp, bijv. de meterstand van een Shelly. Nauwkeuriger dan het integreren van het vermogen; de analyse gebruikt ook de historie van vóór de update.",
           "flow_entity": "Optioneel. Gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp.",
           "dhw_margin_k": "Kelvin boven het verwarmingssetpoint vanaf waar de aanvoer als warm tapwater telt.",
           "mode_source_entity": "Sinds v2.4.0 overbodig, het toestel meldt de modus zelf.",
@@ -75,6 +86,7 @@
               "flow_rate": "Volumestroom verwarmingscircuit",
               "flow_rate_dhw": "Volumestroom warmwatercircuit",
               "power_entity": "Vermogenssensor",
+              "energy_entity": "Stroommeter van de warmtepomp (kWh)",
               "flow_entity": "Debietsensor",
               "dhw_margin_k": "Drempel warmtapwater",
               "mode_source_entity": "Bron voor bedrijfsmodus"
@@ -83,6 +95,7 @@
               "model": "De keuze vult het nominale debiet uit het datablad in.",
               "flow_rate": "Thermisch vermogen en COP worden hiermee berekend. Een COP onder 1 betekent dat de waarde te laag is.",
               "power_entity": "Elektrisch vermogen van de warmtepomp, bijv. een Shelly. Vereist voor de COP.",
+              "energy_entity": "Optioneel. Energiemeter van de warmtepomp, bijv. de meterstand van een Shelly. Nauwkeuriger dan het integreren van het vermogen; de analyse gebruikt ook de historie van vóór de update.",
               "flow_entity": "Optioneel. Gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp.",
               "dhw_margin_k": "Kelvin boven het verwarmingssetpoint vanaf waar de aanvoer als warm tapwater telt.",
               "mode_source_entity": "Sinds v2.4.0 overbodig, het toestel meldt de modus zelf."
@@ -566,6 +579,12 @@
     },
     "konfiguration_unbekannt": {
       "message": "De huidige configuratie is op dit moment niet bekend, er is niets geback-upt. Probeer het opnieuw na de volgende geslaagde polling."
+    },
+    "ungueltiger_wert": {
+      "message": "{name} is niet gewijzigd: {fehler}"
+    },
+    "ungueltige_auswahl": {
+      "message": "\"{option}\" is geen geldige keuze voor {name}."
     }
   },
   "services": {

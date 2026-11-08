@@ -17,6 +17,9 @@ from .settings import KIND_SWITCH, SETTINGS
 
 _LOGGER = logging.getLogger(__name__)
 
+# Schreibzugriffe nacheinander - das Portal nimmt je Aufruf genau einen Wert.
+PARALLEL_UPDATES = 1
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback

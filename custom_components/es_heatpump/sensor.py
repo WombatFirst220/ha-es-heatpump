@@ -32,6 +32,7 @@ from typing import Any
 
 from homeassistant.components.sensor import (
     RestoreSensor,
+    SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
 )
@@ -64,6 +65,7 @@ from .const import (
     CONF_MODE_SOURCE,
     CONF_DHW_MARGIN_K,
     CONF_FLOW_ENTITY,
+    CONF_ENERGY_ENTITY,
     CONF_POWER_ENTITY,
     DEFAULT_FLOW_RATE,
     DEFAULT_FLOW_RATE_DHW,
@@ -85,6 +87,7 @@ from .energy import (
     ART_ELEKTRISCH,
     ART_THERMISCH,
     ENERGIE_ZAEHLER,
+    GESAMT,
     MAX_LUECKE_ELEKTRISCH_S,
     MAX_LUECKE_THERMISCH_S,
     MAX_LUECKE_VERDICHTER_S,
@@ -92,6 +95,8 @@ from .energy import (
     METHODE_TRAPEZ,
     EnergieZaehler,
     VerdichterZaehler,
+    ZaehlerstandFolger,
+    energie_in_kwh,
     kategorie_von,
     leistung_in_w,
     thermische_leistung_w,
@@ -156,12 +161,59 @@ def _live_flow(hass: HomeAssistant, flow_entity: str | None) -> tuple[float | No
     return flow_from_entity(hass.states.get(flow_entity))
 
 
+# Temperaturdifferenz-Geraeteklasse (v4.0.1). TEMPERATURE_DELTA gibt es erst in
+# neueren HA-Versionen; ohne sie lieber gar keine Klasse als "temperature" -
+# letztere rechnet eine Differenz in K als absolute Temperatur um (-268 °C).
+_DEVICE_CLASS_DELTA = getattr(SensorDeviceClass, "TEMPERATURE_DELTA", None)
+
+
+def _geraeteklasse(wert: str | None) -> Any:
+    """Bildet den Katalogwert aus const.py auf eine HA-Geraeteklasse ab."""
+    if wert == "temperature_delta":
+        return _DEVICE_CLASS_DELTA
+    return wert
+
+
+# Zwischenspeicher fuer _resolve_betriebsart (v4.0.1). Bis zu acht Entities
+# fragten je Abruf dieselbe Betriebsart ab, jede rechnete sie vollstaendig neu.
+# Schluessel: Datenstand des Koordinators (Objekt-Identitaet, gegen
+# Wiederverwendung der id() durch die mitgehaltene Referenz abgesichert),
+# Optionen und Zustand der externen Betriebsart-Entity. Das Ergebnis ist damit
+# exakt dasselbe wie ohne Zwischenspeicher.
+_BETRIEBSART_CACHE: dict[tuple, tuple[Any, tuple[str, str]]] = {}
+_BETRIEBSART_CACHE_MAX = 32
+
+
 def _resolve_betriebsart(
     hass: HomeAssistant,
     mode_source: str | None,
     data: dict[str, Any] | None = None,
     dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
-) -> str:
+) -> tuple[str, str]:
+    """Wie ``_resolve_betriebsart_neu``, aber je Datenstand nur einmal gerechnet."""
+    if not data:
+        return _resolve_betriebsart_neu(hass, mode_source, data, dhw_margin_k)
+    quelle_zustand = None
+    if mode_source:
+        state = hass.states.get(mode_source)
+        quelle_zustand = state.state if state is not None else None
+    schluessel = (id(data), mode_source, dhw_margin_k, quelle_zustand)
+    treffer = _BETRIEBSART_CACHE.get(schluessel)
+    if treffer is not None and treffer[0] is data:
+        return treffer[1]
+    ergebnis = _resolve_betriebsart_neu(hass, mode_source, data, dhw_margin_k)
+    if len(_BETRIEBSART_CACHE) >= _BETRIEBSART_CACHE_MAX:
+        _BETRIEBSART_CACHE.clear()
+    _BETRIEBSART_CACHE[schluessel] = (data, ergebnis)
+    return ergebnis
+
+
+def _resolve_betriebsart_neu(
+    hass: HomeAssistant,
+    mode_source: str | None,
+    data: dict[str, Any] | None = None,
+    dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
+) -> tuple[str, str]:
     """Canonical operating mode, with the reason as second element.
 
     Order of precedence:
@@ -201,6 +253,9 @@ from .coordinator import ESHeatpumpCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# Abrufe laufen ueber die Koordinatoren; keine Begrenzung noetig.
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -239,6 +294,10 @@ async def async_setup_entry(
     power_entity = entry.options.get(
         CONF_POWER_ENTITY,
         entry.data.get(CONF_POWER_ENTITY),
+    ) or None
+    energy_entity = entry.options.get(
+        CONF_ENERGY_ENTITY,
+        entry.data.get(CONF_ENERGY_ENTITY),
     ) or None
     mode_source = entry.options.get(
         CONF_MODE_SOURCE,
@@ -300,7 +359,7 @@ async def async_setup_entry(
     # ── Energiezaehler fuer die Auswertungsseite ─────────────────────────
     bilanz = EnergieBilanz(
         hass, coordinator, power_entity, mode_source, dhw_margin_k,
-        flow_rate, flow_rate_dhw, flow_entity,
+        flow_rate, flow_rate_dhw, flow_entity, energy_entity,
     )
     zaehler_entities = [
         EnergieZaehlerSensor(bilanz, device_info, username, slug, art, teil)
@@ -347,7 +406,12 @@ class ESHeatpumpSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{username}_{par_id}"
         self.entity_id = f"sensor.es_hp_{meta['slug']}"
         self._attr_native_unit_of_measurement = meta.get("unit")
-        self._attr_device_class = meta.get("device_class")
+        self._attr_device_class = _geraeteklasse(meta.get("device_class"))
+        # Fuer den -99-Filter zaehlt der Katalogwert, nicht die HA-Klasse
+        # (eine Temperaturdifferenz hat je nach HA-Version gar keine).
+        self._ist_temperatur = meta.get("device_class") in (
+            "temperature", "temperature_delta"
+        )
         self._attr_state_class = meta.get("state_class")
         self._attr_icon = meta.get("icon")
         self._attr_entity_registry_enabled_default = meta.get("enabled_default", True)
@@ -365,7 +429,7 @@ class ESHeatpumpSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         # temperature probes (e.g. Mischventil 2 when unused).
         if (
             value == TEMP_SENTINEL
-            and self._attr_device_class == "temperature"
+            and self._ist_temperatur
         ):
             return None
         # Apply value mapping (state keys, translated via translation_key)
@@ -395,7 +459,9 @@ class SpreizungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
     _attr_should_poll = False
     _attr_translation_key = "spreizung"
     _attr_native_unit_of_measurement = "K"
-    _attr_device_class = "temperature"
+    # Differenz, keine absolute Temperatur - siehe _geraeteklasse(). Die
+    # Einheit bleibt K, die Langzeitstatistik damit unveraendert.
+    _attr_device_class = _DEVICE_CLASS_DELTA
     _attr_state_class = "measurement"
     _attr_icon = "mdi:delta"
 
@@ -436,6 +502,8 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_translation_key = "thermische_leistung"
+    # Klartext mit wechselndem Messwert - gehoert nicht in jeden Recorder-Eintrag
+    _unrecorded_attributes = frozenset({"flow_quelle"})
     _attr_native_unit_of_measurement = "W"
     _attr_device_class = "power"
     _attr_state_class = "measurement"
@@ -508,6 +576,7 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_translation_key = "aktueller_cop"
+    _unrecorded_attributes = frozenset({"flow_quelle"})
     _attr_native_unit_of_measurement = None
     _attr_state_class = "measurement"
     _attr_icon = "mdi:chart-bell-curve"
@@ -642,6 +711,19 @@ class BetriebsartCalcSensor(
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_translation_key = "betriebsart"
+    # Diagnose-Attribute, die sich bei jedem Abruf aendern: Ohne Ausschluss
+    # schrieb der Recorder jede Minute einen neuen, grossen Attributsatz.
+    _unrecorded_attributes = frozenset({
+        "api_response_meta",
+        "begruendung",
+        "par1_roh",
+        "abgeleitet_aus_eigenen_werten",
+        "vorlauf_c",
+        "ruecklauf_c",
+        "wassertemperatur_tup_c",
+        "heizwasser_tc_c",
+        "kompressor_hz",
+    })
     _attr_device_class = "enum"
     # Zustands-Schluessel statt deutscher Texte; Anzeige ueber
     # entity.sensor.betriebsart.state.<schluessel>
@@ -843,6 +925,9 @@ class SicherungenSensor(CoordinatorEntity, SensorEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "konfigurationssicherungen"
+    # Die Liste der letzten zehn Sicherungen ist gross und steht ohnehin in
+    # der Sicherungsablage - nicht in die Recorder-Historie.
+    _unrecorded_attributes = frozenset({"sicherungen"})
     _attr_icon = "mdi:content-save-cog-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -924,10 +1009,15 @@ class EnergieBilanz:
         flow_heating: float,
         flow_dhw: float,
         flow_entity: str | None,
+        energy_entity: str | None = None,
     ) -> None:
         self.hass = hass
         self.coordinator = coordinator
         self.power_entity = power_entity
+        # Stromzaehler (kWh, v4.0.1): Ist er gesetzt, schreiben dessen
+        # Zaehlerstands-Zuwaechse die elektrischen Zaehler fort, und die
+        # Leistung wird dafuer nicht mehr integriert.
+        self.energy_entity = energy_entity
         self._mode_source = mode_source
         self._dhw_margin_k = dhw_margin_k
         self._flow_heating = flow_heating
@@ -940,8 +1030,15 @@ class EnergieBilanz:
             ART_THERMISCH: EnergieZaehler(MAX_LUECKE_THERMISCH_S, METHODE_TRAPEZ),
         }
         self.verdichter = VerdichterZaehler(MAX_LUECKE_VERDICHTER_S)
+        self.folger = ZaehlerstandFolger(self.zaehler[ART_ELEKTRISCH])
         self._entities: list[SensorEntity] = []
         self._zuletzt_geschrieben: dict[str, float] = {}
+        self._ausstehend = False
+
+    @property
+    def elektrisch_quelle(self) -> str | None:
+        """Entity, aus der die elektrischen Zaehler gespeist werden."""
+        return self.energy_entity or self.power_entity
 
     # -- Entities ------------------------------------------------------
     def anmelden(self, entity: SensorEntity) -> None:
@@ -971,22 +1068,36 @@ class EnergieBilanz:
 
     @callback
     def _elektrisch_messen(self) -> None:
-        state = self.hass.states.get(self.power_entity) if self.power_entity else None
-        leistung = None
-        if state is not None:
-            leistung = leistung_in_w(
-                state.state, state.attributes.get("unit_of_measurement")
-            )
         jetzt = self._jetzt()
-        kwh = self.zaehler[ART_ELEKTRISCH].messpunkt(
-            jetzt, leistung, kategorie_von(self._betriebsart())
-        )
-        if kwh <= 0:
+        if self.energy_entity:
+            state = self.hass.states.get(self.energy_entity)
+            stand = None
+            if state is not None:
+                stand = energie_in_kwh(
+                    state.state, state.attributes.get("unit_of_measurement")
+                )
+            kwh = self.folger.messpunkt(
+                jetzt, stand, kategorie_von(self._betriebsart())
+            )
+        else:
+            state = self.hass.states.get(self.power_entity) if self.power_entity else None
+            leistung = None
+            if state is not None:
+                leistung = leistung_in_w(
+                    state.state, state.attributes.get("unit_of_measurement")
+                )
+            kwh = self.zaehler[ART_ELEKTRISCH].messpunkt(
+                jetzt, leistung, kategorie_von(self._betriebsart())
+            )
+        if kwh > 0:
+            self._ausstehend = True
+        if not self._ausstehend:
             return
         zuletzt = self._zuletzt_geschrieben.get(ART_ELEKTRISCH)
         if zuletzt is not None and 0 <= jetzt - zuletzt < _MIN_SCHREIBABSTAND_ELEKTRISCH_S:
             return
         self._zuletzt_geschrieben[ART_ELEKTRISCH] = jetzt
+        self._ausstehend = False
         self._schreibe(ART_ELEKTRISCH)
 
     @callback
@@ -1020,10 +1131,11 @@ class EnergieBilanz:
     def async_starte(self):
         """Startet die Beobachtung; liefert die Abmeldefunktion."""
         abmelden = [self.coordinator.async_add_listener(self._bei_abruf)]
-        if self.power_entity:
+        quelle = self.elektrisch_quelle
+        if quelle:
             abmelden.append(
                 async_track_state_change_event(
-                    self.hass, [self.power_entity], self._bei_leistungsaenderung
+                    self.hass, [quelle], self._bei_leistungsaenderung
                 )
             )
             abmelden.append(
@@ -1079,6 +1191,11 @@ class EnergieZaehlerSensor(_BilanzSensor):
     _attr_native_unit_of_measurement = "kWh"
     _attr_device_class = "energy"
     _attr_suggested_display_precision = 2
+    # Basis des Stromzaehlers: aendert sich bei jedem Schreiben und dient nur
+    # der Wiederherstellung nach einem Neustart. Die Wiederherstellung liest
+    # den gespeicherten Zustand (restore_state), nicht den Recorder - der
+    # Ausschluss schadet ihr also nicht.
+    _unrecorded_attributes = frozenset({"zaehlerstand_kwh", "zaehlerstand_zeit"})
 
     def __init__(
         self,
@@ -1099,11 +1216,28 @@ class EnergieZaehlerSensor(_BilanzSensor):
     def _uebernehme(self, wert: Any) -> None:
         self._bilanz.zaehler[self.art].uebernehme(self._teil, wert)
 
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # Basis des Stromzaehlers wiederherstellen (nur der Gesamtzaehler traegt
+        # sie), damit der Verbrauch waehrend eines Neustarts mitgezaehlt wird.
+        # Nur, wenn es noch dieselbe Zaehler-Entity ist.
+        bilanz = self._bilanz
+        if self.art != ART_ELEKTRISCH or self._teil != GESAMT or not bilanz.energy_entity:
+            return
+        letzter = await self.async_get_last_state()
+        if letzter is None:
+            return
+        attrs = letzter.attributes
+        if attrs.get("energy_entity") == bilanz.energy_entity:
+            bilanz.folger.setze_basis(
+                attrs.get("zaehlerstand_kwh"), attrs.get("zaehlerstand_zeit")
+            )
+
     @property
     def available(self) -> bool:
         # Ohne Strommessung gibt es keinen elektrischen Zaehler
         if self.art == ART_ELEKTRISCH:
-            return self._bilanz.power_entity is not None
+            return self._bilanz.elektrisch_quelle is not None
         return True
 
     @property
@@ -1114,7 +1248,13 @@ class EnergieZaehlerSensor(_BilanzSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {"teil": self._teil}
         if self.art == ART_ELEKTRISCH:
-            attrs["power_entity"] = self._bilanz.power_entity
+            bilanz = self._bilanz
+            attrs["power_entity"] = bilanz.power_entity
+            if bilanz.energy_entity:
+                attrs["energy_entity"] = bilanz.energy_entity
+                if self._teil == GESAMT and bilanz.folger.basis is not None:
+                    attrs["zaehlerstand_kwh"] = round(bilanz.folger.basis, 6)
+                    attrs["zaehlerstand_zeit"] = bilanz.folger.basis_t
         return attrs
 
 

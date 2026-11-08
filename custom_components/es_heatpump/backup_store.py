@@ -29,8 +29,11 @@ from .backup import (
     Wiederherstellungsplan,
     aufraeumen,
     aus_dict,
+    aussetzer,
+    letzte_gueltige,
     neue_id,
     plane_wiederherstellung,
+    pruefe_stand,
     pruefsumme_von,
     vergleiche,
 )
@@ -103,6 +106,11 @@ class Sicherungsablage:
     def neueste(self) -> Sicherung | None:
         return self._sicherungen[0] if self._sicherungen else None
 
+    @property
+    def neueste_gueltige(self) -> Sicherung | None:
+        """Juengste Sicherung, die kein gespeicherter Portal-Aussetzer ist."""
+        return letzte_gueltige(self._sicherungen)
+
     def hole(self, sicherung_id: str) -> Sicherung:
         """Sucht eine Sicherung; ``"neueste"`` und ``"aelteste"`` sind erlaubt."""
         if not self._sicherungen:
@@ -147,6 +155,17 @@ class Sicherungsablage:
 
         if not pars:
             raise ValueError("Leerer Konfigurationsstand - es wird nichts gesichert.")
+
+        # Portal-Aussetzer (fast alles 0) nie sichern: Eine Wiederherstellung
+        # daraus wuerde die Anlage tatsaechlich auf 0 setzen.
+        bezug = self.neueste_gueltige
+        fehler = pruefe_stand(pars, bezug.pars if bezug else None)
+        if fehler:
+            _LOGGER.warning(
+                "ES Heatpump: Konfigurationsstand unplausibel (%s) - "
+                "vermutlich ein Portal-Aussetzer, es wird nichts gesichert", fehler,
+            )
+            return None
 
         neu_summe = pruefsumme_von(pars)
         if nur_bei_aenderung and self.neueste and self.neueste.pruefsumme == neu_summe:
@@ -241,6 +260,14 @@ class Sicherungsablage:
         """
         await self.async_laden()
         ziel = self.hole(sicherung_id)
+        # Ein gespeicherter Portal-Aussetzer (fast alles 0) ist kein Stand, auf
+        # den man die Anlage zuruecksetzen darf.
+        fehler = aussetzer(self._sicherungen).get(ziel.id)
+        if fehler:
+            raise ValueError(
+                f"Sicherung {ziel.id} ist ein Portal-Aussetzer ({fehler}) und "
+                "wird nicht wiederhergestellt."
+            )
         plan: Wiederherstellungsplan = plane_wiederherstellung(jetzt_pars, ziel.pars)
 
         bericht: dict[str, Any] = {

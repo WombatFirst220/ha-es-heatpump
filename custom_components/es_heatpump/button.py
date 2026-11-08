@@ -23,6 +23,9 @@ from .device import baue_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
+# Abrufe laufen ueber die Koordinatoren; keine Begrenzung noetig.
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback

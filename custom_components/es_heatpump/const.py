@@ -7,6 +7,7 @@ PLATFORMS = ["sensor", "number", "select", "switch", "button"]
 CONF_BASE_URL         = "base_url"
 CONF_SCAN_INTERVAL    = "scan_interval"
 CONF_POWER_ENTITY     = "power_entity"
+CONF_ENERGY_ENTITY    = "energy_entity"       # optionaler Stromzaehler (kWh) der WP, v4.0.1
 CONF_FLOW_RATE        = "flow_rate"           # Heizen (heating circuit)
 CONF_FLOW_RATE_DHW    = "flow_rate_dhw"       # Brauchwasser (DHW circuit)
 CONF_MODE_SOURCE      = "mode_source_entity"  # optional external override for the mode
@@ -235,7 +236,9 @@ TEMP_SENTINEL = -99.0
 #                      ist entity.sensor.<slug>.name in translations/de.json
 #                      (tests/test_translations.py haelt beide gleich)
 #   unit             : native_unit_of_measurement
-#   device_class     : SensorDeviceClass string
+#   device_class     : SensorDeviceClass string ("temperature_delta" wird in
+#                      sensor.py auf HAs TEMPERATURE_DELTA abgebildet, wenn
+#                      vorhanden - sonst keine Geraeteklasse)
 #   state_class      : SensorStateClass string
 #   icon             : Material Design icon
 #   enabled_default  : True = visible by default
@@ -541,7 +544,10 @@ PARAMETER_SENSORS = {
     "par40": {
         "slug": "diag_par40",
         "name": "Diagnose par40 (unbestätigt)",
-        "unit": "K", "device_class": "temperature", "state_class": "measurement",
+        # Temperaturdifferenz: "temperature" zeigte bei Anzeige in °C rund
+        # -268 °C (K als absolute Temperatur umgerechnet). sensor.py setzt
+        # TEMPERATURE_DELTA, wo HA es kennt, sonst keine Geraeteklasse.
+        "unit": "K", "device_class": "temperature_delta", "state_class": "measurement",
         "icon": "mdi:delta",
         "enabled_default": False,
     },

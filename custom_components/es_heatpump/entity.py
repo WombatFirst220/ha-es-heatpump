@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -80,14 +80,31 @@ class ESHeatpumpSettingEntity(CoordinatorEntity[ESHeatpumpSettingsCoordinator]):
     async def _async_setze(self, wert: Any) -> None:
         """Schreibt einen Wert - nach Freigabepruefung und Katalogpruefung."""
         if not self._schreiben_erlaubt:
-            name = self.name if isinstance(self.name, str) else None
             raise Schreibsperre(
                 translation_domain=DOMAIN,
                 translation_key="schreibzugriff_aus",
-                translation_placeholders={"name": name or self.setting.name},
+                translation_placeholders={"name": self._anzeigename()},
             )
-        geprueft = self.setting.validate(wert)
+        try:
+            geprueft = self.setting.validate(wert)
+        except ValueError as err:
+            # Als ServiceValidationError, damit die Oberflaeche den Grund
+            # nennt - ein nacktes ValueError erscheint dort nur als
+            # "Unbekannter Fehler".
+            raise ServiceValidationError(
+                str(err),
+                translation_domain=DOMAIN,
+                translation_key="ungueltiger_wert",
+                translation_placeholders={
+                    "name": self._anzeigename(),
+                    "fehler": str(err),
+                },
+            ) from err
         await self.coordinator.async_setze(self.setting.par, geprueft)
+
+    def _anzeigename(self) -> str:
+        name = self.name if isinstance(self.name, str) else None
+        return name or self.setting.name
 
 
 class Schreibsperre(HomeAssistantError):

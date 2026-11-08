@@ -186,7 +186,10 @@ def test_betriebsart_zustaende():
 
 def test_mode_map_der_hydraulikkarte_nutzt_zustands_schluessel():
     # "unknown" ist HAs eigener Zustand, wenn die Betriebsart nicht bestimmbar ist.
-    assert set(_layout.MODE_MAP) == set(C.BETRIEBSART_STATE_OPTIONS) | {"unknown"}
+    # Dazu die alten deutschen Zustaende aus der Historie (v4.0.1)
+    assert set(_layout.MODE_MAP) == (
+        set(C.BETRIEBSART_STATE_OPTIONS) | {"unknown"} | set(_layout.ALTE_BETRIEBSARTEN)
+    )
 
 
 def test_auswahllisten_zustaende():
@@ -232,3 +235,19 @@ def test_dienste_vollstaendig_uebersetzt():
             assert set(uebersetzt[name].get("fields", {})) == felder, (sprache, name)
             for f in felder:
                 assert uebersetzt[name]["fields"][f]["name"], (sprache, name, f)
+
+
+def test_erneute_anmeldung_uebersetzt():
+    """config_flow.py bietet seit v4.0.1 reauth_confirm an (alle Sprachen)."""
+    quelle = (_ROOT / "config_flow.py").read_text(encoding="utf-8")
+    assert 'step_id="reauth_confirm"' in quelle
+    assert "reauth_successful" in quelle
+    for pfad in list(_PFLICHT.values()) + [
+        _ROOT / "translations" / f"{s}.json" for s in _WEITERE
+    ]:
+        config = _json(pfad)["config"]
+        schritt = config["step"]["reauth_confirm"]
+        assert schritt["title"] and schritt["description"], pfad.name
+        assert schritt["data"]["password"], pfad.name
+        assert _platzhalter(schritt["description"]) == {"username"}, pfad.name
+        assert config["abort"]["reauth_successful"], pfad.name

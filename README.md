@@ -3,7 +3,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/HA-2024.2%2B-blue.svg)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.0.0-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
+[![Version](https://img.shields.io/badge/Version-4.0.1-green.svg)](https://github.com/WombatFirst220/ha-es-heatpump/releases)
 
 > 🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english) · 📋 [Changelog](#-changelog)
 >
@@ -262,6 +262,11 @@ Langzeitstatistik — die Auswertungsseite liest diese Statistik.
 - **Strom** wird aus der konfigurierten Power-Entity integriert (Wert gilt bis
   zur nächsten Änderung, zusätzlich jede Minute fortgeschrieben; kW wird
   umgerechnet). Ohne Power-Entity sind die drei Stromzähler „nicht verfügbar“.
+- **Stromzähler** (seit v4.0.1, Option *Stromzähler der Wärmepumpe*): Ist ein
+  Energiezähler in kWh gewählt (z. B. `sensor.shelly…_total_active_energy`),
+  übernehmen die Stromzähler dessen Zuwächse statt die Leistung zu
+  integrieren — genauer, und Neustarts gehen nicht verloren. Wh/MWh werden
+  umgerechnet, ein Zählerreset wird erkannt und nicht als Verbrauch gezählt.
 - **Wärme** wird bei jedem Portalabruf aus der thermischen Leistung integriert
   (Trapezregel) — sie ist also nur so genau wie der eingestellte
   **Volumenstrom**.
@@ -269,7 +274,12 @@ Langzeitstatistik — die Auswertungsseite liest diese Statistik.
   Bereitschaft zählen nur zur Gesamtsumme.
 - **Lücken** (HA-Neustart, Portal-Ausfall) über 10–15 Minuten werden nicht
   geschätzt, sondern ausgelassen. Ein Zähler zählt lieber etwas zu wenig.
-- Die Zähler laufen **ab dem Update** — rückwirkend gibt es keine Werte.
+- Die Zähler laufen **ab dem Update** — rückwirkend gibt es keine Werte. Die
+  Auswertungskarte füllt die Zeit davor (seit v4.0.1) aus der vorhandenen
+  Statistik: Strom aus dem Stromzähler bzw. dem Mittel der elektrischen
+  Leistung, Wärme aus dem Mittel der thermischen Leistung. Solche Balken sind
+  schraffiert und nicht nach Heizen/Warmwasser aufgeteilt; Starts und Laufzeit
+  gibt es erst ab dem Update.
 - Die Stromzähler eignen sich für das **Energie-Dashboard** von Home Assistant
   (*Einzelne Geräte*). Wer dort schon den Shelly selbst führt, nimmt ihn nicht
   doppelt auf.
@@ -294,7 +304,7 @@ Vier Ansichten. Ihr Aufbau hängt vom gewählten Design ab (siehe unten):
 |---|---|---|
 | **Übersicht** | Hydraulik-Schema, Messzeiger (COP, Wärmeabgabe, El. Leistung, Heizwasser, Brauchwasser, Spreizung), Temperaturen, 24-h-Verlauf, System-Technik | *Wärmepumpe* mit Schema, *Jetzt*, *Speicher*, *Verlauf · 24 h* als Kacheln |
 | **Energie** | COP-Statistik (7 Tage), Wärmeabgabe und Frequenz, Heißgas, Betriebsstunden | *Effizienz*, *Leistung · 24 h*, *Betriebsstunden* |
-| **Auswertung** (seit v4.0.0) | Auswertungskarte über die volle Breite, darunter Energie je Tag (30 Tage) und je Monat | *Auswertung*, *Energie je Tag*, *Energie je Monat* |
+| **Auswertung** (seit v4.0.0) | Auswertungskarte über die volle Breite | *Auswertung* |
 | **Diagnose** | Mischventile, Diagnose-Parameter, Geräteinfo | *Kältekreis*, *Elektrik und Lüfter*, *Diagnose-Parameter* |
 
 Die Integration schreibt das Dashboard bei **jedem Start und jeder
@@ -310,7 +320,7 @@ Erklärung zu jedem Feld steht als Hilfetext darunter.
 
 | Abschnitt | Felder |
 |---|---|
-| **Messung und Berechnung** | Modell, Volumenstrom Heizkreis und Brauchwasserkreis, Stromsensor, Volumenstrom-Sensor, Schwelle Brauchwasser-Erkennung, Betriebsart-Quelle |
+| **Messung und Berechnung** | Modell, Volumenstrom Heizkreis und Brauchwasserkreis, Stromsensor, Stromzähler (seit v4.0.1), Volumenstrom-Sensor, Schwelle Brauchwasser-Erkennung, Betriebsart-Quelle |
 | **Dashboard** | Hydraulik-Schema anzeigen, Design (Standard / Origami) |
 | **Schreibzugriff und Sicherungen** *(eingeklappt)* | Schreibzugriff erlauben, Abruf der Einstellungen, automatische Sicherung, aufbewahrte Sicherungen |
 | **Verbindung zum Portal** *(eingeklappt)* | Portal-URL, Aktualisierungsintervall |
@@ -359,8 +369,31 @@ heating_base_temp: 15      # Basis der Heizgradtage in °C
 Die **Arbeitszahl** ist hier Wärme ÷ Strom über den Zeitraum — aussagekräftiger
 als der Momentan-COP. Sie hängt an der Strommessung und am eingestellten
 Volumenstrom; ein falscher Volumenstrom verschiebt alle Werte gleichmäßig.
+Seit v4.0.1 zählen nur Stunden mit Strom *und* Wärme, und Tage mit einer
+Arbeitszahl unter 1 (physikalisch unmöglich, meist ein zu niedriger
+Volumenstrom) bleiben außen vor (hohler Punkt, Hinweis unter dem Diagramm).
+Der Vergleich mit dem Vorzeitraum erscheint nur, wenn dieser mindestens 80 %
+der Datenabdeckung hat.
 Die Einstellungsänderungen sind nur so fein wie die Sicherungen (Standard:
 alle 24 h, außerdem vor jedem Schreibzugriff).
+
+**Historie vor dem Update (seit v4.0.1):** Die Energiezähler gibt es erst ab
+dem Update auf v4.0.0 — die Karte war davor leer. Jetzt wählt sie die Quelle je
+Balken: Deckt die Statistik der Zähler einen Balken vollständig ab, gelten die
+Zähler. Sonst kommt der **Strom** aus dem Stromzähler (Option *Stromzähler der
+Wärmepumpe*, Zuwachs laut Langzeitstatistik) oder — geschätzt — aus dem Mittel
+von `sensor.es_hp_leistung_elektrisch` × Stunden, die **Wärme** aus dem Mittel
+von `sensor.es_hp_thermische_leistung` × Stunden. Summiert wird immer die
+Stundenstatistik: Stunden ohne Daten zählen nicht, es wird nichts hochgerechnet.
+Solche Balken sind nicht nach Heizen/Warmwasser aufgeteilt (geschätzte
+schraffiert), Starts und Laufzeit fehlen dort; ein Hinweis unter dem Diagramm
+nennt die Quellen. Wer einen Shelly o. ä. an der Wärmepumpe hat, sollte ihn
+unter **Optionen → Messung und Berechnung → Stromzähler der Wärmepumpe**
+eintragen: Er ist genauer als das Leistungsmittel und reicht meist weiter
+zurück. Welche Entities die Karte liest, erfragt sie über den WebSocket-Befehl
+`es_heatpump/analysis_config` (umbenannte Entities werden über die `unique_id`
+gefunden); `entities:` in der Kartenkonfiguration hat Vorrang, der Stromzähler
+heißt dort `meter`.
 
 #### 🔀 Hydraulik-Schema (seit v3.1.0)
 
@@ -688,6 +721,14 @@ clicking one compares 3/7/14/30 full days before and after. The card is always
 loaded and can be used in your own dashboards (`default_view`,
 `heating_base_temp`, `entities` options).
 
+Since v4.0.1 the card also shows the time **before the counters existed**: per
+bar it falls back to the configured electricity meter (new option *Heat pump
+electricity meter (kWh)*, e.g. the Shelly total energy) or the hourly mean of
+the electrical power, and the hourly mean of the thermal power (missing hours
+are not extrapolated). Such bars are not split into heating/hot water and have
+no starts/runtime. With the meter option set, the electricity counters follow
+the meter's increments instead of integrating the power.
+
 <a id="-breaking-changes-in-400-english"></a>
 ### ⚠️ Breaking changes in 4.0.0
 
@@ -775,6 +816,70 @@ verschwinden ohne Neustart.
 
 Wem die Historie dieser drei Werte egal ist, der kann im Dialog auch einfach
 löschen. Beim Hochdruck hingen hier 187 Tage daran.
+
+### 4.0.1 — 2026-11-08
+
+- **Auswertung mit Historie:** Die Karte war nach dem Update leer, weil die
+  Energiezähler erst ab v4.0.0 zählen. Sie füllt die Zeit davor jetzt aus der
+  vorhandenen Langzeitstatistik (Stromzähler bzw. Leistungsmittel, Wärme aus
+  dem Mittel der thermischen Leistung, immer stundengenau, ohne Hochrechnung) —
+  siehe [Auswertung](#-auswertung-seit-v400). Neuer WebSocket-Befehl
+  `es_heatpump/analysis_config`.
+- **Neue Option „Stromzähler der Wärmepumpe“** (kWh, z. B. Shelly): Die
+  Stromzähler übernehmen dessen Zuwächse statt die Leistung zu integrieren;
+  Zählerreset und unplausible Sprünge werden verworfen, ein HA-Neustart geht
+  nicht verloren. Das Feld lässt sich wieder leeren.
+- **Erneute Anmeldung:** Lehnt das Portal die Zugangsdaten ab, fragt Home
+  Assistant nach dem neuen Passwort (bisher blieb die Integration tot). Nur eine
+  eindeutige Ablehnung zählt — Wartung, Captcha oder eine unklare Antwort
+  führen zu einem neuen Versuch beim nächsten Abruf.
+- **Sitzung:** Jeder Eintrag hat eine eigene HTTP-Sitzung (zwei Konten oder
+  der Einrichtungsdialog überschrieben sich bisher gegenseitig die Anmeldung).
+  Eine vom Portal verworfene Sitzung (Anmeldeseite statt Daten) wird sofort
+  erkannt und genau einmal neu angemeldet, statt bis zu 55 Minuten zu scheitern.
+  Mess- und Einstellungs-Abruf melden sich nicht mehr parallel an.
+- **Portal-URL** aus den Optionen (*Verbindung zum Portal*) wirkt jetzt —
+  bisher galt immer die URL der Ersteinrichtung.
+- Schreibfehler und ungültige Werte erscheinen mit Begründung statt als
+  „Unbekannter Fehler“; Schreibzugriffe laufen nacheinander.
+- Spreizung und `par40` als Temperatur*differenz* (zeigten in °C rund
+  −268 °C); die Einheit K und die Statistik bleiben.
+- Häufig wechselnde Diagnose-Attribute (Betriebsart, COP, thermische Leistung,
+  Sicherungsliste) werden nicht mehr in die Recorder-Historie geschrieben.
+- Formularkopf (Installateur, Artikelnummer) wird nach einem Fehlschlag erneut
+  versucht.
+- **Arbeitszahl nur aus gemeinsamen Zeiten:** Die Arbeitszahl (Balken, Linie,
+  Kacheln, AZ Heizen/Warmwasser, Vorher/Nachher, Vorzeitraum) entsteht nur noch
+  aus Stunden, in denen Strom *und* Wärme vorliegen (bei den Zählern der
+  Integration aus dem ganzen Balken). Bisher teilte „Alle Jahre“ z. B. die Wärme
+  ab Mai durch den Strom ab Januar (AZ 0,52). Strom- und Wärmebalken zeigen
+  weiter die volle Menge.
+- **Unplausible Arbeitszahl:** Tage mit mindestens 0,5 kWh Strom und weniger
+  Wärme als Strom (AZ < 1, physikalisch unmöglich — meist ein zu niedrig
+  eingestellter Volumenstrom) zählen nicht zur Arbeitszahl; der Punkt ist hohl,
+  Tooltip und ein Hinweis unter dem Diagramm erklären es.
+- **Vorzeitraum-Vergleich** nur noch, wenn der Vorzeitraum mindestens 80 % der
+  Datenabdeckung des aktuellen Zeitraums hat (sonst z. B. „Strom +443 %“ gegen
+  ein Vorjahr mit Daten erst ab Juli); Fußnote „Vorzeitraum unvollständig“.
+- **Portal-Aussetzer:** Ein Konfigurationsstand, in dem Software-/Datenbankversion
+  auf 0 fallen oder mindestens die Hälfte der gesetzten Einstellungen
+  gleichzeitig 0 wird, gilt als Lesefehler: Die Entities behalten den vorherigen
+  Stand, es entsteht keine Sicherung und keine „Änderung erkannt“. Bereits
+  gespeicherte Aussetzer erscheinen nicht mehr im Änderungsverlauf und lassen
+  sich nicht wiederherstellen.
+- Auswertungskarte: auf schmalen Bildschirmen alle sieben Wochentage beschriftet.
+
+*English:* The analysis card now back-fills the time before the v4.0.0 counters
+from existing statistics (electricity meter or power mean, thermal power mean,
+hourly, no extrapolation); new option for a heat pump electricity meter (kWh);
+re-authentication flow; own HTTP session per entry with a single re-login on an
+expired session; the portal URL option now takes effect; clearer write errors;
+temperature differences no longer shown as −268 °C. The SPF is only computed
+from hours with both electricity and heat; days with an SPF below 1 (physically
+impossible, usually a wrong flow rate) are excluded and drawn hollow;
+previous-period deltas need at least 80 % of the current data coverage; portal
+glitches (nearly all configuration values 0) are discarded instead of being
+backed up and no longer show up as settings changes.
 
 ### 4.0.0 — 2026-11-08
 

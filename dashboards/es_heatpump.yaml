@@ -212,42 +212,16 @@ views:
   # ────────────────────────────────────────────────────────────────────────
   # View 3: Auswertung (v4.0.0)
   # ────────────────────────────────────────────────────────────────────────
-  # Auswertungskarte der Integration (custom:es-heatpump-analysis-card) und
-  # darunter Statistik-Diagramme als Rueckfall, falls die Karte nicht laedt.
+  # Auswertungskarte der Integration (custom:es-heatpump-analysis-card). Die
+  # frueheren statistics-graph-Karten darunter sind seit v4.0.1 entfernt: Sie
+  # kannten nur die neuen Zaehler und zeigten nach dem Update lediglich
+  # "Keine Statistik gefunden"; die Karte nutzt auch die aeltere Historie.
   - title: Auswertung
     path: auswertung
     icon: mdi:chart-box-outline
     type: panel
     cards:
-      - type: vertical-stack
-        cards:
-          - type: custom:es-heatpump-analysis-card
-
-          - type: statistics-graph
-            title: Energie je Tag (30 Tage)
-            entities:
-              - entity: sensor.es_hp_energie_elektrisch
-                name: Strom
-              - entity: sensor.es_hp_energie_thermisch
-                name: Wärme
-            chart_type: bar
-            period: day
-            days_to_show: 30
-            stat_types:
-              - change
-
-          - type: statistics-graph
-            title: Energie je Monat
-            entities:
-              - entity: sensor.es_hp_energie_elektrisch
-                name: Strom
-              - entity: sensor.es_hp_energie_thermisch
-                name: Wärme
-            chart_type: bar
-            period: month
-            days_to_show: 365
-            stat_types:
-              - change
+      - type: custom:es-heatpump-analysis-card
 
   # ────────────────────────────────────────────────────────────────────────
   # View 4: Diagnose
