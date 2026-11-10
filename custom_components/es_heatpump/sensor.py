@@ -57,6 +57,7 @@ from .const import (
     BETRIEBSART_STATE_OPTIONS,
     CALC_BETRIEBSART,
     CALC_CARNOT,
+    CALC_VOLUMENSTROM_KALIBRIERT,
     CALC_COP,
     CALC_ELEC_POWER,
     CALC_SPREIZUNG,
@@ -69,6 +70,10 @@ from .const import (
     CONF_ENERGY_ENTITY,
     CONF_POWER_ENTITY,
     CONF_MODEL,
+    CONF_DHW_TANK_L,
+    CONF_FLOW_CALIBRATION,
+    DEFAULT_DHW_TANK_L,
+    DEFAULT_FLOW_CALIBRATION,
     DEFAULT_FLOW_RATE,
     DEFAULT_FLOW_RATE_DHW,
     DEFAULT_DHW_MARGIN_K,
@@ -97,6 +102,11 @@ from .plausibilitaet import (
     richtwert_text,
 )
 from .flow import active_flow_rate as _active_flow_rate, flow_from_entity
+from .kalibrierung import (
+    KALIBRIERUNG_AUS,
+    LadungsKalibrierung,
+    wirksame_volumenstroeme,
+)
 from .energy import (
     ART_ELEKTRISCH,
     ART_THERMISCH,
@@ -184,6 +194,10 @@ async def async_setup_entry(
     flow_entity = o["flow_entity"]
     dhw_margin_k = o["dhw_margin_k"]
 
+    # Die Bilanz haelt seit v4.2.0 auch die Volumenstrom-Kalibrierung; die
+    # Rechen-Sensoren fragen sie nach dem wirksamen Volumenstrom.
+    bilanz = bilanz_fuer(hass, entry)
+
     entities: list[SensorEntity] = []
 
     # ── Raw parameter sensors ────────────────────────────────────────────
@@ -204,6 +218,7 @@ async def async_setup_entry(
         ThermLeistungSensor(
             coordinator, device_info, username,
             flow_rate, flow_rate_dhw, mode_source, hass, dhw_margin_k, flow_entity,
+            bilanz=bilanz,
         )
     )
     entities.append(
@@ -212,6 +227,7 @@ async def async_setup_entry(
             flow_rate, flow_rate_dhw, power_entity, mode_source, hass, dhw_margin_k, flow_entity,
             modell=entry.options.get(CONF_MODEL, entry.data.get(CONF_MODEL)),
             entry_id=entry.entry_id,
+            bilanz=bilanz,
         )
     )
     entities.append(
@@ -228,8 +244,13 @@ async def async_setup_entry(
         CarnotGuetegradSensor(
             coordinator, device_info, username,
             flow_rate, flow_rate_dhw, power_entity, mode_source, hass, dhw_margin_k, flow_entity,
+            bilanz=bilanz,
         )
     )
+
+    # Volumenstrom aus Warmwasser-Ladungen (v4.2.0), nur mit Speichervolumen
+    if bilanz.kalibrierung.aktiv:
+        entities.append(VolumenstromKalibriertSensor(bilanz, device_info, username))
 
     # ── Stammdaten und Sicherungsstand (v3.0.0) ──────────────────────────
     entities.append(StammdatenSensor(coordinator, device_info, username))
@@ -237,7 +258,6 @@ async def async_setup_entry(
         entities.append(SicherungenSensor(_settings, device_info, username))
 
     # ── Energiezaehler fuer die Auswertungsseite ─────────────────────────
-    bilanz = bilanz_fuer(hass, entry)
     zaehler_entities = [
         EnergieZaehlerSensor(bilanz, device_info, username, slug, art, teil)
         for slug, art, teil in ENERGIE_ZAEHLER
@@ -267,6 +287,9 @@ def messoptionen(entry: ConfigEntry) -> dict[str, Any]:
         "mode_source": wert(CONF_MODE_SOURCE) or None,
         "flow_entity": wert(CONF_FLOW_ENTITY) or None,
         "dhw_margin_k": float(wert(CONF_DHW_MARGIN_K, DEFAULT_DHW_MARGIN_K)),
+        "dhw_tank_l": float(wert(CONF_DHW_TANK_L, DEFAULT_DHW_TANK_L) or 0),
+        "flow_calibration": wert(CONF_FLOW_CALIBRATION, DEFAULT_FLOW_CALIBRATION)
+        or KALIBRIERUNG_AUS,
     }
 
 
@@ -287,10 +310,50 @@ def bilanz_fuer(hass: HomeAssistant, entry: ConfigEntry) -> "EnergieBilanz":
             hass, buendel["api"], o["power_entity"], o["mode_source"],
             o["dhw_margin_k"], o["flow_rate"], o["flow_rate_dhw"],
             o["flow_entity"], o["energy_entity"],
+            speicher_l=o["dhw_tank_l"], kalibrier_modus=o["flow_calibration"],
         )
         buendel["bilanz"] = bilanz
         entry.async_on_unload(bilanz.async_starte())
     return bilanz
+
+
+class _WirksamerVolumenstrom:
+    """Volumenstroeme Heizen/Warmwasser - eingestellt oder kalibriert (v4.2.0).
+
+    Die Rechen-Sensoren lasen bis v4.1.1 feste Zahlen aus dem Konstruktor. Mit
+    der Kalibrierung kann sich der Wert zur Laufzeit aendern, deshalb fragen sie
+    die gemeinsame EnergieBilanz - so rechnen Anzeige und Energiezaehler mit
+    demselben Volumenstrom.
+    """
+
+    _flow_heating_konst: float
+    _flow_dhw_konst: float
+    _bilanz: "EnergieBilanz | None" = None
+
+    def _volumenstroeme(self) -> tuple[float, float]:
+        if self._bilanz is not None:
+            return self._bilanz.volumenstroeme()
+        return self._flow_heating_konst, self._flow_dhw_konst
+
+    @property
+    def _flow_heating(self) -> float:
+        return self._volumenstroeme()[0]
+
+    @property
+    def _flow_dhw(self) -> float:
+        return self._volumenstroeme()[1]
+
+    def _volumenstrom_attribute(self) -> dict[str, Any]:
+        heizen, warmwasser = self._volumenstroeme()
+        attrs: dict[str, Any] = {
+            "flow_rate_heating_m3h": round(heizen, 3),
+            "flow_rate_dhw_m3h": round(warmwasser, 3),
+        }
+        if self._bilanz is not None and self._bilanz.kalibrierung.aktiv:
+            attrs["flow_kalibrierung"] = self._bilanz.kalibrier_modus
+            attrs["flow_rate_heating_eingestellt_m3h"] = self._flow_heating_konst
+            attrs["flow_rate_dhw_eingestellt_m3h"] = self._flow_dhw_konst
+        return attrs
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -399,7 +462,9 @@ class SpreizungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
 # Calculated: Thermische Leistung (Wärmeabgabe)
 # ─────────────────────────────────────────────────────────────────────────────
 
-class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
+class ThermLeistungSensor(
+    _WirksamerVolumenstrom, CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
+):
     """Approximate heat output, mode-aware.
 
     P [W] = active_flow_rate [m³/h] × ΔT [K] × 1163 [Wh/(m³·K)]
@@ -435,13 +500,15 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
         hass: HomeAssistant,
         dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
         flow_entity: str | None = None,
+        bilanz: "EnergieBilanz | None" = None,
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_THERM_LEISTUNG}"
         self.entity_id = "sensor.es_hp_thermische_leistung"
         self._attr_device_info = device_info
-        self._flow_heating = flow_rate_heating
-        self._flow_dhw = flow_rate_dhw
+        self._flow_heating_konst = flow_rate_heating
+        self._flow_dhw_konst = flow_rate_dhw
+        self._bilanz = bilanz
         self._mode_source = mode_source
         self._hass = hass
         self._dhw_margin_k = dhw_margin_k
@@ -462,8 +529,7 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
-            "flow_rate_heating_m3h": self._flow_heating,
-            "flow_rate_dhw_m3h": self._flow_dhw,
+            **self._volumenstrom_attribute(),
             "flow_entity": self._flow_entity,
             "flow_quelle": _live_flow(self._hass, self._flow_entity)[1],
             "mode_source": self._mode_source,
@@ -477,7 +543,9 @@ class ThermLeistungSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
 # Calculated: COP = Thermal / Electrical
 # ─────────────────────────────────────────────────────────────────────────────
 
-class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
+class COPSensor(
+    _WirksamerVolumenstrom, CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity
+):
     """Coefficient of Performance, mode-aware.
 
     Uses ``flow_rate_heating`` in Heizen mode (par15=2) and
@@ -511,13 +579,15 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
         flow_entity: str | None = None,
         modell: str | None = None,
         entry_id: str | None = None,
+        bilanz: "EnergieBilanz | None" = None,
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_COP}"
         self.entity_id = "sensor.es_hp_aktueller_cop"
         self._attr_device_info = device_info
-        self._flow_heating = flow_rate_heating
-        self._flow_dhw = flow_rate_dhw
+        self._flow_heating_konst = flow_rate_heating
+        self._flow_dhw_konst = flow_rate_dhw
+        self._bilanz = bilanz
         self._power_entity = power_entity
         self._mode_source = mode_source
         self._hass = hass
@@ -654,8 +724,7 @@ class COPSensor(CoordinatorEntity[ESHeatpumpCoordinator], SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "power_entity": self._power_entity,
-            "flow_rate_heating_m3h": self._flow_heating,
-            "flow_rate_dhw_m3h": self._flow_dhw,
+            **self._volumenstrom_attribute(),
             "flow_entity": self._flow_entity,
             "flow_quelle": _live_flow(self._hass, self._flow_entity)[1],
             "mode_source": self._mode_source,
@@ -697,10 +766,12 @@ class CarnotGuetegradSensor(COPSensor):
         hass: HomeAssistant,
         dhw_margin_k: float = DEFAULT_DHW_MARGIN_K,
         flow_entity: str | None = None,
+        bilanz: "EnergieBilanz | None" = None,
     ) -> None:
         super().__init__(
             coordinator, device_info, username, flow_rate_heating, flow_rate_dhw,
             power_entity, mode_source, hass, dhw_margin_k, flow_entity,
+            bilanz=bilanz,
         )
         # unique_id/entity_id des COP-Sensors ueberschreiben; kein
         # Reparaturhinweis (den meldet der COP-Sensor selbst)
@@ -1052,6 +1123,8 @@ class EnergieBilanz:
         flow_dhw: float,
         flow_entity: str | None,
         energy_entity: str | None = None,
+        speicher_l: float = 0.0,
+        kalibrier_modus: str = KALIBRIERUNG_AUS,
     ) -> None:
         self.hass = hass
         self.coordinator = coordinator
@@ -1065,6 +1138,9 @@ class EnergieBilanz:
         self._flow_heating = flow_heating
         self._flow_dhw = flow_dhw
         self._flow_entity = flow_entity
+        # Volumenstrom aus Warmwasser-Ladungen (v4.2.0), siehe kalibrierung.py
+        self.kalibrierung = LadungsKalibrierung(speicher_l)
+        self.kalibrier_modus = kalibrier_modus
         self.zaehler: dict[str, EnergieZaehler] = {
             # Der Zustand der Strommess-Entity gilt, bis er sich aendert
             ART_ELEKTRISCH: EnergieZaehler(MAX_LUECKE_ELEKTRISCH_S, METHODE_LINKS),
@@ -1077,6 +1153,13 @@ class EnergieBilanz:
         self._entities: list[Any] = []
         self._zuletzt_geschrieben: dict[str, float] = {}
         self._ausstehend = False
+
+    def volumenstroeme(self) -> tuple[float, float]:
+        """Wirksame Volumenstroeme (Heizen, Warmwasser) in m³/h."""
+        return wirksame_volumenstroeme(
+            self.kalibrier_modus, self._flow_heating, self._flow_dhw,
+            self.kalibrierung.wert(),
+        )
 
     @property
     def elektrisch_quelle(self) -> str | None:
@@ -1167,10 +1250,13 @@ class EnergieBilanz:
         data = self.coordinator.data
         t = self._jetzt()
         modus = self._betriebsart()
+        # Kalibrierung zuerst: eine gerade gewertete Ladung gilt schon fuer
+        # diesen Messpunkt
+        if self.kalibrierung.messpunkt(t, modus, data):
+            self._schreibe("kalibrierung")
+        heizen, warmwasser = self.volumenstroeme()
         live, _ = _live_flow(self.hass, self._flow_entity)
-        leistung = thermische_leistung_w(
-            data, modus, self._flow_heating, self._flow_dhw, live
-        )
+        leistung = thermische_leistung_w(data, modus, heizen, warmwasser, live)
         kwh = self.zaehler[ART_THERMISCH].messpunkt(t, leistung, kategorie_von(modus))
         verdichter = self.verdichter.messpunkt(t, data.get("par20"))
         if kwh > 0:
@@ -1350,3 +1436,67 @@ class VerdichterLaufzeitSensor(_BilanzSensor):
     @property
     def native_value(self) -> float:
         return round(self._bilanz.verdichter.laufzeit_h, 4)
+
+
+class VolumenstromKalibriertSensor(RestoreSensor):
+    """Volumenstrom aus Warmwasser-Ladungen (m³/h), v4.2.0.
+
+    Median der letzten gueltigen Ladungen, Rechnung in ``kalibrierung.py``.
+    Die einzelnen Ladungen stehen im Attribut ``ladungen`` und werden nach
+    einem Neustart daraus wiederhergestellt (restore_state, nicht Recorder).
+    Ob der Wert die eingestellten Konstanten ersetzt, entscheidet die Option
+    "Volumenstrom automatisch kalibrieren".
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_translation_key = "volumenstrom_kalibriert"
+    _attr_native_unit_of_measurement = "m³/h"
+    _attr_device_class = getattr(SensorDeviceClass, "VOLUME_FLOW_RATE", None)
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:waves-arrow-right"
+    _attr_suggested_display_precision = 2
+    # Liste der Ladungen nur fuer die Wiederherstellung, nicht fuer den Recorder
+    _unrecorded_attributes = frozenset({"ladungen", "letzte_verworfen"})
+    art = "kalibrierung"
+
+    def __init__(self, bilanz: EnergieBilanz, device_info: DeviceInfo, username: str) -> None:
+        self._bilanz = bilanz
+        self._attr_unique_id = f"{DOMAIN}_{username}_{CALC_VOLUMENSTROM_KALIBRIERT}"
+        self.entity_id = "sensor.es_hp_volumenstrom_kalibriert"
+        self._attr_device_info = device_info
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        letzter = await self.async_get_last_state()
+        if letzter is not None:
+            alt = letzter.attributes.get("ladungen")
+            if isinstance(alt, list):
+                kal = self._bilanz.kalibrierung
+                # Seit dem Start gewertete Ladungen hinten anhaengen
+                kal.uebernehme(list(alt) + list(kal.ladungen))
+        self._bilanz.anmelden(self)
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._bilanz.abmelden(self)
+        await super().async_will_remove_from_hass()
+
+    @property
+    def native_value(self) -> float | None:
+        wert = self._bilanz.kalibrierung.wert()
+        return None if wert is None else round(wert, 3)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        kal = self._bilanz.kalibrierung
+        werte = [l["m3h"] for l in kal.ladungen]
+        return {
+            "speicher_l": kal.speicher_l,
+            "anzahl_ladungen": len(kal.ladungen),
+            "min_m3h": min(werte) if werte else None,
+            "max_m3h": max(werte) if werte else None,
+            "ladung_laeuft": kal.laeuft,
+            "letzte_verworfen": kal.letzte_verworfen,
+            "verwendung": self._bilanz.kalibrier_modus,
+            "ladungen": kal.ladungen,
+        }

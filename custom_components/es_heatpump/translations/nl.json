@@ -60,6 +60,8 @@
           "model": "Warmtepompmodel",
           "flow_rate": "Volumestroom verwarmingscircuit",
           "flow_rate_dhw": "Volumestroom warmwatercircuit",
+          "flow_calibration": "Debiet automatisch kalibreren",
+          "dhw_tank_volume_l": "Volume tapwaterboiler",
           "power_entity": "Vermogenssensor",
           "energy_entity": "Stroommeter van de warmtepomp (kWh)",
           "flow_entity": "Debietsensor",
@@ -77,6 +79,8 @@
         "data_description": {
           "model": "De keuze vult het nominale debiet uit het datablad in.",
           "flow_rate": "Thermisch vermogen en COP worden hiermee berekend. Een COP onder 1 betekent dat de waarde te laag is.",
+          "flow_calibration": "Gebruikt het uit tapwateropwarmingen gemeten debiet in plaats van de constanten zodra er 3 geldige opwarmingen zijn. \"Alleen tapwater\" is de veilige keuze; \"beide\" veronderstelt dat de circulatiepomp bij verwarmen even snel draait.",
+          "dhw_tank_volume_l": "Liters van de tapwaterboiler (niet het buffervat). 0 = geen kalibratie. Elke tapwateropwarming wordt geëvalueerd: temperatuurstijging in de boiler tegenover het aanvoer/retour-verschil.",
           "power_entity": "Elektrisch vermogen van de warmtepomp, bijv. een Shelly. Vereist voor de COP.",
           "energy_entity": "Optioneel. Energiemeter van de warmtepomp, bijv. de meterstand van een Shelly. Nauwkeuriger dan het integreren van het vermogen; de analyse gebruikt ook de historie van vóór de update.",
           "flow_entity": "Optioneel. Gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp.",
@@ -96,6 +100,8 @@
               "model": "Warmtepompmodel",
               "flow_rate": "Volumestroom verwarmingscircuit",
               "flow_rate_dhw": "Volumestroom warmwatercircuit",
+              "flow_calibration": "Debiet automatisch kalibreren",
+              "dhw_tank_volume_l": "Volume tapwaterboiler",
               "power_entity": "Vermogenssensor",
               "energy_entity": "Stroommeter van de warmtepomp (kWh)",
               "flow_entity": "Debietsensor",
@@ -105,6 +111,8 @@
             "data_description": {
               "model": "De keuze vult het nominale debiet uit het datablad in.",
               "flow_rate": "Thermisch vermogen en COP worden hiermee berekend. Een COP onder 1 betekent dat de waarde te laag is.",
+              "flow_calibration": "Gebruikt het uit tapwateropwarmingen gemeten debiet in plaats van de constanten zodra er 3 geldige opwarmingen zijn. \"Alleen tapwater\" is de veilige keuze; \"beide\" veronderstelt dat de circulatiepomp bij verwarmen even snel draait.",
+              "dhw_tank_volume_l": "Liters van de tapwaterboiler (niet het buffervat). 0 = geen kalibratie. Elke tapwateropwarming wordt geëvalueerd: temperatuurstijging in de boiler tegenover het aanvoer/retour-verschil.",
               "power_entity": "Elektrisch vermogen van de warmtepomp, bijv. een Shelly. Vereist voor de COP.",
               "energy_entity": "Optioneel. Energiemeter van de warmtepomp, bijv. de meterstand van een Shelly. Nauwkeuriger dan het integreren van het vermogen; de analyse gebruikt ook de historie van vóór de update.",
               "flow_entity": "Optioneel. Gaat vóór de constanten, aanbevolen bij een modulerende circulatiepomp.",
@@ -155,6 +163,13 @@
       "options": {
         "standard": "Standaard (eigen thema)",
         "origami": "Origami"
+      }
+    },
+    "flow_calibration": {
+      "options": {
+        "aus": "Uit (alleen constanten)",
+        "warmwasser": "Alleen tapwater",
+        "beide": "Tapwater en verwarming"
       }
     }
   },
@@ -563,6 +578,9 @@
             "name": "Carnot-COP"
           }
         }
+      },
+      "volumenstrom_kalibriert": {
+        "name": "Gemeten debiet"
       }
     },
     "switch": {

@@ -63,6 +63,28 @@ def _energie_bilanz(bilanz: Any) -> dict[str, Any] | None:
             "laufzeit_h": round(verdichter.laufzeit_h, 4),
         },
         "stromzaehler_basis_kwh": None if folger is None else folger.basis,
+        "volumenstrom": _volumenstrom(bilanz),
+    }
+
+
+def _volumenstrom(bilanz: Any) -> dict[str, Any] | None:
+    """Kalibrierung aus Warmwasser-Ladungen (v4.2.0)."""
+    kal = getattr(bilanz, "kalibrierung", None)
+    if kal is None:
+        return None
+    try:
+        heizen, warmwasser = bilanz.volumenstroeme()
+    except Exception:  # noqa: BLE001 - Diagnose darf nicht scheitern
+        heizen = warmwasser = None
+    return {
+        "wirksam_heizen_m3h": heizen,
+        "wirksam_warmwasser_m3h": warmwasser,
+        "kalibrier_modus": getattr(bilanz, "kalibrier_modus", None),
+        "speicher_l": kal.speicher_l,
+        "kalibriert_m3h": kal.wert(),
+        "ladung_laeuft": kal.laeuft,
+        "letzte_verworfen": kal.letzte_verworfen,
+        "ladungen": list(kal.ladungen),
     }
 
 

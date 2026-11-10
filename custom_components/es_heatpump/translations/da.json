@@ -60,6 +60,8 @@
           "model": "Varmepumpemodel",
           "flow_rate": "Flow varmekreds",
           "flow_rate_dhw": "Flow brugsvandskreds",
+          "flow_calibration": "Kalibrer flow automatisk",
+          "dhw_tank_volume_l": "Volumen varmtvandsbeholder",
           "power_entity": "Effektsensor",
           "energy_entity": "Varmepumpens elmåler (kWh)",
           "flow_entity": "Flowsensor",
@@ -77,6 +79,8 @@
         "data_description": {
           "model": "Valget udfylder det nominelle flow fra databladet.",
           "flow_rate": "Termisk effekt og COP beregnes ud fra den. En COP under 1 betyder, at værdien er for lav.",
+          "flow_calibration": "Bruger flowet målt ud fra varmtvandsopvarmninger i stedet for konstanterne, så snart der er 3 gyldige opvarmninger. \"Kun varmt vand\" er det sikre valg; \"begge\" forudsætter, at cirkulationspumpen kører lige hurtigt ved opvarmning.",
+          "dhw_tank_volume_l": "Liter i varmtvandsbeholderen (ikke bufferen). 0 = ingen kalibrering. Hver varmtvandsopvarmning evalueres: temperaturstigning i beholderen mod frem-/returspredning.",
           "power_entity": "Varmepumpens elektriske effekt, f.eks. fra en Shelly. Kræves til COP.",
           "energy_entity": "Valgfri. Varmepumpens energimåler, f.eks. tællerstanden fra en Shelly. Mere præcis end integration af effekten; analysen bruger også dens historik fra før opdateringen.",
           "flow_entity": "Valgfri. Har forrang over konstanterne; anbefales ved modulerende cirkulationspumpe.",
@@ -96,6 +100,8 @@
               "model": "Varmepumpemodel",
               "flow_rate": "Flow varmekreds",
               "flow_rate_dhw": "Flow brugsvandskreds",
+              "flow_calibration": "Kalibrer flow automatisk",
+              "dhw_tank_volume_l": "Volumen varmtvandsbeholder",
               "power_entity": "Effektsensor",
               "energy_entity": "Varmepumpens elmåler (kWh)",
               "flow_entity": "Flowsensor",
@@ -105,6 +111,8 @@
             "data_description": {
               "model": "Valget udfylder det nominelle flow fra databladet.",
               "flow_rate": "Termisk effekt og COP beregnes ud fra den. En COP under 1 betyder, at værdien er for lav.",
+              "flow_calibration": "Bruger flowet målt ud fra varmtvandsopvarmninger i stedet for konstanterne, så snart der er 3 gyldige opvarmninger. \"Kun varmt vand\" er det sikre valg; \"begge\" forudsætter, at cirkulationspumpen kører lige hurtigt ved opvarmning.",
+              "dhw_tank_volume_l": "Liter i varmtvandsbeholderen (ikke bufferen). 0 = ingen kalibrering. Hver varmtvandsopvarmning evalueres: temperaturstigning i beholderen mod frem-/returspredning.",
               "power_entity": "Varmepumpens elektriske effekt, f.eks. fra en Shelly. Kræves til COP.",
               "energy_entity": "Valgfri. Varmepumpens energimåler, f.eks. tællerstanden fra en Shelly. Mere præcis end integration af effekten; analysen bruger også dens historik fra før opdateringen.",
               "flow_entity": "Valgfri. Har forrang over konstanterne; anbefales ved modulerende cirkulationspumpe.",
@@ -155,6 +163,13 @@
       "options": {
         "standard": "Standard (eget tema)",
         "origami": "Origami"
+      }
+    },
+    "flow_calibration": {
+      "options": {
+        "aus": "Fra (kun konstanter)",
+        "warmwasser": "Kun varmt vand",
+        "beide": "Varmt vand og opvarmning"
       }
     }
   },
@@ -563,6 +578,9 @@
             "name": "Carnot-COP"
           }
         }
+      },
+      "volumenstrom_kalibriert": {
+        "name": "Målt flow"
       }
     },
     "switch": {

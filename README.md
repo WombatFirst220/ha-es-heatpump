@@ -205,7 +205,55 @@ niedrig.
 >   Warmwasser COP 1,3–1,4, mit 2,0 m³/h plausible 2,6–2,8.
 > - Genau wird es nur mit einem Zähler im gemeinsamen Rücklauf vor dem
 >   Außengerät (z. B. Ultraschall-Wärmemengenzähler mit M-Bus), eingebunden über
->   das Feld „Volumenstrom-Sensor“.
+>   das Feld „Volumenstrom-Sensor“. Ohne Zähler hilft seit v4.2.0 die
+>   Kalibrierung über den Warmwasserspeicher (nächster Abschnitt).
+
+#### 🛁 Volumenstrom aus dem Warmwasserspeicher kalibrieren (seit v4.2.0)
+
+Ohne Durchflussmesser lässt sich der Volumenstrom trotzdem messen – der
+Warmwasserspeicher ist ein Wärmemengenzähler, den jede Anlage schon hat.
+Während einer Ladung landet die Wärme des Erzeugerkreises im Speicher:
+
+```
+V̇ [m³/h] = Speichervolumen [m³] × Anstieg Tw [K] / ∫(Vorlauf − Rücklauf) dt [K·h]
+```
+
+`Tw` ist der Speicherfühler T5 (`par7`, `sensor.es_hp_warmwasser_tw`). Die
+Auslegungsformel `V̇ = Q × 0,86 / ΔT` hilft dagegen nicht: Sie braucht die
+Wärmeleistung Q – genau das, was gesucht ist.
+
+**Einrichten:** In den Optionen unter *Messung und Berechnung*
+
+| Feld | Bedeutung |
+|---|---|
+| **Volumen Warmwasserspeicher** | Liter des **Brauchwasserspeichers** (nicht des Puffers). 0 = aus |
+| **Volumenstrom automatisch kalibrieren** | *Aus* (Standard): nur messen und anzeigen · *Nur Warmwasser*: der gemessene Wert ersetzt den Volumenstrom Brauchwasserkreis · *Warmwasser und Heizen*: ersetzt beide (nur, wenn P0 beim Heizen dieselbe Stufe fährt) |
+
+Mit Speichervolumen erscheint der Sensor **Volumenstrom gemessen**
+(`sensor.es_hp_volumenstrom_kalibriert`): Median der letzten 10 gültigen
+Ladungen, ab 3 Ladungen. Die Attribute zeigen jede Ladung (Dauer, Anstieg,
+∫ΔT, Ergebnis), Min/Max und warum die letzte verworfene Ladung nicht zählte.
+Die Ladungen überstehen einen Neustart; ändert man das Speichervolumen, werden
+sie damit neu gerechnet.
+
+**Was gewertet wird:** reine Warmwasserbereitung bei laufendem Verdichter, mind.
+10 min und 5 K Anstieg. Verworfen werden Ladungen mit Datenlücke im Portal
+(> 2 min – sonst fehlte ein Stück ∫ΔT und der Wert fiele zu hoch aus), mit
+Abtauen und mit Zapfen **während** des Anstiegs. Fällt Tw **vor** dem Anstieg
+(die Ladung startet oft, weil gerade geduscht wird), zählt das Minimum als
+Startwert. Die Spreizung nach dem Verdichter-Stopp zählt nicht – sie beträgt
+dann bis zu 12 K, obwohl kaum Wasser fließt. Weil Tw nachläuft, wird nach dem
+Ende noch 10 min lang das Maximum gesucht.
+
+**Grenzen:** Der Wert ist eher eine **Untergrenze**. Die Wärme, die den
+Wasserinhalt von Wärmepumpe, Leitungen und Wärmetauscher aufheizt, steckt in
+∫ΔT, aber nicht im Speicher – bei 20–30 l im Kreis und 200 l Speicher grob
+10–20 %. Heizstab-Betrieb während der Ladung treibt einzelne Werte nach oben,
+der Median fängt das ab.
+
+**Erprobt** an einer AWC12 mit 200-l-Speicher (Woche 04.–10.11.2026): 18 von 20
+Ladungen gültig, 1,46–2,21 m³/h, Median **1,73 m³/h** – zusammen mit der
+Untergrenze passend zum Datenblatt-Nennwert 2,02.
 
 #### 🔄 Betriebsart (seit v2.4.0 aus dem Gerät)
 
@@ -454,7 +502,7 @@ Erklärung zu jedem Feld steht als Hilfetext darunter.
 
 | Abschnitt | Felder |
 |---|---|
-| **Messung und Berechnung** | Modell, Volumenstrom Heizkreis und Brauchwasserkreis, Stromsensor, Stromzähler (seit v4.0.1), Volumenstrom-Sensor, Schwelle Brauchwasser-Erkennung, Betriebsart-Quelle |
+| **Messung und Berechnung** | Modell, Volumenstrom Heizkreis und Brauchwasserkreis, Volumen Warmwasserspeicher und Kalibrierung (seit v4.2.0), Stromsensor, Stromzähler (seit v4.0.1), Volumenstrom-Sensor, Schwelle Brauchwasser-Erkennung, Betriebsart-Quelle |
 | **Dashboard** | Hydraulik-Schema anzeigen, Design (Standard / Origami) |
 | **Schreibzugriff und Sicherungen** *(eingeklappt)* | Schreibzugriff erlauben, Abruf der Einstellungen, automatische Sicherung, aufbewahrte Sicherungen |
 | **Verbindung zum Portal** *(eingeklappt)* | Portal-URL, Aktualisierungsintervall |
@@ -965,6 +1013,27 @@ full load.
 > is too low for an AWC12), and only a meter in the shared return line gives
 > exact values.
 
+#### 🛁 Calibrating the flow rate from the DHW tank (since v4.2.0)
+
+Without a flow meter the flow rate can still be measured: during a DHW charge
+the heat of the heat-pump loop ends up in the tank, so
+
+```
+flow [m³/h] = tank volume [m³] × rise of Tw [K] / ∫(flow − return) dt [K·h]
+```
+
+with `Tw` = tank probe T5 (`par7`). In the options (*Measurement and
+calculation*) enter the **DHW tank volume** (litres of the domestic hot water
+tank, not the buffer; 0 = off) and choose whether the result should replace the
+constants (**Off** = measure only, **DHW only**, **DHW and heating**). The
+sensor **Measured flow rate** (`sensor.es_hp_volumenstrom_kalibriert`) shows the
+median of the last 10 valid charges once 3 exist; its attributes list every
+charge and the reason the last rejected one did not count. Charges are rejected
+on portal gaps > 2 min, defrost, tapping during the rise, < 10 min or < 5 K.
+The value is rather a lower bound (heating up the water in the loop is in ∫ΔT
+but not in the tank). Tested on an AWC12 with a 200 l tank: median 1.73 m³/h,
+datasheet nominal 2.02.
+
 #### 🔄 Operating-mode detection (since v2.3.0)
 
 The portal exposes no usable operating-mode field — `par15` looked like one but
@@ -1186,6 +1255,26 @@ verschwinden ohne Neustart.
 
 Wem die Historie dieser drei Werte egal ist, der kann im Dialog auch einfach
 löschen. Beim Hochdruck hingen hier 187 Tage daran.
+
+### 4.2.0 — 2026-11-10
+
+- **Neu: Volumenstrom aus dem Warmwasserspeicher kalibrieren.** Die
+  Wärmepumpe misst ihren Volumenstrom nicht. Mit eingetragenem Speichervolumen
+  wertet die Integration jede Warmwasser-Ladung aus (Anstieg von Tw gegen
+  ∫ Spreizung dt) und zeigt den Median im neuen Sensor
+  `sensor.es_hp_volumenstrom_kalibriert`. Die Option *Volumenstrom
+  automatisch kalibrieren* lässt ihn statt der Konstanten in thermische
+  Leistung, COP, Carnot-Gütegrad und die thermischen Energiezähler einfließen
+  – nur Warmwasser oder beide Kreise. Standard ist *Aus*: **Bestehende
+  Installationen rechnen unverändert**, bis man es einschaltet. Details im
+  Abschnitt „Volumenstrom aus dem Warmwasserspeicher kalibrieren“.
+- Neue Optionen `dhw_tank_volume_l` und `flow_calibration` (Abschnitt
+  *Messung und Berechnung*), übersetzt in allen fünf Sprachen.
+- Thermische Leistung und COP zeigen in den Attributen den **wirksamen**
+  Volumenstrom; bei aktiver Kalibrierung zusätzlich die eingestellten Werte.
+- Diagnose: neuer Block `volumenstrom` mit Ladungen und wirksamen Werten.
+- Tests: `tests/test_kalibrierung.py`, u. a. mit dem gemessenen Fall „geduscht
+  beim Start der Ladung“.
 
 ### 4.1.1 — 2026-11-09
 

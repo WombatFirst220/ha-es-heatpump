@@ -60,6 +60,8 @@
           "model": "Wärmepumpen-Modell",
           "flow_rate": "Volumenstrom Heizkreis",
           "flow_rate_dhw": "Volumenstrom Brauchwasserkreis",
+          "flow_calibration": "Volumenstrom automatisch kalibrieren",
+          "dhw_tank_volume_l": "Volumen Warmwasserspeicher",
           "power_entity": "Stromsensor",
           "energy_entity": "Stromzähler der Wärmepumpe (kWh)",
           "flow_entity": "Volumenstrom-Sensor",
@@ -77,6 +79,8 @@
         "data_description": {
           "model": "Die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt.",
           "flow_rate": "Thermische Leistung und COP werden daraus berechnet. Ein COP unter 1 heißt: Wert zu niedrig.",
+          "flow_calibration": "Nutzt den aus Warmwasser-Ladungen gemessenen Volumenstrom statt der Konstanten, sobald 3 gültige Ladungen vorliegen. „Nur Warmwasser“ ist die sichere Wahl; „beide“ setzt voraus, dass die Umwälzpumpe beim Heizen gleich schnell läuft.",
+          "dhw_tank_volume_l": "Liter des Brauchwasserspeichers (nicht des Puffers). 0 = keine Kalibrierung. Jede Warmwasser-Ladung wird ausgewertet: Temperaturanstieg im Speicher gegen die Spreizung.",
           "power_entity": "Elektrische Leistung der Wärmepumpe, z. B. Shelly. Nötig für den COP.",
           "energy_entity": "Optional. Energiezähler der Wärmepumpe, z. B. der Zählerstand eines Shelly. Genauer als die Integration der Leistung; die Auswertung nutzt auch seine Historie vor dem Update.",
           "flow_entity": "Optional. Hat Vorrang vor den Konstanten, empfohlen bei geregelter Umwälzpumpe.",
@@ -96,6 +100,8 @@
               "model": "Wärmepumpen-Modell",
               "flow_rate": "Volumenstrom Heizkreis",
               "flow_rate_dhw": "Volumenstrom Brauchwasserkreis",
+              "flow_calibration": "Volumenstrom automatisch kalibrieren",
+              "dhw_tank_volume_l": "Volumen Warmwasserspeicher",
               "power_entity": "Stromsensor",
               "energy_entity": "Stromzähler der Wärmepumpe (kWh)",
               "flow_entity": "Volumenstrom-Sensor",
@@ -105,6 +111,8 @@
             "data_description": {
               "model": "Die Auswahl setzt den Nennvolumenstrom aus dem Datenblatt.",
               "flow_rate": "Thermische Leistung und COP werden daraus berechnet. Ein COP unter 1 heißt: Wert zu niedrig.",
+              "flow_calibration": "Nutzt den aus Warmwasser-Ladungen gemessenen Volumenstrom statt der Konstanten, sobald 3 gültige Ladungen vorliegen. „Nur Warmwasser“ ist die sichere Wahl; „beide“ setzt voraus, dass die Umwälzpumpe beim Heizen gleich schnell läuft.",
+              "dhw_tank_volume_l": "Liter des Brauchwasserspeichers (nicht des Puffers). 0 = keine Kalibrierung. Jede Warmwasser-Ladung wird ausgewertet: Temperaturanstieg im Speicher gegen die Spreizung.",
               "power_entity": "Elektrische Leistung der Wärmepumpe, z. B. Shelly. Nötig für den COP.",
               "energy_entity": "Optional. Energiezähler der Wärmepumpe, z. B. der Zählerstand eines Shelly. Genauer als die Integration der Leistung; die Auswertung nutzt auch seine Historie vor dem Update.",
               "flow_entity": "Optional. Hat Vorrang vor den Konstanten, empfohlen bei geregelter Umwälzpumpe.",
@@ -155,6 +163,13 @@
       "options": {
         "standard": "Standard (eigenes Theme)",
         "origami": "Origami"
+      }
+    },
+    "flow_calibration": {
+      "options": {
+        "aus": "Aus (nur Konstanten)",
+        "warmwasser": "Nur Warmwasser",
+        "beide": "Warmwasser und Heizen"
       }
     }
   },
@@ -563,6 +578,9 @@
             "name": "Carnot-COP"
           }
         }
+      },
+      "volumenstrom_kalibriert": {
+        "name": "Volumenstrom gemessen"
       }
     },
     "switch": {

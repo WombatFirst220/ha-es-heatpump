@@ -60,6 +60,8 @@
           "model": "Heat-pump model",
           "flow_rate": "Heating-loop flow rate",
           "flow_rate_dhw": "DHW-loop flow rate",
+          "flow_calibration": "Calibrate flow automatically",
+          "dhw_tank_volume_l": "DHW tank volume",
           "power_entity": "Power sensor",
           "energy_entity": "Heat pump electricity meter (kWh)",
           "flow_entity": "Flow sensor",
@@ -77,6 +79,8 @@
         "data_description": {
           "model": "Selecting it fills in the datasheet nominal flow rate.",
           "flow_rate": "Thermal output and COP are calculated from it. A COP below 1 means the value is too low.",
+          "flow_calibration": "Uses the flow rate measured from DHW charges instead of the constants once 3 valid charges exist. \"DHW only\" is the safe choice; \"both\" assumes the circulation pump runs at the same speed for heating.",
+          "dhw_tank_volume_l": "Litres of the domestic hot water tank (not the buffer). 0 = no calibration. Every DHW charge is evaluated: tank temperature rise against flow/return spread.",
           "power_entity": "Electrical power of the heat pump, e.g. a Shelly. Required for the COP.",
           "energy_entity": "Optional. Energy meter of the heat pump, e.g. the Shelly energy counter. More accurate than integrating the power, and the analysis also uses its history from before the update.",
           "flow_entity": "Optional. Overrides the constants; recommended if the circulation pump modulates.",
@@ -96,6 +100,8 @@
               "model": "Heat-pump model",
               "flow_rate": "Heating-loop flow rate",
               "flow_rate_dhw": "DHW-loop flow rate",
+              "flow_calibration": "Calibrate flow automatically",
+              "dhw_tank_volume_l": "DHW tank volume",
               "power_entity": "Power sensor",
               "energy_entity": "Heat pump electricity meter (kWh)",
               "flow_entity": "Flow sensor",
@@ -105,6 +111,8 @@
             "data_description": {
               "model": "Selecting it fills in the datasheet nominal flow rate.",
               "flow_rate": "Thermal output and COP are calculated from it. A COP below 1 means the value is too low.",
+              "flow_calibration": "Uses the flow rate measured from DHW charges instead of the constants once 3 valid charges exist. \"DHW only\" is the safe choice; \"both\" assumes the circulation pump runs at the same speed for heating.",
+              "dhw_tank_volume_l": "Litres of the domestic hot water tank (not the buffer). 0 = no calibration. Every DHW charge is evaluated: tank temperature rise against flow/return spread.",
               "power_entity": "Electrical power of the heat pump, e.g. a Shelly. Required for the COP.",
               "energy_entity": "Optional. Energy meter of the heat pump, e.g. the Shelly energy counter. More accurate than integrating the power, and the analysis also uses its history from before the update.",
               "flow_entity": "Optional. Overrides the constants; recommended if the circulation pump modulates.",
@@ -155,6 +163,13 @@
       "options": {
         "standard": "Standard (your theme)",
         "origami": "Origami"
+      }
+    },
+    "flow_calibration": {
+      "options": {
+        "aus": "Off (constants only)",
+        "warmwasser": "DHW only",
+        "beide": "DHW and heating"
       }
     }
   },
@@ -563,6 +578,9 @@
             "name": "Carnot COP"
           }
         }
+      },
+      "volumenstrom_kalibriert": {
+        "name": "Measured flow rate"
       }
     },
     "switch": {
