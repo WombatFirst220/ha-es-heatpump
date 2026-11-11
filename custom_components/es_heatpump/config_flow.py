@@ -28,6 +28,7 @@ from homeassistant.helpers.selector import (
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .flow import nennvolumenstroeme
+from .kalibrierung import KALIBRIERUNG_OPTIONEN
 from .const import (
     CONF_BACKUP_INTERVAL,
     CONF_BACKUP_KEEP,
@@ -49,6 +50,10 @@ from .const import (
     CONF_DHW_MARGIN_K,
     CONF_FLOW_ENTITY,
     CONF_MODEL,
+    CONF_DHW_TANK_L,
+    CONF_FLOW_CALIBRATION,
+    DEFAULT_DHW_TANK_L,
+    DEFAULT_FLOW_CALIBRATION,
     CONF_POWER_ENTITY,
     CONF_ENERGY_ENTITY,
     CONF_SCAN_INTERVAL,
@@ -82,6 +87,27 @@ def _model_selector() -> SelectSelector:
             # Optionsfelder statt Dropdown: Das Dropdown liess den Dialog auf
             # dem iPhone nach oben springen (v3.1.1).
             mode=SelectSelectorMode.LIST,
+        )
+    )
+
+
+def _speicher_selector() -> NumberSelector:
+    """Volumen des Warmwasserspeichers in Litern (v4.2.0), 0 = aus."""
+    return NumberSelector(
+        NumberSelectorConfig(
+            min=0, max=2000, step=10, mode=NumberSelectorMode.BOX,
+            unit_of_measurement="l",
+        )
+    )
+
+
+def _kalibrierung_selector() -> SelectSelector:
+    """Ob der gemessene Volumenstrom die Konstanten ersetzt (v4.2.0)."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=KALIBRIERUNG_OPTIONEN,
+            mode=SelectSelectorMode.LIST,
+            translation_key=CONF_FLOW_CALIBRATION,
         )
     )
 
@@ -552,6 +578,12 @@ class ESHeatpumpOptionsFlow(config_entries.OptionsFlow):
                 (vol.Optional(CONF_FLOW_RATE_DHW,
                               default=w(CONF_FLOW_RATE_DHW, DEFAULT_FLOW_RATE_DHW)),
                  _flow_rate_selector()),
+                (vol.Optional(CONF_DHW_TANK_L,
+                              default=w(CONF_DHW_TANK_L, DEFAULT_DHW_TANK_L)),
+                 _speicher_selector()),
+                (vol.Optional(CONF_FLOW_CALIBRATION,
+                              default=w(CONF_FLOW_CALIBRATION, DEFAULT_FLOW_CALIBRATION)),
+                 _kalibrierung_selector()),
                 entity(CONF_POWER_ENTITY, device_class="power"),
                 entity(CONF_ENERGY_ENTITY, device_class="energy"),
                 entity(CONF_FLOW_ENTITY),

@@ -21,6 +21,8 @@ CONF_MODE_SOURCE      = "mode_source_entity"  # optional external override for t
 CONF_DHW_MARGIN_K     = "dhw_margin_k"        # Vorlauf-über-Soll threshold for DHW detection
 CONF_FLOW_ENTITY      = "flow_entity"         # optional live volumetric-flow sensor
 CONF_MODEL            = "model"               # picks the datasheet nominal flow rate
+CONF_DHW_TANK_L       = "dhw_tank_volume_l"   # Warmwasserspeicher in l, 0 = aus (v4.2.0)
+CONF_FLOW_CALIBRATION = "flow_calibration"    # aus | warmwasser | beide, siehe kalibrierung.py
 
 # ── Schreibzugriff und Sicherungen (v3.0.0) ──────────────────────────────────
 # Schreiben ist standardmaessig AUS. Eine Cloud-Integration, die ungefragt in
@@ -53,6 +55,8 @@ DEFAULT_FLOW_RATE       = 1.2       # m³/h — see NOMINAL_FLOW_RATES_M3H, set 
 DEFAULT_FLOW_RATE_DHW   = 1.0       # m³/h — nur ohne Modellwahl; mit Modell setzt der
                                     # Config-Flow seit v4.1.1 den Nennwert (P0 versorgt
                                     # Heiz- UND Warmwasserkreis, siehe flow.nennvolumenstroeme)
+DEFAULT_DHW_TANK_L      = 0         # l — keine Kalibrierung, bis der Speicher eingetragen ist
+DEFAULT_FLOW_CALIBRATION = "aus"    # gemessener Wert ersetzt die Konstanten erst auf Wunsch
 DEFAULT_DHW_MARGIN_K    = 8.0       # K — Vorlauf above heating setpoint ⇒ DHW mode
 DEFAULT_ENABLE_WRITES    = False    # Schreibzugriff bewusst abgeschaltet
 DEFAULT_SETTINGS_INTERVAL = 900     # s — Einstellungen aendern sich selten
@@ -130,6 +134,7 @@ CALC_COP            = "calc_cop"
 CALC_ELEC_POWER     = "calc_elec_power"     # mirror of the configured power_entity
 CALC_BETRIEBSART    = "calc_betriebsart"    # derived from mode_source_entity
 CALC_CARNOT         = "calc_carnot_guetegrad"  # COP / Carnot-COP in %, v4.1.0
+CALC_VOLUMENSTROM_KALIBRIERT = "calc_volumenstrom_kalibriert"  # aus WW-Ladungen, v4.2.0
 
 # ── Betriebsart: die Geraeteangabe par1 ──────────────────────────────────────
 # Die Formularseite des Portals (/a/amt/realdata/form) benennt par1 als
