@@ -476,6 +476,42 @@ def test_standby_zaehler_ist_elektrisch():
     assert eintraege["energie_elektrisch_standby"] == (E.ART_ELEKTRISCH, E.STANDBY)
 
 
+def test_standby_hohe_leistung_wird_unterdrueckt():
+    """Portal eingefroren (par20 == 0), aber Verdichter laeuft laut Leistung."""
+    z = E.EnergieZaehler(15 * 60, E.METHODE_LINKS)
+    z.messpunkt(0, 120, None, standby=True)          # P0-Intervall: echtes Standby
+    z.messpunkt(60, 1500, None, standby=True)        # Portal haengt, Verdichter laeuft
+    z.messpunkt(660, 20, None, standby=True)         # 10 min x 1500 W = 0,25 kWh
+    z.messpunkt(720, 20, None, standby=True)         # 60 s x 20 W: wieder Standby
+    erwartet_stby = (120 * 60 + 20 * 60) / 3.6e6
+    erwartet_gesamt = erwartet_stby + 1500 * 600 / 3.6e6
+    assert z.summen[E.STANDBY] == pytest.approx(erwartet_stby)
+    assert z.summen[E.GESAMT] == pytest.approx(erwartet_gesamt)
+
+
+def test_standby_zaehlerstand_portal_haenger_und_grober_zaehler():
+    """Schutz bei Zaehlerstaenden: hohe Leistung blockt Standby, grober Zaehler bleibt."""
+    z = E.EnergieZaehler(15 * 60)
+    f = E.ZaehlerstandFolger(z)
+    f.messpunkt(0, 100.0, None, True)
+    # Grober Zaehler (0,01 kWh): 29 min Gleichstand, dann +0,01 kWh (= 20 W -> echtes Standby)
+    for m in range(1, 30):
+        assert f.messpunkt(m * 60, 100.0, None, True) == 0.0
+    assert f.messpunkt(30 * 60, 100.01, None, True) == pytest.approx(0.01)
+    assert z.summen[E.STANDBY] == pytest.approx(0.01)
+    # Portal haengt 5 h mit par20 == 0, Shelly zaehlt aber 1,5 kWh in 60 min (1500 W)
+    assert f.messpunkt(90 * 60, 101.51, None, True) == pytest.approx(1.5)
+    assert z.summen[E.STANDBY] == pytest.approx(0.01)
+    assert z.summen[E.GESAMT] == pytest.approx(1.51)
+    # Live-Leistung > Schwelle blockt Standby auch bei kleinem Delta
+    assert f.messpunkt(91 * 60, 101.512, None, True, leistung_w=1200.0) == pytest.approx(0.002)
+    assert z.summen[E.STANDBY] == pytest.approx(0.01)
+    assert z.summen[E.GESAMT] == pytest.approx(1.512)
+    # Danach wieder 20 W: echtes Standby zaehlt wieder
+    assert f.messpunkt(151 * 60, 101.532, None, True, leistung_w=20.0) == pytest.approx(0.02)
+    assert z.summen[E.STANDBY] == pytest.approx(0.03)
+
+
 # ── Takt-Erkennung (v4.1.0) ──────────────────────────────────────────────
 
 def _zyklen(v, t0, anzahl, lauf_s, pause_s, takt_s=60):

@@ -1256,6 +1256,18 @@ verschwinden ohne Neustart.
 Wem die Historie dieser drei Werte egal ist, der kann im Dialog auch einfach
 löschen. Beim Hochdruck hingen hier 187 Tage daran.
 
+### 4.2.1 — 2026-11-23
+
+- **Standby-Zähler gegen Portal-Aussetzer abgesichert.** Bleibt der Portalabruf
+  aus (`last_update_success = False`), ordnet `EnergieSammler` eingehende
+  Stromzähler-Zuwächse nicht mehr dem veralteten Betriebszustand (insbesondere
+  Standby bei altem `par20 == 0`) zu, sondern bucht sie nur auf den
+  Gesamtstromzähler. Zusätzlich gilt eine Plausibilitätsgrenze von **250 W**
+  (`MAX_LEISTUNG_STANDBY_W`) für Leistungsintegration und Stromzähler-Zuwächse
+  (auch gegen eingefrorene Portaldaten bei laufendem Verdichter; grobe Zähler
+  mit Gleichstandstakten bleiben dank Zeitstempel des letzten echten Zuwachses
+  unberührt).
+
 ### 4.2.0 — 2026-11-11
 
 - **Neu: Volumenstrom aus dem Warmwasserspeicher kalibrieren.** Die

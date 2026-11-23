@@ -1183,14 +1183,34 @@ class EnergieBilanz:
                 entity.async_write_ha_state()
 
     # -- Messpunkte ----------------------------------------------------
+    def _portal_aktuell(self) -> bool:
+        """True, solange der letzte Portalabruf erfolgreich war und Daten vorliegen."""
+        return bool(self.coordinator.last_update_success and self.coordinator.data)
+
     def _betriebsart(self) -> str:
         return _resolve_betriebsart(
             self.hass, self._mode_source, self.coordinator.data, self._dhw_margin_k
         )[0]
 
+    def _kategorie(self) -> str | None:
+        """Teilzaehler der Betriebsart, oder None bei fehlendem/veraltetem Portalabruf."""
+        if not self._portal_aktuell():
+            return None
+        return kategorie_von(self._betriebsart())
+
     def _standby(self) -> bool:
-        """Verdichter steht (par20 == 0) laut letztem Portalabruf."""
-        return verdichter_steht((self.coordinator.data or {}).get("par20"))
+        """Verdichter steht (par20 == 0) laut aktuellem Portalabruf."""
+        if not self._portal_aktuell():
+            return False
+        return verdichter_steht(self.coordinator.data.get("par20"))
+
+    def _aktuelle_leistung_w(self) -> float | None:
+        if not self.power_entity:
+            return None
+        state = self.hass.states.get(self.power_entity)
+        if state is None:
+            return None
+        return leistung_in_w(state.state, state.attributes.get("unit_of_measurement"))
 
     @staticmethod
     def _jetzt() -> float:
@@ -1203,6 +1223,9 @@ class EnergieBilanz:
     @callback
     def _elektrisch_messen(self) -> None:
         jetzt = self._jetzt()
+        kategorie = self._kategorie()
+        standby = self._standby()
+        leistung = self._aktuelle_leistung_w()
         if self.energy_entity:
             state = self.hass.states.get(self.energy_entity)
             stand = None
@@ -1211,17 +1234,11 @@ class EnergieBilanz:
                     state.state, state.attributes.get("unit_of_measurement")
                 )
             kwh = self.folger.messpunkt(
-                jetzt, stand, kategorie_von(self._betriebsart()), self._standby()
+                jetzt, stand, kategorie, standby, leistung_w=leistung
             )
         else:
-            state = self.hass.states.get(self.power_entity) if self.power_entity else None
-            leistung = None
-            if state is not None:
-                leistung = leistung_in_w(
-                    state.state, state.attributes.get("unit_of_measurement")
-                )
             kwh = self.zaehler[ART_ELEKTRISCH].messpunkt(
-                jetzt, leistung, kategorie_von(self._betriebsart()), self._standby()
+                jetzt, leistung, kategorie, standby
             )
         if kwh > 0:
             self._ausstehend = True

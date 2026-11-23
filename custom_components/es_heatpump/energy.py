@@ -107,6 +107,14 @@ MAX_LEISTUNG_ZAEHLER_W = 50_000.0
 # Zuschlag fuer kurze Abstaende (Rundung der Zaehlerstaende, Sekundenabstand)
 _TOLERANZ_ZAEHLER_KWH = 0.05
 
+# Hoechste glaubwuerdige Leistung im Standby (Steuerung, P0-Intervall,
+# Kurbelwannenheizung). Darueber laeuft der Verdichter oder ein Heizstab -
+# meldet das Portal zugleich par20 == 0 (eingefrorene Daten), wird die Energie
+# nur auf die Gesamtsumme, nicht auf den Standby-Zaehler gebucht.
+MAX_LEISTUNG_STANDBY_W = 250.0
+# Rundungszuschlag fuer Zaehler mit grober Aufloesung (0,001 kWh)
+_TOLERANZ_STANDBY_KWH = 0.001
+
 
 def kategorie_von(betriebsart: str | None) -> str | None:
     """Teilzaehler fuer eine Betriebsart; ``None`` = nur Gesamtsumme."""
@@ -272,11 +280,17 @@ class EnergieZaehler:
     Endwert fehlt.
     """
 
-    def __init__(self, max_luecke_s: float, methode: str = METHODE_LINKS) -> None:
+    def __init__(
+        self,
+        max_luecke_s: float,
+        methode: str = METHODE_LINKS,
+        max_standby_leistung_w: float = MAX_LEISTUNG_STANDBY_W,
+    ) -> None:
         if methode not in (METHODE_LINKS, METHODE_TRAPEZ):
             raise ValueError(f"Unbekannte Methode {methode!r}")
         self.max_luecke_s = float(max_luecke_s)
         self.methode = methode
+        self.max_standby_leistung_w = float(max_standby_leistung_w)
         self.summen: dict[str, float] = {t: 0.0 for t in TEILE}
         # (Zeit, Leistung W, Kategorie, Standby) des letzten Messpunkts
         self._letzt: tuple[float, float, str | None, bool] | None = None
@@ -328,7 +342,8 @@ class EnergieZaehler:
             return 0.0
         mittel_w = (start[1] + ende_w) / 2.0
         kwh = mittel_w * dt / 3_600_000.0
-        return self.addiere(kwh, start[2], start[3])
+        standby = start[3] and mittel_w <= self.max_standby_leistung_w
+        return self.addiere(kwh, start[2], standby)
 
     def addiere(
         self, kwh: float, kategorie: str | None = None, standby: bool = False
@@ -369,12 +384,17 @@ class ZaehlerstandFolger:
     """
 
     def __init__(
-        self, zaehler: EnergieZaehler, max_leistung_w: float = MAX_LEISTUNG_ZAEHLER_W
+        self,
+        zaehler: EnergieZaehler,
+        max_leistung_w: float = MAX_LEISTUNG_ZAEHLER_W,
+        max_standby_leistung_w: float = MAX_LEISTUNG_STANDBY_W,
     ) -> None:
         self.zaehler = zaehler
         self.max_leistung_w = float(max_leistung_w)
+        self.max_standby_leistung_w = float(max_standby_leistung_w)
         self.basis: float | None = None
         self.basis_t: float | None = None
+        self._letzter_zuwachs_t: float | None = None
         self._nur_basis = True   # bisher hoechstens ein Stand, nichts gebucht
 
     def setze_basis(self, stand_kwh: Any, t: Any = None) -> None:
@@ -393,6 +413,7 @@ class ZaehlerstandFolger:
             self.basis_t = float(t) if t is not None else None
         except (TypeError, ValueError):
             self.basis_t = None
+        self._letzter_zuwachs_t = self.basis_t
 
     def messpunkt(
         self,
@@ -400,27 +421,50 @@ class ZaehlerstandFolger:
         stand_kwh: float | None,
         kategorie: str | None = None,
         standby: bool = False,
+        leistung_w: float | None = None,
     ) -> float:
         """Neuer Zaehlerstand zur Zeit ``t`` (Sekunden). Liefert die addierten kWh.
 
         Kategorie und ``standby`` gelten - wie bisher die Kategorie - fuer den
-        Zeitpunkt des Zuwachses.
+        Zeitpunkt des Zuwachses. Uebersteigt die aktuelle Leistung (``leistung_w``)
+        oder die mittlere Leistung seit dem letzten Zuwachs
+        ``max_standby_leistung_w``, wird ``standby`` unterdrueckt (Schutz gegen
+        eingefrorene Portaldaten bei laufendem Verdichter).
         """
         if stand_kwh is None:
             return 0.0
         vorher, vorher_t = self.basis, self.basis_t
         self.basis, self.basis_t = float(stand_kwh), float(t)
         if vorher is None:
+            self._letzter_zuwachs_t = float(t)
             return 0.0
         self._nur_basis = False
         delta = self.basis - vorher
         if delta <= 0:
-            # Gleichstand oder Zaehlerreset: nichts buchen, neuer Stand ist Basis
+            # Gleichstand oder Zaehlerreset: nichts buchen, neuer Stand ist Basis.
+            # Bei Gleichstand bleibt _letzter_zuwachs_t erhalten, damit grobe
+            # Zaehler (z. B. 0,01 kWh) nach Minuten ohne Aenderung nicht falsch
+            # als hohe Leistung gewertet werden.
+            if delta < 0:
+                self._letzter_zuwachs_t = float(t)
             return 0.0
+        ref_t = self._letzter_zuwachs_t if self._letzter_zuwachs_t is not None else vorher_t
+        self._letzter_zuwachs_t = float(t)
         if vorher_t is not None:
             dt_h = max(0.0, t - vorher_t) / 3600.0
             if delta > self.max_leistung_w / 1000.0 * dt_h + _TOLERANZ_ZAEHLER_KWH:
                 return 0.0
+        if standby:
+            if leistung_w is not None and leistung_w > self.max_standby_leistung_w:
+                standby = False
+            elif ref_t is not None and t > ref_t:
+                dt_zuwachs_h = (t - ref_t) / 3600.0
+                grenze_kwh = (
+                    self.max_standby_leistung_w / 1000.0 * dt_zuwachs_h
+                    + _TOLERANZ_STANDBY_KWH
+                )
+                if delta > grenze_kwh:
+                    standby = False
         return self.zaehler.addiere(delta, kategorie, standby)
 
 
